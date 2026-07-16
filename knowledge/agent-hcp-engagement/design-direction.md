@@ -19,6 +19,7 @@ skills:
   - cn-hcp-pro
   - cn-hcp-compliance
 project_skills: .cursor/skills/
+  # cn-hcp-pro, cn-hcp-compliance, rag-implementation, mcp-server-patterns, agent-builder
 ---
 
 # hcp-engagement-agent 设计方向
