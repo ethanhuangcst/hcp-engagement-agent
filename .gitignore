@@ -1,5 +1,11 @@
 .DS_Store
-data/
 node_modules/
 .env
 .env.*
+
+# 研究知识库：本地/团队私有，不入库
+knowledge/
+
+# 本地运行时数据（不提交 JSON / Qdrant 内容；目录骨架由 .gitkeep 追踪）
+data/**/*
+!data/**/.gitkeep
