@@ -152,7 +152,7 @@ Detailed pattern documentation lives in [`references/details.md`](./references/d
 | `knowledge/rag-medical-knowledge-base/content-acquisition.md` | PubMed、RDPAC、指南来源 |
 | `knowledge/rag-medical-knowledge-base/on-demand-ingest.md` | Twin 专科触发 ingest |
 | `specs/3.architecture.md` §5.3、§6.2 | medical-kb 模块边界 |
-| `specs/4.stack.md` §6 | Qdrant、BGE-M3、环境变量 |
+| `specs/4.install-dependencies.md` §6 | Qdrant、BGE-M3、环境变量 |
 
 ### 已决架构（勿偏离 unless ADR）
 

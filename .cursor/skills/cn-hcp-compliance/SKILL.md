@@ -204,7 +204,7 @@ YYYY-MM-DD
   - `knowledge/agent-hcp-engagement/china-hcp-engagement-research.md`
   - `knowledge/rag-medical-knowledge-base/content-acquisition.md`（RDPAC 与合规语料）
   - `specs/2.business-context.md`（缩写与监管语境）
-  - `specs/5.hcp-twin-data-dictinoary.md`（Twin 禁止字段：统方、处方量等）
+  - `specs/5.hcp-twin-data-dictionary.md`（Twin 禁止字段：统方、处方量等）
 - 客户 SOPs：若用户提供，冲突时取**更严格**规则。
 
 ## 能力边界

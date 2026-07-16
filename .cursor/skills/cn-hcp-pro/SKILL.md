@@ -67,7 +67,9 @@ description: |
 - `knowledge/agent-hcp-engagement/design-direction.md`
 - `knowledge/agent-hcp-engagement/glossary-abbreviations.md`
 - `knowledge/mcp-hcp-virtual-twin/data-sources-zhu-tongyu.md`（样例 HCP）
-- `knowledge/hcp-twin/hcp-twin-attributes.md`、`specs/5.hcp-twin-data-dictinoary.md`（Twin 字段）
+- `knowledge/hcp-twin/twin-data-structure.md`（按 UI 八类的 Twin 数据结构）
+- `knowledge/hcp-twin/hcp-twin-attributes.md`、`specs/5.hcp-twin-data-dictionary.md`（Twin 字段）
+- `knowledge/hcp-twin/hcp-tagging.md`（级别主标 `hcp_tier` / 角色辅标；勿用处方潜力打标）
 - `knowledge/rag-medical-knowledge-base/*`（学术/合规 RAG 边界）
 - `specs/1.product-definition.md`、`specs/2.business-context.md`
 

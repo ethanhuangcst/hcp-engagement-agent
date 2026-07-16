@@ -76,9 +76,9 @@ Use **Zod** (or the SDK's preferred schema format) for input validation.
 | 文档 | 内容 |
 |------|------|
 | `specs/3.architecture.md` §5.2 | Twin MCP 职责、进程边界 |
-| `specs/4.stack.md` §5 | Tools、环境变量、端口 `:3200` |
+| `specs/4.install-dependencies.md` §0、§5 | Tools、环境变量、端口 `:3200` |
 | `knowledge/mcp-hcp-virtual-twin/data-sources-zhu-tongyu.md` | Collector 与数据源 |
-| `specs/5.hcp-twin-data-dictinoary.md` | Twin JSON 字段契约 |
+| `specs/5.hcp-twin-data-dictionary.md` | Twin JSON 字段契约 |
 
 ### 硬规则
 
@@ -93,10 +93,15 @@ Use **Zod** (or the SDK's preferred schema format) for input validation.
 
 | Tool | 幂等 | 说明 |
 |------|------|------|
-| `resolve_hcp_identity` | 是 | name + hospital + dept → hcpId |
-| `build_twin` | 否 | 返回 `runId`；异步 collector |
+| `resolve_hcp_identity` | 是 | name + hospital + dept → hcpId；尽量回填 `external_ids` / `author_ids`；写入 `profile.tags`（`hcp_tier` + `role_tags`，见 `knowledge/hcp-twin/hcp-tagging.md`） |
+| `build_twin` | 否 | 返回 `runId`；异步 collector；Stage C 前须满足 §3.2.1（≥1 个 P0 文献号） |
 | `get_twin_status` | 是 | phase / progress |
 | `get_twin` / `get_insights` | 是 | 读本地 JSON |
+| `tag_hcp` | 是 | 可选：按公开证据重算级别标签（规则优先） |
+
+**AuthorIds（论文检索）**：`orcid` · `pubmed_author` · `google_scholar` · `openalex`（P0）及 Scopus/WoS/S2/CNKI（P1+）。权威副本在 `research.author_ids`；见数据字典 §3.2。
+
+**Tags（级别打标）**：主标 `hcp_tier`（T1/T2/T3/unclassified）+ 辅标 `role_tags[]`；禁止处方潜力打标。见数据字典 §3.5。
 
 ### P1 Resources（可选）
 
@@ -117,4 +122,4 @@ twin://{hcpId}/heatmap
 
 - 仅公开信息；不爬处方/统方/非公开 CRM
 - 活动热力不得用拜访记录冒充公开 `events`
-- 见 `cn-hcp-compliance` + `specs/5.hcp-twin-data-dictinoary.md` §1.4
+- 见 `cn-hcp-compliance` + `specs/5.hcp-twin-data-dictionary.md` §1.4

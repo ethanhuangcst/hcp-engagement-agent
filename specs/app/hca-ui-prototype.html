@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HCP Engagement Assistant · UI 原型</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&family=Noto+Serif+SC:wght@500;600&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --hca-bg: #F2F3F5;
+      --hca-surface: #FFFFFF;
+      --hca-ink: #1C1F26;
+      --hca-ink-muted: #5C6370;
+      --hca-line: #D8DCE3;
+      --hca-accent: #2F4A56;
+      --hca-accent-soft: #E8EEF0;
+      --hca-ok: #3D6B5A;
+      --hca-warn: #8A6A3B;
+      --hca-danger: #8B3A3A;
+      --font-display: "Source Serif 4", "Noto Serif SC", serif;
+      --font-ui: "IBM Plex Sans", "Noto Sans SC", sans-serif;
+      --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+      --max: 1120px;
+      --spine: 32px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: var(--font-ui);
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--hca-ink);
+      background:
+        radial-gradient(1200px 600px at 10% -10%, #e8eef0 0%, transparent 55%),
+        linear-gradient(180deg, #eef0f3 0%, var(--hca-bg) 40%, #eceef1 100%);
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input, textarea { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    a { color: var(--hca-accent); }
+    .app {
+      display: grid;
+      grid-template-columns: var(--spine) 1fr;
+      min-height: 100vh;
+    }
+    .specimen {
+      background: var(--hca-ink);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 0;
+      gap: 8px;
+      border-right: 1px solid #000;
+    }
+    .specimen .abbr {
+      writing-mode: vertical-rl;
+      font-family: var(--font-display);
+      font-size: 18px;
+      letter-spacing: 0.12em;
+      font-weight: 600;
+    }
+    .specimen .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #9BB0B8;
+    }
+    .specimen .dot.high { background: #c5d4d9; }
+    .main { display: flex; flex-direction: column; min-width: 0; }
+    .topbar {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0;
+      padding: 0;
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--hca-line);
+      position: sticky; top: 0; z-index: 20;
+    }
+    .topbar-meta {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 28px 6px;
+    }
+    .brand {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      color: var(--hca-ink-muted);
+      text-transform: lowercase;
+    }
+    .nav {
+      display: flex;
+      gap: 0;
+      flex-wrap: wrap;
+      padding: 0 16px;
+      border-top: 1px solid var(--hca-line);
+      background: var(--hca-surface);
+    }
+    .nav button {
+      border: none;
+      background: transparent;
+      padding: 12px 18px;
+      color: var(--hca-ink-muted);
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      white-space: nowrap;
+    }
+    .nav button:hover { color: var(--hca-ink); background: var(--hca-accent-soft); }
+    .nav button.active {
+      color: var(--hca-ink);
+      border-bottom-color: var(--hca-accent);
+      font-weight: 600;
+    }
+    .nav button.locked {
+      opacity: 0.45;
+    }
+    .content {
+      width: min(var(--max), calc(100% - 48px));
+      margin: 0 auto;
+      padding: 28px 0 64px;
+    }
+    .content.wide { --max: 1280px; }
+    .hint {
+      font-size: 12px; color: var(--hca-ink-muted);
+      padding: 8px 28px 0;
+      font-family: var(--font-mono);
+    }
+    h1 {
+      font-family: var(--font-display);
+      font-size: 28px; font-weight: 600; line-height: 1.25;
+      margin: 0 0 8px;
+    }
+    h2 {
+      font-size: 20px; font-weight: 600; margin: 28px 0 12px;
+      letter-spacing: -0.01em;
+    }
+    h3 { font-size: 15px; font-weight: 600; margin: 0 0 8px; }
+    .muted { color: var(--hca-ink-muted); }
+    .mono { font-family: var(--font-mono); font-size: 12px; }
+    .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .between { justify-content: space-between; }
+    .stack { display: flex; flex-direction: column; gap: 12px; }
+    .gap-sm { gap: 8px; }
+    .gap-lg { gap: 20px; }
+    .surface {
+      background: var(--hca-surface);
+      border: 1px solid var(--hca-line);
+      padding: 20px 22px;
+    }
+    .banner {
+      background: var(--hca-accent-soft);
+      border: 1px dashed var(--hca-accent);
+      padding: 12px 14px;
+      font-size: 13px;
+      color: var(--hca-ink);
+    }
+    .btn {
+      border: 1px solid var(--hca-line);
+      background: var(--hca-surface);
+      padding: 8px 14px;
+      color: var(--hca-ink);
+    }
+    .btn:hover { border-color: var(--hca-accent); }
+    .btn.primary {
+      background: var(--hca-accent);
+      border-color: var(--hca-accent);
+      color: #fff;
+    }
+    .btn.primary:hover { filter: brightness(1.05); }
+    .btn.danger { color: var(--hca-danger); border-color: #d8b4b4; }
+    .btn.ghost { background: transparent; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+    table.data {
+      width: 100%; border-collapse: collapse;
+      background: var(--hca-surface);
+      border: 1px solid var(--hca-line);
+    }
+    table.data th, table.data td {
+      text-align: left; padding: 12px 14px;
+      border-bottom: 1px solid var(--hca-line);
+      vertical-align: top;
+    }
+    table.data th {
+      font-size: 12px; font-weight: 500;
+      color: var(--hca-ink-muted);
+      background: #fafbfc;
+    }
+    table.data tr:last-child td { border-bottom: none; }
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 500;
+      margin: 0 4px 4px 0;
+      line-height: 1.6;
+    }
+    .tag.t1 { background: var(--hca-ink); color: #fff; }
+    .tag.t2 { background: var(--hca-accent); color: #fff; }
+    .tag.t3 { background: var(--hca-accent-soft); color: var(--hca-ink); }
+    .tag.soft { background: #f0f2f5; color: var(--hca-ink); }
+    .tag.warn {
+      background: #f5efe4; color: var(--hca-ink);
+      border: 1px dashed var(--hca-warn);
+    }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label { font-size: 12px; color: var(--hca-ink-muted); }
+    .field input, .field textarea {
+      border: 1px solid var(--hca-line);
+      padding: 10px 12px;
+      background: #fff;
+      outline: none;
+    }
+    .field input:focus, .field textarea:focus {
+      border-color: var(--hca-accent);
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+    @media (max-width: 800px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .app { grid-template-columns: 1fr; }
+      .specimen {
+        flex-direction: row; writing-mode: horizontal-tb;
+        padding: 8px 16px; justify-content: flex-start;
+      }
+      .specimen .abbr { writing-mode: horizontal-tb; }
+    }
+    .timeline { position: relative; padding-left: 20px; }
+    .timeline::before {
+      content: ""; position: absolute; left: 4px; top: 4px; bottom: 4px;
+      width: 1px; background: var(--hca-line);
+    }
+    .tl-item { position: relative; margin-bottom: 16px; }
+    .tl-item::before {
+      content: ""; position: absolute; left: -18px; top: 6px;
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--hca-accent); border: 2px solid #fff;
+      box-shadow: 0 0 0 1px var(--hca-line);
+    }
+    .tl-year { font-family: var(--font-mono); font-size: 11px; color: var(--hca-ink-muted); }
+    .heat {
+      width: 100%; border-collapse: collapse;
+      border: 1px solid var(--hca-line); background: #fff;
+    }
+    .heat th, .heat td {
+      border: 1px solid var(--hca-line);
+      padding: 10px; font-size: 12px; vertical-align: top;
+      width: 25%;
+    }
+    .heat th { background: #fafbfc; font-weight: 500; color: var(--hca-ink-muted); }
+    .empty { color: var(--hca-ink-muted); font-style: italic; }
+    .stats {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+      margin: 16px 0 8px;
+    }
+    .stat {
+      border: 1px solid var(--hca-line); background: #fff; padding: 14px 16px;
+    }
+    .stat .n {
+      font-family: var(--font-mono); font-size: 22px; font-weight: 500;
+      color: var(--hca-accent);
+    }
+    .stat .l { font-size: 12px; color: var(--hca-ink-muted); margin-top: 4px; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 900px) {
+      .two-col, .stats { grid-template-columns: 1fr; }
+    }
+    .option-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--hca-line); }
+    .option-tabs button {
+      border: none; background: transparent;
+      padding: 10px 16px; color: var(--hca-ink-muted);
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+    }
+    .option-tabs button.active {
+      color: var(--hca-ink); border-bottom-color: var(--hca-accent); font-weight: 500;
+    }
+    .kv { display: grid; grid-template-columns: 100px 1fr; gap: 8px 12px; font-size: 13px; }
+    .kv dt { color: var(--hca-ink-muted); }
+    .chat-mini {
+      border-top: 1px solid var(--hca-line); margin-top: 20px; padding-top: 16px;
+    }
+    .chat-log {
+      max-height: 220px; overflow: auto; display: flex; flex-direction: column; gap: 8px;
+      margin-bottom: 10px;
+    }
+    .bubble {
+      max-width: 85%; padding: 10px 12px; font-size: 13px;
+      border: 1px solid var(--hca-line); background: #fff;
+    }
+    .bubble.user { align-self: flex-end; background: var(--hca-accent-soft); }
+    .bubble.bot { align-self: flex-start; }
+    .agent-layout {
+      display: grid; grid-template-columns: 220px 1fr; gap: 16px; min-height: 480px;
+    }
+    @media (max-width: 800px) {
+      .agent-layout { grid-template-columns: 1fr; }
+    }
+    .session-list button {
+      display: block; width: 100%; text-align: left;
+      border: none; background: transparent; padding: 10px 12px;
+      border-left: 2px solid transparent; color: var(--hca-ink-muted);
+    }
+    .session-list button.active {
+      border-left-color: var(--hca-accent);
+      background: var(--hca-accent-soft); color: var(--hca-ink);
+    }
+    .agent-panel {
+      border: 1px solid var(--hca-line); background: #fff;
+      display: flex; flex-direction: column; min-height: 420px;
+      resize: both; overflow: auto;
+      max-width: 960px; min-width: 400px; min-height: 280px;
+    }
+    .agent-panel .head {
+      padding: 12px 14px; border-bottom: 1px solid var(--hca-line);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .agent-panel .body {
+      flex: 1; padding: 14px; overflow: auto;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .agent-panel .foot {
+      border-top: 1px solid var(--hca-line); padding: 12px;
+      display: flex; gap: 8px; align-items: flex-end;
+    }
+    .agent-panel textarea { flex: 1; min-height: 56px; resize: vertical; }
+    .cand {
+      border: 1px solid var(--hca-line); background: #fff; padding: 16px;
+      cursor: pointer;
+    }
+    .cand:hover { border-color: var(--hca-accent); }
+    .cand.high { border-left: 3px solid var(--hca-accent); background: #fafcfc; }
+    .ids-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+    .ids-table td { padding: 4px 8px 4px 0; }
+    .ids-table td:first-child { color: var(--hca-ink-muted); width: 120px; }
+    .hidden { display: none !important; }
+    .fade-in { animation: fadeIn 0.35s ease both; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .fade-in { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="specimen" aria-label="Specimen Index">
+      <div class="abbr" id="specimenAbbr">—</div>
+      <div class="dot" id="specimenDot" title="置信"></div>
+    </aside>
+    <div class="main">
+      <header class="topbar">
+        <div class="topbar-meta">
+          <div class="brand">hcp engagement · ui prototype</div>
+        </div>
+        <nav class="nav" id="nav" aria-label="主导航"></nav>
+      </header>
+      <p class="hint">prototype · specs/6.ui-guideline · 可离线打开本 HTML 确认交互</p>
+      <div class="content fade-in" id="root"></div>
+    </div>
+  </div>
+
+  <script>
+(function () {
+  const INSIGHT = "肾移植创新与质控管理并行；公开叙事强调噬菌体、BK 病毒及 AI+移植";
+  const ANALYSIS = "分析：公开身份同时覆盖临床 KOL 与医学院行政；学术主轴为移植感染与免疫，管理与 AI 叙事需与促销语境分桶。";
+
+  const NAV = [
+    { id: "twin", label: "数字分身" },
+    { id: "insights", label: "HCP洞察" },
+    { id: "options", label: "一人一策" },
+    { id: "agent", label: "HCP Engagement Agent" },
+  ];
+
+  const CAREER = [
+    { year: "现任", role: "复旦上海医学院副院长", org: "复旦大学上海医学院" },
+    { year: "现任", role: "肾移植学科带头人", org: "复旦大学附属中山医院" },
+    { year: "现任", role: "上海市器官移植重点实验室主任", org: "上海市器官移植重点实验室" },
+    { year: "曾任", role: "执行院长", org: "中山医院厦门医院（待消歧）" },
+    { year: "1994", role: "外科学博士", org: "上海医科大学" },
+  ];
+
+  const DIRECTIONS = [
+    { title: "噬菌体抗耐药感染", items: ["论文 · 噬菌体治疗移植后感染相关公开文献", "活动 · 学术会议发言（公开日程）"] },
+    { title: "肾移植免疫与排斥", items: ["论文 · 免疫/排斥主题聚类", "认可 · 学科带头人公开任职"] },
+    { title: "AI 与移植/科室管理", items: ["活动 · 2025-06 肾移植 AI 前沿论坛", "出版 · 公开管理叙事"] },
+    { title: "BK 病毒与移植后感染", items: ["论文 · BK/多瘤病毒相关主题", "荣誉 · （降权展示）"] },
+  ];
+
+  const INTEREST = [
+    { title: "耐药感染与噬菌体治疗（学术主轴）", body: "近窗论文与演讲交叉；适合 MSL 科学深聊，勿绑定具体产品卖点。" },
+    { title: "移植质控与路径规范（管理主轴）", body: "行政/质控职务支撑路径教育类 Engagement；须机构同意与代表备案旁注。" },
+    { title: "AI 医疗与可信数据（新兴轴，须分桶）", body: "政策/管理叙事与学术兴趣分桶；会后跟进可用，慎促销话术。" },
+  ];
+
+  const OPPORTUNITIES = [
+    { p: "P0", title: "A · 科学深聊", body: "噬菌体/BK briefing；建议负责人 MSL；渠道 msl_visit。" },
+    { p: "P0", title: "B · 科室路径教育（程序前置）", body: "机构同意 + 备案后再推进科室会；医学事务主导。" },
+    { p: "P1", title: "C · 会后边界对话", body: "AI 论坛跟进；保持非促销边界。" },
+    { p: "P2", title: "D · 转化合作摸底", body: "联合课题窗口探测；低置信假设须标注。" },
+  ];
+
+  const OPTIONS = [
+    {
+      id: "o1", label: "方案 1", p: "P0",
+      action: "MSL 访前：噬菌体治疗证据缺口与临床路径 briefing",
+      owner: "MSL", channel: "msl_visit",
+      topic: "噬菌体抗耐药感染 · 证据边界",
+      signal: "完成访前 briefing 纪要；HCP 确认 1 个可跟进科学问题",
+      compliance: "科学交流语境；禁止说明书外疗效宣称；输出送 MLR。",
+      academicRefs: "PMID/公开综述（示意）",
+      complianceRefs: "RDPAC 学术交流相关条款（示意）",
+    },
+    {
+      id: "o2", label: "方案 2", p: "P0",
+      action: "科室会提案：BK 病毒监测与处理路径（机构同意后）",
+      owner: "医学事务 + 代表备案", channel: "dept_meeting",
+      topic: "BK 病毒与移植后感染",
+      signal: "取得院内同意记录草稿；备案号占位",
+      compliance: "院内活动须机构同意 + 医药代表备案；勿促销话术。",
+      academicRefs: "指南/共识公开文本（示意）",
+      complianceRefs: "《医药代表管理办法》程序前提（示意）",
+    },
+    {
+      id: "o3", label: "方案 3", p: "P1",
+      action: "会后跟进：肾移植 AI 前沿论坛议题边界对话",
+      owner: "MSL", channel: "post_conference_followup",
+      topic: "AI 与移植/科室管理",
+      signal: "会后 14 日内完成一次非促销跟进",
+      compliance: "管理/AI 叙事与学术分桶；勿暗示进院承诺。",
+      academicRefs: "论坛公开日程（示意）",
+      complianceRefs: "广告法/不正当竞争边界（示意）",
+    },
+    {
+      id: "o4", label: "方案 4", p: "P2",
+      action: "重点实验室方向摸底（非促销）",
+      owner: "医学事务 / 对外合作", channel: "msl_visit",
+      topic: "转化合作窗口探测",
+      signal: "明确是否存在公开合作接口",
+      compliance: "低置信；写入 do_not_assume：处方、进院、产品绑定。",
+      academicRefs: "实验室公开页（示意）",
+      complianceRefs: "客户 SOP 占位（示意）",
+    },
+  ];
+
+  function emptyIds() {
+    return { orcid: null, pubmed_author: null, google_scholar: null, openalex: null, scopus_author_id: null, cnki_scholar: null };
+  }
+
+  let twins = [
+    {
+      id: "zhu", name: "朱同玉", hospital: "复旦大学附属中山医院",
+      dept: "肾脏移植科 / 泌尿外科", abbrev: "朱", tier: "T1",
+      roles: ["KOL", "KME", "行政", "政策发声"], insight: INSIGHT, asOf: "2026-07-16",
+      authorIds: { ...emptyIds(), google_scholar: "Yby_S-sAAAAJ" },
+    },
+    {
+      id: "xue", name: "薛武军", hospital: "西安交通大学第一附属医院",
+      dept: "肾脏病医院 / 肾移植", abbrev: "薛", tier: "T1",
+      roles: ["KOL", "KME", "行政"], insight: "肾移植与器官捐献质控；区域中心影响力", asOf: "2026-07-16",
+      authorIds: { ...emptyIds(), orcid: "0000-0002-1111-2222", openalex: "A5012345678", scopus_author_id: "55667788" },
+    },
+    {
+      id: "lin", name: "林涛", hospital: "四川大学华西医院",
+      dept: "泌尿外科 / 肾移植", abbrev: "林", tier: "T2",
+      roles: ["KOL", "KME"], insight: "西部肾移植中心学术网络；指南参与信号", asOf: "2026-07-16",
+      authorIds: { ...emptyIds(), orcid: "0000-0003-3333-4444", pubmed_author: "9988776" },
+    },
+  ];
+
+  const state = {
+    page: "twin",
+    twinView: "list",
+    activeTwinId: "zhu",
+    form: { name: "朱同玉", hospital: "复旦大学附属中山医院", dept: "肾脏移植科 / 泌尿外科" },
+    candidates: [],
+    selectedCandidate: null,
+    optionId: "o1",
+    optionChat: [],
+    sessions: [
+      {
+        id: "s1", title: "朱同玉 · 噬菌体方案",
+        messages: [
+          { role: "user", text: "方案 1 的合规边界如何收紧？" },
+          { role: "bot", text: "保持 MSL 科学交流；禁止促销话术；输出须送 MLR。" },
+        ],
+      },
+      { id: "s2", title: "新建对话", messages: [{ role: "bot", text: "新会话已创建。" }] },
+    ],
+    sessionId: "s1",
+    agentInput: "",
+    attachments: [],
+  };
+
+  const root = document.getElementById("root");
+  const navEl = document.getElementById("nav");
+
+  function activeTwin() {
+    return twins.find((t) => t.id === state.activeTwinId) || twins[0];
+  }
+
+  function showHcpTabs() {
+    // 有当前 HCP 即可进洞察/一人一策（原型评审：四 Tab 始终可见可点）
+    return Boolean(state.activeTwinId && twins.some((t) => t.id === state.activeTwinId));
+  }
+
+  function tierClass(t) {
+    return t === "T1" ? "t1" : t === "T2" ? "t2" : "t3";
+  }
+
+  function roleClass(r) {
+    return r === "行政" || r === "政策发声" ? "warn" : r === "KOL" ? "t2" : "soft";
+  }
+
+  function tagsHtml(tier, roles) {
+    const rs = (roles || []).slice(0, 3);
+    return `<span class="tag ${tierClass(tier)}">${tier}</span>` +
+      rs.map((r) => `<span class="tag ${roleClass(r)}">${r}</span>`).join("");
+  }
+
+  function idsHtml(ids) {
+    const rows = [
+      ["ORCID", ids.orcid],
+      ["PubMed Author", ids.pubmed_author],
+      ["Google Scholar", ids.google_scholar],
+      ["OpenAlex", ids.openalex],
+      ["Scopus", ids.scopus_author_id],
+      ["CNKI", ids.cnki_scholar],
+    ];
+    return `<table class="ids-table">${rows.map(([k, v]) =>
+      `<tr><td>${k}</td><td class="mono">${v || "待绑定"}</td></tr>`).join("")}</table>`;
+  }
+
+  function updateSpecimen() {
+    const t = activeTwin();
+    const show =
+      state.page === "insights" ||
+      state.page === "options" ||
+      state.page === "agent" ||
+      (state.page === "twin" && (state.twinView === "detail" || state.twinView === "list"));
+    document.getElementById("specimenAbbr").textContent = show && t ? t.abbrev : "—";
+    const dot = document.getElementById("specimenDot");
+    dot.className = "dot" + (t ? " high" : "");
+  }
+
+  function renderNav() {
+    const gate = showHcpTabs();
+    navEl.innerHTML = NAV.map((n) => {
+      const needGate = n.id === "insights" || n.id === "options";
+      const locked = needGate && !gate;
+      const active = state.page === n.id;
+      const title = locked ? "请先在数字分身中选定一位 HCP" : "";
+      // 四 Tab 始终渲染；未选 HCP 时洞察/一人一策加 locked 样式但仍显示
+      return `<button type="button" data-page="${n.id}" class="${[active ? "active" : "", locked ? "locked" : ""].filter(Boolean).join(" ")}" title="${title}">${n.label}</button>`;
+    }).join("");
+  }
+
+  function goPage(id) {
+    if ((id === "insights" || id === "options") && !showHcpTabs()) {
+      alert("请先在「数字分身」列表中打开或选定一位 HCP。");
+      return;
+    }
+    state.page = id;
+    if (id === "insights" || id === "options") {
+      state.twinView = "detail";
+    }
+    if (id === "twin") {
+      state.twinView = "list";
+    }
+    render();
+  }
+
+  function mockSearch(name, hospital, dept) {
+    const q = `${name}${hospital}${dept}`;
+    if (q.includes("朱") || q.includes("中山")) {
+      return [
+        {
+          candidateId: "c-zhu-zs", name: "朱同玉", nameEn: "Tongyu Zhu",
+          hospital: "复旦大学附属中山医院", dept: "肾脏移植科 / 泌尿外科",
+          title: "主任医师 / 教授", tier: "T1",
+          roles: ["KOL", "KME", "行政", "政策发声"], insight: INSIGHT,
+          authorIds: { ...emptyIds(), google_scholar: "Yby_S-sAAAAJ" },
+          matchNote: "医院专家页 + Scholar · high", confidence: "high",
+        },
+        {
+          candidateId: "c-zhu-other", name: "朱同玉", nameEn: "Tongyu Zhu",
+          hospital: "其他机构（同名待核）", dept: "外科", title: "副主任医师",
+          tier: "T3", roles: ["一线"],
+          insight: "证据不足，勿与中山肾移植朱同玉合并",
+          authorIds: { ...emptyIds(), orcid: "0000-0009-9999-0000" },
+          matchNote: "仅姓名命中 · low", confidence: "low",
+        },
+      ];
+    }
+    return [
+      {
+        candidateId: "c-g1", name: name || "查询姓名", nameEn: "—",
+        hospital: hospital || "待确认医院", dept: dept || "待确认科室",
+        title: "待确认职称", tier: "T2", roles: ["KME"],
+        insight: "MCP 已回填公开页要点；请核对文献检索号后确认",
+        authorIds: { ...emptyIds(), orcid: "0000-0001-2345-6789", pubmed_author: "1122334", google_scholar: "AbCdEfGhIjK", openalex: "A5098765432" },
+        matchNote: "模拟检索命中 · medium", confidence: "medium",
+      },
+    ];
+  }
+
+  function careerHtml() {
+    return `<div class="timeline">${CAREER.map((c) => `
+      <div class="tl-item">
+        <div class="tl-year">${c.year}</div>
+        <div><strong>${c.role}</strong></div>
+        <div class="muted">${c.org}</div>
+      </div>`).join("")}</div>`;
+  }
+
+  function renderList() {
+    return `
+      <div class="row between">
+        <div>
+          <h1>HCP 数字分身列表</h1>
+          <p class="muted">共 ${twins.length} 位 · 公开信息结构化画像</p>
+        </div>
+        <button type="button" class="btn primary" data-action="create">新增数字分身</button>
+      </div>
+      <table class="data" style="margin-top:16px">
+        <thead><tr><th>#</th><th>医生 / 机构 / 一句话洞察</th><th>级别标签</th><th>操作</th></tr></thead>
+        <tbody>
+          ${twins.map((t, i) => `
+            <tr>
+              <td class="mono">${i + 1}</td>
+              <td>
+                <div><strong>${t.name}</strong> <span class="mono muted">hcp:${t.id}</span></div>
+                <div class="muted">${t.hospital} · ${t.dept}</div>
+                <div style="margin-top:4px">${t.insight}</div>
+                <div class="mono muted" style="margin-top:4px">as_of ${t.asOf}</div>
+              </td>
+              <td>${tagsHtml(t.tier, t.roles)}</td>
+              <td>
+                <button type="button" class="btn btn-sm" data-action="open" data-id="${t.id}">打开</button>
+                <button type="button" class="btn btn-sm" data-action="edit" data-id="${t.id}">修改</button>
+                <button type="button" class="btn btn-sm danger" data-action="del" data-id="${t.id}">删除</button>
+              </td>
+            </tr>`).join("")}
+        </tbody>
+      </table>`;
+  }
+
+  function renderCreate() {
+    const f = state.form;
+    return `
+      <button type="button" class="btn ghost btn-sm" data-action="to-list">← 返回列表</button>
+      <h1 style="margin-top:12px">新增数字分身</h1>
+      <p class="muted">提交后调用 MCP 消歧（本原型为模拟检索）</p>
+      <div class="surface" style="margin-top:16px">
+        <div class="form-grid">
+          <div class="field"><label>姓名</label><input id="f-name" value="${esc(f.name)}" /></div>
+          <div class="field"><label>医院</label><input id="f-hospital" value="${esc(f.hospital)}" /></div>
+          <div class="field"><label>科室</label><input id="f-dept" value="${esc(f.dept)}" /></div>
+        </div>
+        <div style="margin-top:16px">
+          <button type="button" class="btn primary" data-action="query">查询 HCP</button>
+        </div>
+      </div>`;
+  }
+
+  function renderCandidates() {
+    return `
+      <button type="button" class="btn ghost btn-sm" data-action="to-create">← 返回查询</button>
+      <h1 style="margin-top:12px">候选记录</h1>
+      <p class="muted">请选择正确消歧结果</p>
+      <div class="stack gap-lg" style="margin-top:16px">
+        ${state.candidates.map((c, i) => `
+          <div class="cand ${c.confidence === "high" ? "high" : ""}" data-action="pick" data-cid="${c.candidateId}">
+            <div class="row between">
+              <div>
+                <strong>${i + 1}. ${c.name}</strong>
+                <span class="muted mono"> · ${c.nameEn}</span>
+              </div>
+              <span class="mono muted">${c.matchNote}</span>
+            </div>
+            <div class="muted" style="margin:6px 0">${c.hospital} · ${c.dept} · ${c.title}</div>
+            <div>${tagsHtml(c.tier, c.roles)}</div>
+            <div style="margin:8px 0">${c.insight}</div>
+            <div class="muted" style="margin-bottom:6px">文献检索号码</div>
+            ${idsHtml(c.authorIds)}
+            <div style="margin-top:12px">
+              <button type="button" class="btn primary btn-sm" data-action="pick" data-cid="${c.candidateId}">选择此记录</button>
+            </div>
+          </div>`).join("")}
+      </div>`;
+  }
+
+  function renderProfile(mode) {
+    const t = mode === "confirm" ? candidateToTwin(state.selectedCandidate) : activeTwin();
+    if (!t) return `<p>未选定</p>`;
+    const banner = mode === "confirm"
+      ? `<div class="banner">预览分身（未落盘）。确认后写入本地 Twin JSON，并触发构建补齐。</div>`
+      : "";
+    const actions = mode === "confirm"
+      ? `<button type="button" class="btn primary" data-action="save">确认并保存</button>
+         <button type="button" class="btn" data-action="to-candidates">返回候选</button>`
+      : mode === "detail"
+      ? `<button type="button" class="btn" data-action="to-list">返回列表</button>
+         <button type="button" class="btn" data-action="edit" data-id="${t.id}">修改</button>`
+      : "";
+    return `
+      ${mode !== "detail" ? `<button type="button" class="btn ghost btn-sm" data-action="to-list">← 列表</button>` : ""}
+      ${banner}
+      <div class="row between" style="margin-top:12px">
+        <div>
+          <h1>${t.name}</h1>
+          <div>${tagsHtml(t.tier, t.roles)}</div>
+          <p class="muted">${t.hospital} · ${t.dept}</p>
+        </div>
+        <div class="row">${actions}</div>
+      </div>
+      <div class="surface" style="margin-top:12px">
+        <h3>一句话洞察</h3>
+        <p>${t.insight}</p>
+      </div>
+      <h2>文献检索号码</h2>
+      <div class="surface">${idsHtml(t.authorIds)}</div>
+      <h2>职业轨迹</h2>
+      <div class="surface">${careerHtml()}</div>`;
+  }
+
+  function candidateToTwin(c) {
+    return {
+      id: "new-" + Date.now().toString(36),
+      name: c.name, hospital: c.hospital, dept: c.dept,
+      abbrev: c.name.slice(0, 1), tier: c.tier, roles: c.roles,
+      insight: c.insight, asOf: "2026-07-16", authorIds: c.authorIds,
+    };
+  }
+
+  function renderEdit() {
+    const t = activeTwin();
+    return `
+      <button type="button" class="btn ghost btn-sm" data-action="open" data-id="${t.id}">← 返回详情</button>
+      <h1 style="margin-top:12px">修改分身</h1>
+      <div class="surface" style="margin-top:16px">
+        <div class="form-grid">
+          <div class="field"><label>姓名</label><input id="e-name" value="${esc(t.name)}" /></div>
+          <div class="field"><label>医院</label><input id="e-hospital" value="${esc(t.hospital)}" /></div>
+          <div class="field"><label>科室</label><input id="e-dept" value="${esc(t.dept)}" /></div>
+        </div>
+        <div style="margin-top:16px">
+          <h3 class="muted">文献检索号码（只读）</h3>
+          ${idsHtml(t.authorIds)}
+        </div>
+        <div style="margin-top:16px">
+          <button type="button" class="btn primary" data-action="save-edit">保存修改</button>
+        </div>
+      </div>`;
+  }
+
+  function renderInsights() {
+    const t = activeTwin();
+    return `
+      <div class="row between">
+        <div>
+          <h1>${t.name}</h1>
+          <div>${tagsHtml(t.tier, t.roles)}</div>
+          <p class="mono muted">as_of ${t.asOf} · twin_version 0.1.5-p0</p>
+        </div>
+        <button type="button" class="btn" disabled>导出</button>
+      </div>
+      <div class="surface" style="margin-top:12px">
+        <h3>一句话洞察</h3>
+        <p>${t.insight}</p>
+        <p class="muted" style="margin-top:8px">${ANALYSIS}</p>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="n">4</div><div class="l">科研方向</div></div>
+        <div class="stat"><div class="n">0</div><div class="l">近 90 日公开会务</div></div>
+        <div class="stat"><div class="n">${t.tier}</div><div class="l">级别主标</div></div>
+      </div>
+      <h2>科研方向与成果</h2>
+      <div class="stack">
+        ${DIRECTIONS.map((d) => `
+          <div class="surface">
+            <h3>${d.title}</h3>
+            <ul class="muted" style="margin:0;padding-left:18px">
+              ${d.items.map((x) => `<li>${x}</li>`).join("")}
+            </ul>
+          </div>`).join("")}
+      </div>
+      <h2>活动热力</h2>
+      <table class="heat">
+        <thead><tr><th>更早</th><th>90天</th><th>60天</th><th>30天</th></tr></thead>
+        <tbody><tr>
+          <td>2025-06 · 上海 · <a href="#">肾移植 AI 前沿论坛</a></td>
+          <td class="empty">无公开证据</td>
+          <td class="empty">无公开证据</td>
+          <td class="empty">无公开证据</td>
+        </tr></tbody>
+      </table>
+      <h2>已知近期学术活动</h2>
+      <div class="surface">2025-06 · 上海 · 肾移植 AI 前沿论坛 · 主席 · academic</div>
+      <div class="two-col" style="margin-top:8px">
+        <div>
+          <h2>兴趣方向</h2>
+          ${INTEREST.map((x) => `
+            <div class="surface" style="margin-bottom:12px">
+              <h3>${x.title}</h3>
+              <p class="muted">${x.body}</p>
+            </div>`).join("")}
+          <p class="mono muted">渠道假设：msl_visit · dept_meeting · post_conference_followup（推断，medium）</p>
+        </div>
+        <div>
+          <h2>可能的机会</h2>
+          ${OPPORTUNITIES.map((o) => `
+            <div class="surface" style="margin-bottom:12px">
+              <div class="row"><span class="tag ${o.p === "P0" ? "t2" : "soft"}">${o.p}</span><strong>${o.title}</strong></div>
+              <p class="muted" style="margin-top:6px">${o.body}</p>
+            </div>`).join("")}
+        </div>
+      </div>
+      <h2>证据与来源</h2>
+      <table class="data">
+        <thead><tr><th>来源</th><th>置信</th><th>as_of</th></tr></thead>
+        <tbody>
+          <tr><td><a href="#">医院专家介绍 / 医学院任职页</a></td><td>high</td><td class="mono">2026-07-16</td></tr>
+          <tr><td><a href="#">Scholar 作者页</a></td><td>medium</td><td class="mono">2026-07-16</td></tr>
+        </tbody>
+      </table>`;
+  }
+
+  function renderOptions() {
+    const t = activeTwin();
+    const o = OPTIONS.find((x) => x.id === state.optionId) || OPTIONS[0];
+    return `
+      <div class="row between">
+        <div>
+          <h1>${t.name} · 方案选项</h1>
+          <p class="mono muted">author_ids.google_scholar = Yby_S-sAAAAJ</p>
+        </div>
+        <div class="row">
+          <button type="button" class="btn primary" data-action="gen-opt">生成方案</button>
+          <button type="button" class="btn" data-action="gate">送合规闸门检查</button>
+        </div>
+      </div>
+      <div class="option-tabs" style="margin-top:16px">
+        ${OPTIONS.map((x) => `
+          <button type="button" class="${x.id === o.id ? "active" : ""}" data-action="opt" data-oid="${x.id}">${x.label}</button>`).join("")}
+      </div>
+      <div class="surface" style="border-top:none">
+        <div class="row" style="margin-bottom:12px">
+          <span class="tag ${o.p === "P0" ? "t2" : "soft"}">${o.p}</span>
+          <strong>${o.action}</strong>
+        </div>
+        <dl class="kv">
+          <dt>负责人</dt><dd>${o.owner}</dd>
+          <dt>渠道</dt><dd class="mono">${o.channel}</dd>
+          <dt>主题</dt><dd>${o.topic}</dd>
+          <dt>成功信号</dt><dd>${o.signal}</dd>
+          <dt>合规旁注</dt><dd class="muted">${o.compliance}</dd>
+          <dt>学术引用</dt><dd class="mono">${o.academicRefs}</dd>
+          <dt>合规引用</dt><dd class="mono">${o.complianceRefs}</dd>
+        </dl>
+        <div class="chat-mini">
+          <h3>与 Agent 讨论本方案</h3>
+          <div class="chat-log" id="opt-chat">
+            ${state.optionChat.map((m) => `<div class="bubble ${m.role}">${esc(m.text)}</div>`).join("")}
+          </div>
+          <div class="row">
+            <input id="opt-input" style="flex:1;border:1px solid var(--hca-line);padding:10px 12px" placeholder="短输入…" />
+            <button type="button" class="btn primary" data-action="opt-send">发送</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function renderAgent() {
+    const s = state.sessions.find((x) => x.id === state.sessionId) || state.sessions[0];
+    document.querySelector(".content")?.classList.add("wide");
+    return `
+      <h1>HCP Engagement Agent</h1>
+      <p class="muted">历史会话 · 附件 · 面板可拖拽右下角调整尺寸</p>
+      <div class="agent-layout" style="margin-top:16px">
+        <div class="surface" style="padding:8px">
+          <button type="button" class="btn btn-sm primary" style="width:100%;margin-bottom:8px" data-action="new-session">新建会话</button>
+          <div class="session-list">
+            ${state.sessions.map((x) => `
+              <button type="button" class="${x.id === s.id ? "active" : ""}" data-action="session" data-sid="${x.id}">${x.title}</button>`).join("")}
+          </div>
+        </div>
+        <div class="agent-panel">
+          <div class="head">
+            <strong>${s.title}</strong>
+            <span class="mono muted">resize</span>
+          </div>
+          <div class="body" id="agent-body">
+            ${s.messages.map((m) => `<div class="bubble ${m.role}">${esc(m.text)}</div>`).join("")}
+            ${state.attachments.length ? `<div class="mono muted">附件：${state.attachments.join(", ")}</div>` : ""}
+          </div>
+          <div class="foot">
+            <button type="button" class="btn btn-sm" data-action="upload">上传附件</button>
+            <textarea id="agent-input" placeholder="输入消息…">${esc(state.agentInput)}</textarea>
+            <button type="button" class="btn primary" data-action="agent-send">发送</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function esc(s) {
+    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    })[c]);
+  }
+
+  function render() {
+    renderNav();
+    updateSpecimen();
+    const content = document.getElementById("root");
+    content.classList.toggle("wide", state.page === "agent");
+    let html = "";
+    if (state.page === "twin") {
+      if (state.twinView === "list") html = renderList();
+      else if (state.twinView === "create") html = renderCreate();
+      else if (state.twinView === "candidates") html = renderCandidates();
+      else if (state.twinView === "confirm") html = renderProfile("confirm");
+      else if (state.twinView === "detail") html = renderProfile("detail");
+      else if (state.twinView === "edit") html = renderEdit();
+    } else if (state.page === "insights") html = renderInsights();
+    else if (state.page === "options") html = renderOptions();
+    else if (state.page === "agent") html = renderAgent();
+    content.innerHTML = html;
+    content.classList.remove("fade-in");
+    void content.offsetWidth;
+    content.classList.add("fade-in");
+  }
+
+  document.body.addEventListener("click", (e) => {
+    const navBtn = e.target.closest("[data-page]");
+    if (navBtn && navBtn.dataset.page) {
+      goPage(navBtn.dataset.page);
+      return;
+    }
+    const el = e.target.closest("[data-action]");
+    if (!el) return;
+    const a = el.dataset.action;
+    if (a === "create") {
+      state.twinView = "create";
+      state.form = { name: "朱同玉", hospital: "复旦大学附属中山医院", dept: "肾脏移植科 / 泌尿外科" };
+      render();
+    } else if (a === "to-list") {
+      state.twinView = "list";
+      state.page = "twin";
+      render();
+    } else if (a === "to-create") {
+      state.twinView = "create";
+      render();
+    } else if (a === "to-candidates") {
+      state.twinView = "candidates";
+      render();
+    } else if (a === "query") {
+      state.form = {
+        name: document.getElementById("f-name").value.trim(),
+        hospital: document.getElementById("f-hospital").value.trim(),
+        dept: document.getElementById("f-dept").value.trim(),
+      };
+      state.candidates = mockSearch(state.form.name, state.form.hospital, state.form.dept);
+      state.twinView = "candidates";
+      render();
+    } else if (a === "pick") {
+      const c = state.candidates.find((x) => x.candidateId === el.dataset.cid);
+      state.selectedCandidate = c;
+      state.twinView = "confirm";
+      render();
+    } else if (a === "save") {
+      const t = candidateToTwin(state.selectedCandidate);
+      twins = [t, ...twins.filter((x) => x.id !== t.id)];
+      state.activeTwinId = t.id;
+      state.twinView = "detail";
+      render();
+    } else if (a === "open") {
+      state.activeTwinId = el.dataset.id;
+      state.twinView = "detail";
+      state.page = "twin";
+      render();
+    } else if (a === "edit") {
+      state.activeTwinId = el.dataset.id || state.activeTwinId;
+      state.twinView = "edit";
+      state.page = "twin";
+      render();
+    } else if (a === "save-edit") {
+      const t = activeTwin();
+      t.name = document.getElementById("e-name").value.trim();
+      t.hospital = document.getElementById("e-hospital").value.trim();
+      t.dept = document.getElementById("e-dept").value.trim();
+      t.abbrev = t.name.slice(0, 1);
+      state.twinView = "detail";
+      render();
+    } else if (a === "del") {
+      if (!confirm("确认删除该分身？")) return;
+      const id = el.dataset.id;
+      twins = twins.filter((x) => x.id !== id);
+      if (state.activeTwinId === id) {
+        state.activeTwinId = twins[0]?.id || "";
+        state.twinView = "list";
+      }
+      render();
+    } else if (a === "opt") {
+      state.optionId = el.dataset.oid;
+      render();
+    } else if (a === "gen-opt") {
+      alert("（原型）已生成方案。正式环境调用 hcp-engagement-agent proposeOptions。");
+    } else if (a === "gate") {
+      alert("（原型）合规闸门：附条件通过。正式环境调用 runComplianceGate / cn-hcp-compliance。");
+    } else if (a === "opt-send") {
+      const input = document.getElementById("opt-input");
+      const text = (input?.value || "").trim();
+      if (!text) return;
+      state.optionChat.push({ role: "user", text });
+      state.optionChat.push({ role: "bot", text: "（原型）已记录。完整对话请使用「HCP Engagement Agent」Tab。" });
+      render();
+    } else if (a === "session") {
+      state.sessionId = el.dataset.sid;
+      render();
+    } else if (a === "new-session") {
+      const id = "s" + Date.now();
+      state.sessions.unshift({ id, title: "新建对话", messages: [{ role: "bot", text: "新会话已创建。" }] });
+      state.sessionId = id;
+      state.attachments = [];
+      render();
+    } else if (a === "upload") {
+      state.attachments.push("附件-" + (state.attachments.length + 1) + ".pdf");
+      render();
+    } else if (a === "agent-send") {
+      const input = document.getElementById("agent-input");
+      const text = (input?.value || "").trim();
+      if (!text) return;
+      const s = state.sessions.find((x) => x.id === state.sessionId);
+      s.messages.push({ role: "user", text });
+      s.messages.push({ role: "bot", text: "（原型回复）已收到。正式环境将调用 hcp-engagement-agent（mode=open_chat）。" });
+      state.agentInput = "";
+      render();
+    }
+  });
+
+  render();
+})();
+  </script>
+</body>
+</html>

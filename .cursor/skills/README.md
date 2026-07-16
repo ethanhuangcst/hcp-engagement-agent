@@ -30,7 +30,7 @@
 |------|------|
 | 知识库 | `knowledge/` |
 | 规格 | `specs/` |
-| Twin 数据字典 | `specs/5.hcp-twin-data-dictinoary.md` |
+| Twin 数据字典 | `specs/5.hcp-twin-data-dictionary.md` |
 
 修改知识库或架构后，请同步更新技能内「本项目」锚点段落。
 
