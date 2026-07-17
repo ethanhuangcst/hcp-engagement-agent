@@ -91,7 +91,7 @@
 | 9 | F-AGT-005 | Zod 入参校验 | 对外入口与各 Capability 入参 Zod；结构化错误无堆栈 | MVP-3 |
 | 10 | F-AGT-006 | Options 入库 | 写 Postgres `engagement_options`；事务写 | MVP-6 |
 | 11 | F-AGT-007 | Session 入库 | 写 Postgres `chat_sessions`；区分 `mode`（open_chat / revise_options）；每轮持久化 | MVP-6 |
-| 12 | F-AGT-008 | 一句话洞察合成 | `synthesizeDoingNow`：经 `LlmClient` 生成 `doing_now.summary`（1–3 句）+ 可选 `analysis`；写回 `insights.json`；推断可追溯 | MVP-3 |
+| 12 | F-AGT-008 | 一句话洞察合成 | `synthesizeDoingNow`：生成 `doing_now.summary`（1–3 句）+ 可选 `analysis`；summary 空/缺失时写入，`refresh=true` 强制覆盖；**拥有展示权威**（Stage E 不写最终 summary） | MVP-3 |
 | 13 | F-AGT-009 | 数字分身一句话洞察消费 | 支撑 F-WEB-005/007：列表截断 + 详情摘要条；与 HCP 洞察同源字段 | MVP-3 |
 | 14 | F-AGT-010 | HCP 洞察一句话洞察消费 | 支撑 F-WEB-018：摘要条 + 可选分析段；禁止与数字分身两套文案 | MVP-3 |
 | 15 | F-AGT-011 | Capability：读 Insights | `get_twin_insights(hcpId)` → insights（含 doing_now / opportunities / interest_directions / tags 旁注） | MVP-6 |
@@ -286,14 +286,16 @@ A0 壳 / Zod / LlmClient（默认 qwen）/ Postgres 持久化
 
 ---
 
-## Open questions
+## Open questions（已决 · 2026-07-17）
 
-- [ ] `EngagementOption` / `ChatSession` Zod 正式冻结（domain 专文；session 须含 `mode` + `llm`）
-- [ ] 合规闸门：生成后一步 vs 用户按钮是否共用（建议共用 I-AGT-004）
-- [x] Insights「解释建议」→ 复用 `chat(mode=open_chat)`，不另开 API
-- [ ] MCP Stage E 草稿与 Agent `synthesizeDoingNow`：始终覆盖，还是仅 `refresh=true` / 空 summary 时写入
-- [ ] `open_chat` 是否允许直接改写 `doing_now`（P0 建议否，走 I-AGT-001）
-- [ ] P0 是否预置非 DashScope 的第二家厂商 adapter，还是仅 `openai_compatible` 通用适配即可
+| # | 问题 | 决定 | 落地 |
+|---|------|------|------|
+| 1 | `EngagementOption` / `ChatSession` Zod 正式冻结 | **在 MVP-6 开工前冻结于 `@hca/domain`**；`ChatSession` 必含 `mode` + `llm`；Option 字段以本规格 §Option 契约为基线，另文可扩但不改名破坏兼容 | domain 专文 / schema 模块 |
+| 2 | 合规闸门：生成后一步 vs 用户按钮 | **共用 `I-AGT-004` `runComplianceGate`**。提案主路径末可自动调用；一人一策「送合规闸门」按钮调同一 API | F-WEB-028 · F-AGT-017 |
+| 3 | Insights「解释建议」是否另开 API | **否**。复用 `chat(mode=open_chat)` | 已决 |
+| 4 | Stage E 草稿 vs `synthesizeDoingNow` 覆盖策略 | **Agent 拥有展示用 `doing_now.summary`（+ `analysis`）**。MCP Stage E 只写结构化草稿（兴趣/机会等），**不写最终 summary**。`synthesizeDoingNow`：summary 为空或缺失时写入；`refresh=true` 强制覆盖；同 Twin 版本重复调用结果应稳定 | F-AGT-008 · F-MCP-023 |
+| 5 | `open_chat` 是否直接改写 `doing_now` | **P0 否**。须经 BFF/`I-AGT-001`；chat 内最多建议用户刷新洞察 | F-AGT-019 |
+| 6 | P0 是否预置第二家命名厂商 adapter | **否**。P0 仅 `qwen`（默认）+ `openai_compatible` 通用适配；新厂商只加 adapter，不改 Capabilities | F-AGT-001c |
 
 ---
 

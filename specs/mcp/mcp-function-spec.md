@@ -77,8 +77,8 @@ Research Collector **仅**使用同时满足下列条件的源：公开 HTTP API
 | 19 | F-MCP-019 | Stage A 身份锚点 | 锁定主页 URL + AuthorIds + 基础 profile + tagging | MVP-2 |
 | 20 | F-MCP-020 | Stage B Career Collector | 医院/大学页 → education / positions / society_roles → `career-timeline.json`（或并入 twin） | MVP-2 |
 | 21 | F-MCP-021 | Stage C Research Collector | 按 author_ids 拉文 → recent_pubs、themes、trend_shift、lab；专利/基金 P1 | MVP-2 |
-| 22 | F-MCP-022 | Stage D Heatmap Collector | 会务/新闻 → events；窗：更早 \| d90 \| d60 \| d30；分桶 academic \| policy_media；空窗 `no_public_evidence` | MVP-2 |
-| 23 | F-MCP-023 | Stage E Insights 衍生 | `doing_now`、`interest_directions`、`opportunities`、合规旁注；政策桶不并入学术兴趣 | MVP-2 |
+| 22 | F-MCP-022 | Stage D Heatmap Collector | 会务/新闻 → events；窗：更早 \| d90 \| d60 \| d30；分桶 academic \| policy_media；空窗或失败 → `no_public_evidence`（**不阻断** Stage E） | MVP-2 |
+| 23 | F-MCP-023 | Stage E Insights 衍生 | 基于身份+职业+科研（及可用热力）写结构化草稿；D 失败时仍可出 Insights | MVP-2 |
 | 24 | F-MCP-024 | 构建进度查询 | `get_twin_status(runId)` → phase / progress / error；phase 对齐：身份→职业→科研→热力(可跳)→洞察 | MVP-2 |
 | 25 | F-MCP-025 | Twin / Insights 读取 | `get_twin` / `get_insights`；不存在时结构化 `NOT_FOUND`，不抛未捕获异常 | MVP-1 |
 | 26 | F-MCP-026 | MCP Resources（只读） | 注册 URI 模板 `twin://{hcpId}/career\|research\|heatmap`；`mimeType=application/json`；缺文件 → 可读错误；产品 UI 仍走 BFF | MVP-2 |
@@ -213,13 +213,13 @@ Stage A 身份+AuthorIds+tags
 
 ---
 
-## Open questions
+## Open questions（已决 · 2026-07-17）
 
-- [x] `resolve_hcp_identity` 是否在消歧成功时写入 `hcp_twins.identity`，还是完全由 BFF「确认并保存」后首次入库  
-  **决定（MVP-1）**：resolve **不**入库完整 Twin（`persisted: false`）。首次入库由 BFF 调 `confirmAndSaveTwin` / `@hca/db.upsertTwin`（确认并保存）完成。
-- [ ] Stage D 失败时 Stage E 是否仍可基于论文+职业出 Insights（建议：可，热力标空窗）
-- [x] `tag_hcp` 是否允许在 Twin 未 `build` 完成时仅凭 resolve 草稿打标并入库  
-  **决定（MVP-1）**：`tag_hcp` 要求 Twin 已入库；未入库返回 `NOT_FOUND`。resolve 仅返回 `tags_draft`。
+| # | 问题 | 决定 |
+|---|------|------|
+| 1 | resolve 是否入库完整 Twin | **否**。`persisted: false`；确认保存由 BFF `confirmAndSaveTwin` / `upsertTwin` |
+| 2 | Stage D 失败时 Stage E 是否仍跑 | **是**。Stage D 失败或空窗时热力标 `no_public_evidence` / 记录可重试错误；Stage E **仍基于身份+职业+科研**衍生 Insights；政策热力桶不并入学术兴趣 |
+| 3 | 未 build 完成能否仅凭草稿 `tag_hcp` 入库 | **否**。`tag_hcp` 须 Twin 已入库；未入库 → `NOT_FOUND`；resolve 仅 `tags_draft` |
 
 ---
 

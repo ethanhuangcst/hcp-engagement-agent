@@ -69,7 +69,8 @@ Web「确认并保存」
        → 拉公开源（PubMed / OpenAlex / 指南摘要；OA 优先）
        → 写入 data/rag/corpus/academic/{specialty}/
        → 切块 → embed → upsert academic_index
-       → 更新 Postgres ingest_manifest + Twin knowledge_status
+       → 更新 Postgres ingest_manifest + rag_ingest_jobs（knowledge_status）
+       → （可选）BFF 联表展示；不写 Twin JSON
   → UI 可选轮询 get_ingest_status(jobId)
 ```
 
@@ -229,7 +230,7 @@ tenant_id?   # SOP 必填；全局种子为 null
 | 指南 | **按章节** | 标 `authority` |
 | 租户 SOP | 按小节/编号 | payload 强制 `tenant_id` |
 
-Parent-Document（小块召回、生成拉 parent）：**P2**，P0 不做。
+Parent-Document（小块召回、生成拉 parent）：**P2**，不进 MVP-4/5；MVP-7 可选。
 
 ---
 
@@ -312,8 +313,8 @@ Query
 | 表 / 实体 | 用途 |
 |-----------|------|
 | `ingest_manifest` | doc_id、index、specialty?、version、as_of、corpus_path、chunk_count |
-| `rag_ingest_jobs` | jobId、specialty、status、progress、error、hcpId? |
-| Twin 旁路字段 | `knowledge_status` / `knowledge_job_id` / `knowledge_updated_at`（或仅 manifest；与字典对齐） |
+| `rag_ingest_jobs` | jobId、specialty、status（= knowledge_status）、progress、error、hcpId?；**权威状态源** |
+| Twin | **不**在 Twin JSON / 数据字典写入 knowledge_*；列表展示由 BFF 联表 jobs；可选 `hcp_twins` 表级旁路列镜像（非 JSONB 文档字段） |
 
 与 Twin 共用 `DATABASE_URL`。向量**不**进 Postgres。
 
@@ -330,11 +331,11 @@ data/
 
 | 规则 | 要求 |
 |------|------|
-| Qdrant | 回环 / Docker internal；严格模式拒绝不安全 `QDRANT_URL` |
+| Qdrant | 回环 / Docker internal；**绑定检查始终开启**；非本机须 `QDRANT_ALLOW_NON_LOCAL=true` |
 | 访问 | 仅 medical-kb → Qdrant；浏览器永不直连 |
-| 租户 | 物理目录 + payload `tenant_id`；跨租户拒绝 |
+| 租户 | 物理目录 + **同一** compliance_index 上 payload `tenant_id`；跨租户拒绝；不分租户 collection |
 | 日志 | 不打印完整 SOP / 大段合规正文 |
-| Embedding | 优先进程内/内网；云 API 只传切块、Key 仅服务端 |
+| Embedding | **默认进程内/内网**；云 API 只传切块、Key 仅服务端、须显式开启 |
 
 ---
 
@@ -394,7 +395,8 @@ packages/medical-kb/
 
 ## 17. 相关文档
 
-- 功能规格：[`rag-function-spec.md`](./rag-function-spec.md)  
+- 功能规格（含 **Open questions 已决**）：[`rag-function-spec.md`](./rag-function-spec.md)  
+- 用户故事：[`rag-stories.md`](./rag-stories.md)  
 - Web 触发：[`../app/app-function-spec.md`](../app/app-function-spec.md) F-WEB-039  
 - Agent 消费：[`../agent/agent-design.md`](../agent/agent-design.md) · function-spec `retrieve_*`  
 - 安装：[`../4.install-dependencies.md`](../4.install-dependencies.md) §6  

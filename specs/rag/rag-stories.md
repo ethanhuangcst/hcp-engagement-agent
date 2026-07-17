@@ -58,8 +58,10 @@ Feature: medical-kb 壳与安全边界
 
 ### 规则清单
 
-- 业务元数据（manifest）在香港 Postgres；向量仅 Qdrant；浏览器禁止直连向量库与 embedding Key。
-- Embedding / Rerank 优先进程内或内网；若用云 API，只传切块文本。
+- Embedding / Rerank：**默认进程内或内网**；公有云 API 仅显式例外。
+- `knowledge_status` 权威在 `rag_ingest_jobs` / manifest；不写 Twin JSON。
+- 租户 SOP：同一合规索引 + `tenant_id` 过滤；不分 collection。
+- Qdrant 绑定检查始终开启；开发用 localhost 即安全。
 
 ---
 

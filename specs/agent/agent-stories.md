@@ -67,6 +67,11 @@ Feature: LlmClient 与安全边界
 **覆盖**：F-AGT-008、009、010 · I-AGT-001  
 **MVP**：MVP-3  
 
+### 规则清单
+
+- Agent 拥有展示用 `doing_now.summary`；summary 空/缺失时写入，`refresh=true` 强制覆盖。
+- MCP Stage E 不写最终 summary。
+
 ### 验收标准
 
 ```gherkin
@@ -101,6 +106,11 @@ Feature: synthesizeDoingNow
 
 **覆盖**：F-AGT-002–004、006、011–018、024–027、029 · I-AGT-002、004、006–009  
 **MVP**：MVP-6  
+
+### 规则清单
+
+- 合规闸门与一人一策「送检」按钮共用 `runComplianceGate`。
+- 提案路径不可跳过合规检索。
 
 ### 验收标准
 
@@ -197,6 +207,10 @@ Feature: revise_options
 
 **覆盖**：F-AGT-019、022、023 · I-AGT-003  
 **MVP**：MVP-7  
+
+### 规则清单
+
+- `open_chat` 不直接改写 `doing_now`；刷新洞察走 `synthesizeDoingNow`。
 
 ### 验收标准
 
