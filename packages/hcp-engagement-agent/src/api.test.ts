@@ -73,7 +73,7 @@ describe("LlmClient config", () => {
   });
 });
 
-describe("MVP-3 agent against live Postgres + real LLM", () => {
+describe("MVP-2 agent against live Postgres + real LLM", () => {
   beforeAll(async () => {
     const cfg = resolveLlmConfig();
     if (!cfg.ok) {

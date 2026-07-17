@@ -95,11 +95,40 @@ function openAlexId(raw?: string | null): string | null {
   return m ? m[0]!.toUpperCase().replace(/^A/, "A") : raw.replace(/^https?:\/\/openalex\.org\/authors\//i, "");
 }
 
+/**
+ * OpenAlex display_name 是否与 Twin 姓名一致。
+ * 用于拦截 fixture/历史误绑（如 A5040172093=Austin S. Ankney 误作朱同玉）。
+ */
+export function openAlexDisplayMatchesHcp(
+  displayName: string | undefined | null,
+  nameZh: string,
+  nameEn?: string | null,
+): boolean {
+  if (!displayName?.trim()) return false;
+  const raw = displayName.trim();
+  const compact = raw.toLowerCase().replace(/[\s.,'-]+/g, "");
+  const zh = nameZh.trim();
+  if (zh && (raw.includes(zh) || compact.includes(zh.toLowerCase()))) {
+    return true;
+  }
+  if (nameEn?.trim()) {
+    const parts = nameEn
+      .toLowerCase()
+      .split(/[\s,]+/)
+      .map((p) => p.replace(/[^a-z]/g, ""))
+      .filter((p) => p.length > 1);
+    if (parts.length >= 2 && parts.every((p) => compact.includes(p))) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export async function searchOpenAlexAuthors(
   http: HttpClient,
   name: string,
   hospital?: string,
-): Promise<Array<{ id: string; display_name: string; institution?: string; orcid?: string | null }>> {
+): Promise<Array<{ id: string; display_name: string; institution?: string; orcid?: string | null; concepts?: string[] }>> {
   const q = encodeURIComponent(name.trim());
   const data = await http.getJson<{ results?: OpenAlexAuthor[] }>(
     `https://api.openalex.org/authors?search=${q}&per_page=5`,
@@ -116,25 +145,54 @@ export async function searchOpenAlexAuthors(
         display_name: a.display_name ?? name,
         institution: inst,
         orcid: a.orcid?.replace(/^https?:\/\/orcid\.org\//, "") ?? null,
+        concepts: (a.x_concepts ?? [])
+          .slice(0, 5)
+          .map((c) => c.display_name)
+          .filter((x): x is string => Boolean(x)),
       };
     })
     .filter((x): x is NonNullable<typeof x> => Boolean(x));
 
-  // 医院仅作排序加权，不硬过滤（避免漏掉英文机构名）
-  if (hospital?.trim()) {
-    const h = hospital.toLowerCase();
-    mapped.sort((a, b) => {
-      const ai = (a.institution ?? "").toLowerCase();
-      const bi = (b.institution ?? "").toLowerCase();
-      const score = (inst: string) =>
-        inst.includes("zhongshan") || inst.includes("fudan") || h.includes("中山")
-          ? 2
-          : inst
-            ? 1
-            : 0;
-      return score(bi) - score(ai);
-    });
-  }
+  // 医院 + 医学概念加权（避免同名物理/CS 作者排第一）
+  const h = (hospital ?? "").toLowerCase();
+  mapped.sort((a, b) => {
+    const score = (row: (typeof mapped)[number]) => {
+      let s = 0;
+      const inst = (row.institution ?? "").toLowerCase();
+      if (
+        inst.includes("zhongshan") ||
+        inst.includes("fudan") ||
+        inst.includes("shanghai medical") ||
+        h.includes("中山") ||
+        h.includes("复旦")
+      ) {
+        s += 4;
+      } else if (inst.includes("hospital") || inst.includes("medical") || inst.includes("医院")) {
+        s += 2;
+      } else if (inst) {
+        s += 1;
+      }
+      const concepts = (row.concepts ?? []).map((c) => c.toLowerCase());
+      if (
+        concepts.some((c) =>
+          /medicine|transplant|nephrology|urology|cardiology|surgery|biology|internal medicine/.test(
+            c,
+          ),
+        )
+      ) {
+        s += 3;
+      }
+      if (
+        concepts.some((c) =>
+          /nuclear physics|cosmic ray|computer science|materials science/.test(c),
+        )
+      ) {
+        s -= 2;
+      }
+      return s;
+    };
+    return score(b) - score(a);
+  });
   return mapped;
 }
 

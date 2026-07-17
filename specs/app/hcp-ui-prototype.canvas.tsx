@@ -19,7 +19,8 @@ import {
   useHostTheme,
 } from "cursor/canvas";
 
-type PageId = "twin" | "insights" | "options" | "agent";
+type TwinPane = "profile" | "insights" | "options";
+type ShellFocus = "list" | "agent" | { twinId: string };
 type TwinView =
   | "list"
   | "detail"
@@ -33,12 +34,30 @@ type GateResult = "idle" | "pass" | "conditional" | "reject";
 
 const BUILD_STAGES = ["身份锁定", "职业轨迹", "科研动向", "一句话洞察"] as const;
 
-const NAV: { id: PageId; label: string }[] = [
-  { id: "twin", label: "数字分身" },
+const SHELL_LIST_LABEL = "HCP数字分身";
+const SHELL_AGENT_LABEL = "HCP Engagement Agent";
+
+const TWIN_PANES: { id: TwinPane; label: string }[] = [
+  { id: "profile", label: "HCP资料" },
   { id: "insights", label: "HCP洞察" },
   { id: "options", label: "一人一策" },
-  { id: "agent", label: "HCP Engagement Agent" },
 ];
+
+function parseShellFocus(raw: string): ShellFocus {
+  if (raw === "agent") return "agent";
+  if (raw.startsWith("twin:")) return { twinId: raw.slice(5) };
+  return "list";
+}
+
+function formatShellFocus(f: ShellFocus): string {
+  if (f === "list") return "list";
+  if (f === "agent") return "agent";
+  return `twin:${f.twinId}`;
+}
+
+function shellTwinId(f: ShellFocus): string | null {
+  return typeof f === "object" ? f.twinId : null;
+}
 
 const INSIGHT_ONE_LINER =
   "肾移植临床与质控管理并行；公开叙事强调噬菌体、BK 病毒及 AI+移植";
@@ -342,13 +361,29 @@ const INITIAL_TWINS: TwinRow[] = [
   },
 ];
 
-const CAREER = [
-  { year: "现任", role: "复旦上海医学院副院长", org: "复旦大学上海医学院" },
-  { year: "现任", role: "肾移植学科带头人", org: "复旦大学附属中山医院" },
-  { year: "现任", role: "上海市器官移植重点实验室主任", org: "上海市器官移植重点实验室" },
-  { year: "曾任", role: "执行院长", org: "中山医院厦门医院（待消歧）" },
-  { year: "1994", role: "外科学博士", org: "上海医科大学" },
-];
+/** 职业轨迹演示数据：按界面 locale 取词表（预留 i18n；默认 zh-CN） */
+type CareerLocale = "zh-CN" | "en";
+const CAREER_I18N: Record<
+  CareerLocale,
+  Array<{ year: string; role: string; org: string }>
+> = {
+  "zh-CN": [
+    { year: "现任", role: "复旦上海医学院副院长", org: "复旦大学上海医学院" },
+    { year: "现任", role: "肾移植学科带头人", org: "复旦大学附属中山医院" },
+    { year: "现任", role: "上海市器官移植重点实验室主任", org: "上海市器官移植重点实验室" },
+    { year: "曾任", role: "执行院长", org: "中山医院厦门医院（待消歧）" },
+    { year: "1994", role: "外科学博士", org: "上海医科大学" },
+  ],
+  en: [
+    { year: "Present", role: "Vice Dean", org: "Shanghai Medical College, Fudan University" },
+    { year: "Present", role: "Lead, Kidney Transplantation", org: "Zhongshan Hospital, Fudan University" },
+    { year: "Present", role: "Director", org: "Shanghai Key Laboratory of Organ Transplantation" },
+    { year: "Former", role: "Executive President", org: "Zhongshan Hospital Xiamen (TBD)" },
+    { year: "1994", role: "MD, Surgery", org: "Shanghai Medical University" },
+  ],
+};
+const UI_LOCALE: CareerLocale = "zh-CN";
+const CAREER = CAREER_I18N[UI_LOCALE];
 
 const DIRECTIONS = [
   {
@@ -515,7 +550,10 @@ function TagChip({
   );
 }
 
-/** 子页返回导航：secondary + 箭头，独立条，避免 ghost 淹没在操作区 */
+/**
+ * 子页返回导航：仅用于列表下的新增/消歧向导（返回列表、返回候选等）。
+ * 已打开的分身工作台不再使用「返回列表 / 返回数字分身」。
+ */
 function BackNavBar({
   label,
   onBack,
@@ -706,24 +744,85 @@ function ActCell({ items }: { items: Act[] }) {
   );
 }
 
+function ShellTab({
+  tabKey,
+  label,
+  active,
+  onClick,
+  onClose,
+  closable,
+}: {
+  tabKey: string;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  onClose?: () => void;
+  closable?: boolean;
+}) {
+  const theme = useHostTheme();
+  const [hover, setHover] = useCanvasState(`tab-hover-${tabKey}`, false);
+  return (
+    <div
+      style={{ position: "relative", display: "inline-flex" }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      <Button variant={active ? "primary" : "ghost"} onClick={onClick}>
+        {label}
+      </Button>
+      {closable && hover && onClose ? (
+        <button
+          type="button"
+          aria-label={`关闭 ${label}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+          style={{
+            position: "absolute",
+            top: -6,
+            right: -6,
+            width: 17,
+            height: 17,
+            borderRadius: 999,
+            border: `1px solid ${theme.stroke.secondary}`,
+            background: theme.bg.elevated,
+            color: theme.text.secondary,
+            fontSize: 11,
+            lineHeight: 1,
+            cursor: "pointer",
+            padding: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          ×
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function AppChrome({
-  page,
-  onPage,
+  shellFocus,
+  onShellFocus,
+  openTwinIds,
+  twins,
+  onCloseTwinTab,
   abbrev,
-  showHcpTabs,
   children,
 }: {
-  page: PageId;
-  onPage: (p: PageId) => void;
+  shellFocus: ShellFocus;
+  onShellFocus: (f: ShellFocus) => void;
+  openTwinIds: string[];
+  twins: TwinRow[];
+  onCloseTwinTab: (id: string) => void;
   abbrev: string;
-  showHcpTabs: boolean;
   children?: unknown;
 }) {
   const theme = useHostTheme();
-  const visibleNav = NAV.filter((s) => {
-    if (s.id === "insights" || s.id === "options") return showHcpTabs;
-    return true;
-  });
+  const activeTwinId = shellTwinId(shellFocus);
   return (
     <div
       style={{
@@ -753,26 +852,43 @@ function AppChrome({
             ·
           </Text>
           <Row gap={4} align="center" wrap>
-            {visibleNav.map((s) => (
-              <div key={s.id}>
-                <Button
-                  variant={s.id === page ? "primary" : "ghost"}
-                  onClick={() => onPage(s.id)}
-                >
-                  {s.label}
-                </Button>
-              </div>
-            ))}
+            <ShellTab
+              tabKey="shell-list"
+              label={SHELL_LIST_LABEL}
+              active={shellFocus === "list"}
+              onClick={() => onShellFocus("list")}
+            />
+            {openTwinIds.map((id) => {
+              const twin = twins.find((t) => t.id === id);
+              if (!twin) return null;
+              return (
+                <ShellTab
+                  key={id}
+                  tabKey={`shell-twin-${id}`}
+                  label={twin.name}
+                  active={activeTwinId === id}
+                  closable
+                  onClick={() => onShellFocus({ twinId: id })}
+                  onClose={() => onCloseTwinTab(id)}
+                />
+              );
+            })}
+            <ShellTab
+              tabKey="shell-agent"
+              label={SHELL_AGENT_LABEL}
+              active={shellFocus === "agent"}
+              onClick={() => onShellFocus("agent")}
+            />
           </Row>
           <Spacer />
           <Text tone="tertiary" style={{ fontSize: 11, fontFamily: "ui-monospace, monospace" }}>
-            prototype · 6.ui-guideline
+            prototype · multi-tab nav · 6.ui-guideline
           </Text>
         </div>
         <div
           style={{
             padding: "24px 28px 40px",
-            maxWidth: page === "agent" ? 1280 : 1120,
+            maxWidth: shellFocus === "agent" ? 1280 : 1120,
             width: "100%",
             boxSizing: "border-box",
           }}
@@ -787,24 +903,13 @@ function AppChrome({
 function TwinListPage({
   twins,
   onOpen,
-  onEdit,
-  onDelete,
   onAdd,
 }: {
   twins: TwinRow[];
   onOpen: (id: string) => void;
-  onEdit: (id: string) => void;
-  onDelete: (id: string) => void;
   onAdd: () => void;
 }) {
   const theme = useHostTheme();
-  const [pendingDeleteId, setPendingDeleteId] = useCanvasState<string | null>(
-    "pending-delete-id",
-    null,
-  );
-  const pending = pendingDeleteId
-    ? twins.find((t) => t.id === pendingDeleteId)
-    : null;
 
   return (
     <Stack gap={20}>
@@ -814,7 +919,7 @@ function TwinListPage({
             数字分身
           </Text>
           <H1 style={{ fontSize: 28, fontWeight: 500, margin: 0 }}>
-            HCP 数字分身列表
+            HCP数字分身列表
           </H1>
           <Text tone="secondary" style={{ fontSize: 14 }}>
             共 {twins.length} 位医生分身 · 每一行是一位独立 HCP
@@ -824,37 +929,6 @@ function TwinListPage({
           新增数字分身
         </Button>
       </Row>
-
-      {pending ? (
-        <div
-          style={{
-            border: `1px solid ${theme.stroke.secondary}`,
-            borderRadius: 4,
-            padding: "12px 16px",
-            background: theme.bg.elevated,
-          }}
-        >
-          <Stack gap={10}>
-            <Text style={{ fontSize: 14 }}>
-              确认删除「{pending.name}」？删除后不可从列表恢复，洞察与一人一策将收回。
-            </Text>
-            <Row gap={8}>
-              <Button
-                variant="primary"
-                onClick={() => {
-                  onDelete(pending.id);
-                  setPendingDeleteId(null);
-                }}
-              >
-                确认删除
-              </Button>
-              <Button variant="ghost" onClick={() => setPendingDeleteId(null)}>
-                取消
-              </Button>
-            </Row>
-          </Stack>
-        </div>
-      ) : null}
 
       <div
         style={{
@@ -959,12 +1033,6 @@ function TwinListPage({
                 <Button variant="primary" onClick={() => onOpen(t.id)}>
                   打开
                 </Button>
-                <Button variant="secondary" onClick={() => onEdit(t.id)}>
-                  修改
-                </Button>
-                <Button variant="ghost" onClick={() => setPendingDeleteId(t.id)}>
-                  删除
-                </Button>
               </Stack>
             </div>
           ))
@@ -974,50 +1042,32 @@ function TwinListPage({
   );
 }
 
-function TwinDetailPage({
+function TwinProfilePane({
   twin,
-  onBack,
-  onEdit,
-  mode = "saved",
-  onConfirmSave,
+  onBuildIntel,
+  showBuildIntel = true,
 }: {
   twin: TwinRow;
-  onBack: () => void;
-  onEdit?: () => void;
-  mode?: "saved" | "confirm";
-  onConfirmSave?: () => void;
+  onBuildIntel: () => void;
+  showBuildIntel?: boolean;
 }) {
   const theme = useHostTheme();
-  const backLabel = mode === "confirm" ? "返回候选" : "返回列表";
   return (
     <Stack gap={24}>
-      <BackNavBar
-        label={backLabel}
-        onBack={onBack}
-        actions={
-          mode === "saved" && onEdit ? (
-            <Button variant="secondary" onClick={onEdit}>
-              修改
-            </Button>
-          ) : mode === "confirm" && onConfirmSave ? (
-            <Button variant="primary" onClick={onConfirmSave}>
-              确认并保存
-            </Button>
-          ) : null
-        }
-      />
-      {mode === "confirm" ? (
-        <Text tone="secondary" style={{ fontSize: 13 }}>
-          已根据 hcp-twin-mcp 查询结果生成分身预览。核对 ORCID 等文献号后确认保存。
-        </Text>
-      ) : null}
-      <Stack gap={8}>
-        <H1 style={{ fontSize: 28, fontWeight: 500, margin: 0 }}>{twin.name}</H1>
-        <TwinTags tier={twin.tier} roles={twin.roles} />
-        <Text tone="secondary" style={{ fontSize: 13 }}>
-          {twin.hospital} · {twin.dept}
-        </Text>
-      </Stack>
+      <Row align="start" justify="space-between" wrap gap={12}>
+        <Stack gap={8}>
+          <H1 style={{ fontSize: 28, fontWeight: 500, margin: 0 }}>{twin.name}</H1>
+          <TwinTags tier={twin.tier} roles={twin.roles} />
+          <Text tone="secondary" style={{ fontSize: 13 }}>
+            {twin.hospital} · {twin.dept}
+          </Text>
+        </Stack>
+        {showBuildIntel ? (
+          <Button variant="secondary" onClick={onBuildIntel}>
+            构建情报
+          </Button>
+        ) : null}
+      </Row>
 
       <div
         style={{
@@ -1042,6 +1092,41 @@ function TwinDetailPage({
         <Divider />
         <CareerSpine />
       </Stack>
+    </Stack>
+  );
+}
+
+function TwinDetailPage({
+  twin,
+  onBack,
+  mode = "saved",
+  onConfirmSave,
+}: {
+  twin: TwinRow;
+  onBack: () => void;
+  mode?: "saved" | "confirm";
+  onConfirmSave?: () => void;
+}) {
+  const backLabel = mode === "confirm" ? "返回候选" : "返回列表";
+  return (
+    <Stack gap={24}>
+      <BackNavBar
+        label={backLabel}
+        onBack={onBack}
+        actions={
+          mode === "confirm" && onConfirmSave ? (
+            <Button variant="primary" onClick={onConfirmSave}>
+              确认并保存
+            </Button>
+          ) : null
+        }
+      />
+      {mode === "confirm" ? (
+        <Text tone="secondary" style={{ fontSize: 13 }}>
+          已根据 hcp-twin-mcp 查询结果生成分身预览。核对 ORCID 等文献号后确认保存。
+        </Text>
+      ) : null}
+      <TwinProfilePane twin={twin} onBuildIntel={() => {}} showBuildIntel={false} />
 
       {mode === "confirm" && onConfirmSave ? (
         <Row gap={8}>
@@ -1052,6 +1137,109 @@ function TwinDetailPage({
             ← 返回候选
           </Button>
         </Row>
+      ) : null}
+    </Stack>
+  );
+}
+
+function TwinWorkspace({
+  twin,
+  pane,
+  onPane,
+  onEdit,
+  onDelete,
+  onClose,
+  onBuildIntel,
+  children,
+}: {
+  twin: TwinRow;
+  pane: TwinPane;
+  onPane: (p: TwinPane) => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onClose: () => void;
+  onBuildIntel: () => void;
+  children?: unknown;
+}) {
+  const theme = useHostTheme();
+  const [pendingDelete, setPendingDelete] = useCanvasState(
+    `ws-pending-delete-${twin.id}`,
+    false,
+  );
+
+  return (
+    <Stack gap={20}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+          paddingBottom: 12,
+          borderBottom: `1px solid ${theme.stroke.tertiary}`,
+        }}
+      >
+        <Row gap={4} wrap align="center">
+          {TWIN_PANES.map((p) => (
+            <div key={p.id}>
+              <Button
+                variant={pane === p.id ? "primary" : "ghost"}
+                onClick={() => onPane(p.id)}
+              >
+                {p.label}
+              </Button>
+            </div>
+          ))}
+        </Row>
+        <Row gap={8} wrap align="center">
+          <Button variant="secondary" onClick={onEdit}>
+            修改
+          </Button>
+          <Button variant="ghost" onClick={() => setPendingDelete(true)}>
+            删除
+          </Button>
+          <Button variant="ghost" onClick={onClose}>
+            关闭本页
+          </Button>
+        </Row>
+      </div>
+
+      {pendingDelete ? (
+        <div
+          style={{
+            border: `1px solid ${theme.stroke.secondary}`,
+            borderRadius: 4,
+            padding: "12px 16px",
+            background: theme.bg.elevated,
+          }}
+        >
+          <Stack gap={10}>
+            <Text style={{ fontSize: 14 }}>
+              确认删除「{twin.name}」？删除后不可从列表恢复，洞察与一人一策将收回。
+            </Text>
+            <Row gap={8}>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  onDelete();
+                  setPendingDelete(false);
+                }}
+              >
+                确认删除
+              </Button>
+              <Button variant="ghost" onClick={() => setPendingDelete(false)}>
+                取消
+              </Button>
+            </Row>
+          </Stack>
+        </div>
+      ) : null}
+
+      {children ? (
+        (children as never)
+      ) : pane === "profile" ? (
+        <TwinProfilePane twin={twin} onBuildIntel={onBuildIntel} />
       ) : null}
     </Stack>
   );
@@ -1320,10 +1508,12 @@ function TwinEditPage({
   twin,
   onBack,
   onSave,
+  backLabel = "取消",
 }: {
   twin: TwinRow;
   onBack: () => void;
   onSave: (patch: { name: string; hospital: string; dept: string }) => void;
+  backLabel?: string;
 }) {
   const theme = useHostTheme();
   const [name, setName] = useCanvasState("edit-name", twin.name);
@@ -1333,7 +1523,7 @@ function TwinEditPage({
   return (
     <Stack gap={24}>
       <BackNavBar
-        label="返回列表"
+        label={backLabel}
         onBack={onBack}
         actions={<Text weight="medium">修改数字分身</Text>}
       />
@@ -2233,7 +2423,7 @@ function TwinBuildingPage({
       </Stack>
       <Row gap={8}>
         <Button variant="primary" onClick={last ? onSkip : onAdvance}>
-          {last ? "完成并进入详情" : "下一步"}
+          {last ? "完成并进入资料" : "下一步"}
         </Button>
         {!last ? (
           <Button variant="ghost" onClick={onSkip}>
@@ -2246,12 +2436,14 @@ function TwinBuildingPage({
 }
 
 export default function HcpUiPrototype() {
-  const [page, setPage] = useCanvasState<PageId>("page", "twin");
+  const [shellFocusRaw, setShellFocusRaw] = useCanvasState("shell-focus", "list");
   const [twins, setTwins] = useCanvasState<TwinRow[]>("twins", INITIAL_TWINS);
+  const [openTwinIds, setOpenTwinIds] = useCanvasState<string[]>("open-twin-ids", []);
   const [twinView, setTwinView] = useCanvasState<TwinView>("twin-view", "list");
-  const [activeTwinId, setActiveTwinId] = useCanvasState<string | null>(
-    "active-twin",
-    "zhu",
+  const [twinPane, setTwinPane] = useCanvasState<TwinPane>("twin-pane", "profile");
+  const [buildingTwinId, setBuildingTwinId] = useCanvasState<string | null>(
+    "building-twin-id",
+    null,
   );
   const [editTarget, setEditTarget] = useCanvasState<string | null>(
     "edit-target",
@@ -2267,72 +2459,111 @@ export default function HcpUiPrototype() {
   );
   const [buildStage, setBuildStage] = useCanvasState("build-stage", 0);
 
+  const shellFocus = parseShellFocus(shellFocusRaw);
   const safeTwins = twins.map(normalizeTwin);
-  const activeTwinRaw = activeTwinId
+  const activeTwinId = shellTwinId(shellFocus);
+  const activeTwin = activeTwinId
     ? safeTwins.find((t) => t.id === activeTwinId) ?? null
     : null;
-  const activeTwin = activeTwinRaw;
-  const editTwinRaw = editTarget
+  const effectiveShellFocus: ShellFocus =
+    typeof shellFocus === "object" && !activeTwin ? "list" : shellFocus;
+  const editTwin = editTarget
     ? safeTwins.find((t) => t.id === editTarget) ?? null
     : null;
-  const editTwin = editTwinRaw;
   const safePending = pendingTwin ? normalizeTwin(pendingTwin) : null;
+  const buildingTwin = buildingTwinId
+    ? safeTwins.find((t) => t.id === buildingTwinId) ?? null
+    : null;
+  const listBuildingTwin =
+    effectiveShellFocus === "list" && twinView === "building" ? buildingTwin : null;
 
-  const tabsUnlocked =
-    !!activeTwin &&
-    twinView !== "list" &&
-    twinView !== "create" &&
-    twinView !== "candidates" &&
-    twinView !== "confirm" &&
-    twinView !== "edit";
-
-  const goPage = (p: PageId) => {
-    if ((p === "insights" || p === "options") && !tabsUnlocked) return;
-    setPage(p);
-    if (p === "twin" && twinView !== "building") setTwinView("list");
+  const setShellFocus = (f: ShellFocus) => {
+    setShellFocusRaw(formatShellFocus(f));
+    if (f === "list") {
+      if (twinView === "detail" || twinView === "edit") setTwinView("list");
+    } else if (typeof f === "object") {
+      const id = f.twinId;
+      if (twinView === "list") setTwinView("detail");
+      if (editTarget && editTarget !== id) {
+        setEditTarget(null);
+        setTwinView("detail");
+      }
+      if (buildingTwinId && buildingTwinId !== id) {
+        setBuildingTwinId(null);
+        setTwinView("detail");
+      }
+    }
   };
+
+  const openTwinTab = (id: string) => {
+    setOpenTwinIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    setShellFocus({ twinId: id });
+    setTwinView("detail");
+    setTwinPane("profile");
+    setEditTarget(null);
+    setBuildingTwinId(null);
+  };
+
+  const closeTwinTab = (id: string) => {
+    const nextOpen = openTwinIds.filter((x) => x !== id);
+    setOpenTwinIds(nextOpen);
+    if (activeTwinId === id) {
+      if (nextOpen.length > 0) {
+        setShellFocus({ twinId: nextOpen[nextOpen.length - 1] });
+        setTwinView("detail");
+      } else {
+        setShellFocus("list");
+        setTwinView("list");
+      }
+    }
+    if (editTarget === id) setEditTarget(null);
+    if (buildingTwinId === id) setBuildingTwinId(null);
+  };
+
+  const deleteTwin = (id: string) => {
+    setTwins((prev) => prev.filter((t) => t.id !== id));
+    closeTwinTab(id);
+  };
+
+  const finishBuilding = (twinId: string, fromList: boolean) => {
+    setBuildStage(BUILD_STAGES.length);
+    setBuildingTwinId(null);
+    if (fromList) {
+      openTwinTab(twinId);
+    } else {
+      setTwinView("detail");
+      setTwinPane("profile");
+    }
+  };
+
+  const specimenAbbrev =
+    activeTwin && typeof effectiveShellFocus === "object"
+      ? activeTwin.abbrev
+      : "—";
 
   return (
     <AppChrome
-      page={page}
-      onPage={goPage}
-      showHcpTabs={tabsUnlocked}
-      abbrev={tabsUnlocked ? activeTwin!.abbrev : "—"}
+      shellFocus={effectiveShellFocus}
+      onShellFocus={setShellFocus}
+      openTwinIds={openTwinIds.filter((id) => safeTwins.some((t) => t.id === id))}
+      twins={safeTwins}
+      onCloseTwinTab={closeTwinTab}
+      abbrev={specimenAbbrev}
     >
-      {page === "twin" && twinView === "list" ? (
+      {effectiveShellFocus === "list" && twinView === "list" ? (
         <TwinListPage
           twins={safeTwins}
-          onOpen={(id) => {
-            setActiveTwinId(id);
-            setTwinView("detail");
-            setPage("twin");
-          }}
-          onEdit={(id) => {
-            setEditTarget(id);
-            setActiveTwinId(id);
-            setTwinView("edit");
-            setPage("twin");
-          }}
-          onDelete={(id) => {
-            const remaining = safeTwins.filter((t) => t.id !== id);
-            setTwins(remaining);
-            if (activeTwinId === id) {
-              setActiveTwinId(null);
-              setPage("twin");
-            }
-            setTwinView("list");
-          }}
+          onOpen={openTwinTab}
           onAdd={() => {
             setEditTarget(null);
             setPendingTwin(null);
             setCandidates([]);
             setTwinView("create");
-            setPage("twin");
           }}
         />
       ) : null}
 
-      {page === "twin" && twinView === "create" ? (
+      {effectiveShellFocus === "list" && twinView === "create" ? (
         <TwinCreatePage
           onBack={() => setTwinView("list")}
           onQueried={(_n, _h, _d, list) => {
@@ -2342,7 +2573,7 @@ export default function HcpUiPrototype() {
         />
       ) : null}
 
-      {page === "twin" && twinView === "candidates" ? (
+      {effectiveShellFocus === "list" && twinView === "candidates" ? (
         <TwinCandidatesPage
           candidates={candidates}
           onBack={() => setTwinView("create")}
@@ -2354,7 +2585,7 @@ export default function HcpUiPrototype() {
         />
       ) : null}
 
-      {page === "twin" && twinView === "confirm" && safePending ? (
+      {effectiveShellFocus === "list" && twinView === "confirm" && safePending ? (
         <TwinDetailPage
           twin={safePending}
           mode="confirm"
@@ -2368,74 +2599,95 @@ export default function HcpUiPrototype() {
               }
               return [...normalized, saved];
             });
-            setActiveTwinId(saved.id);
             setPendingTwin(null);
             setBuildStage(0);
+            setBuildingTwinId(saved.id);
             setTwinView("building");
-            setPage("twin");
           }}
         />
       ) : null}
 
-      {page === "twin" && twinView === "building" && activeTwin ? (
+      {effectiveShellFocus === "list" && twinView === "building" && listBuildingTwin ? (
         <TwinBuildingPage
-          twin={activeTwin}
+          twin={listBuildingTwin}
           stageIndex={buildStage}
           onAdvance={() => setBuildStage((s) => s + 1)}
-          onSkip={() => {
-            setBuildStage(BUILD_STAGES.length);
-            setTwinView("detail");
-          }}
+          onSkip={() => finishBuilding(listBuildingTwin.id, true)}
         />
       ) : null}
 
-      {page === "twin" && twinView === "detail" && activeTwin ? (
-        <TwinDetailPage
-          twin={activeTwin}
-          mode="saved"
-          onBack={() => {
-            setTwinView("list");
-            setPage("twin");
-          }}
-          onEdit={() => {
-            setEditTarget(activeTwin.id);
-            setTwinView("edit");
-          }}
-        />
+      {typeof effectiveShellFocus === "object" && activeTwin ? (
+        twinView === "edit" && editTwin && editTwin.id === activeTwin.id ? (
+          <TwinEditPage
+            twin={editTwin}
+            backLabel="返回资料"
+            onBack={() => {
+              setEditTarget(null);
+              setTwinView("detail");
+              setTwinPane("profile");
+            }}
+            onSave={(patch) => {
+              setTwins((prev) =>
+                prev.map((t) =>
+                  t.id === editTwin.id
+                    ? {
+                        ...t,
+                        name: patch.name,
+                        hospital: patch.hospital,
+                        dept: patch.dept,
+                        abbrev: patch.name.slice(0, 1) || t.abbrev,
+                      }
+                    : t,
+                ),
+              );
+              setEditTarget(null);
+              setTwinView("detail");
+              setTwinPane("profile");
+            }}
+          />
+        ) : twinView === "building" && buildingTwin && buildingTwin.id === activeTwin.id ? (
+          <TwinBuildingPage
+            twin={buildingTwin}
+            stageIndex={buildStage}
+            onAdvance={() => setBuildStage((s) => s + 1)}
+            onSkip={() => finishBuilding(buildingTwin.id, false)}
+          />
+        ) : (
+          <TwinWorkspace
+            twin={activeTwin}
+            pane={twinPane}
+            onPane={setTwinPane}
+            onEdit={() => {
+              setEditTarget(activeTwin.id);
+              setTwinView("edit");
+            }}
+            onDelete={() => deleteTwin(activeTwin.id)}
+            onClose={() => closeTwinTab(activeTwin.id)}
+            onBuildIntel={() => {
+              setBuildStage(0);
+              setBuildingTwinId(activeTwin.id);
+              setTwinView("building");
+            }}
+          >
+            {twinPane === "profile" ? (
+              <TwinProfilePane
+                twin={activeTwin}
+                onBuildIntel={() => {
+                  setBuildStage(0);
+                  setBuildingTwinId(activeTwin.id);
+                  setTwinView("building");
+                }}
+              />
+            ) : twinPane === "insights" ? (
+              <InsightsPage twin={activeTwin} />
+            ) : (
+              <OptionsPage twin={activeTwin} />
+            )}
+          </TwinWorkspace>
+        )
       ) : null}
 
-      {page === "twin" && twinView === "edit" && editTwin ? (
-        <TwinEditPage
-          twin={editTwin}
-          onBack={() => setTwinView("list")}
-          onSave={(patch) => {
-            setTwins((prev) =>
-              prev.map((t) =>
-                t.id === editTwin.id
-                  ? {
-                      ...t,
-                      name: patch.name,
-                      hospital: patch.hospital,
-                      dept: patch.dept,
-                      abbrev: patch.name.slice(0, 1) || t.abbrev,
-                    }
-                  : t,
-              ),
-            );
-            setActiveTwinId(editTwin.id);
-            setTwinView("detail");
-            setPage("twin");
-          }}
-        />
-      ) : null}
-
-      {page === "insights" && activeTwin && tabsUnlocked ? (
-        <InsightsPage twin={activeTwin} />
-      ) : null}
-      {page === "options" && activeTwin && tabsUnlocked ? (
-        <OptionsPage twin={activeTwin} />
-      ) : null}
-      {page === "agent" ? <AgentPage /> : null}
+      {effectiveShellFocus === "agent" ? <AgentPage /> : null}
     </AppChrome>
   );
 }

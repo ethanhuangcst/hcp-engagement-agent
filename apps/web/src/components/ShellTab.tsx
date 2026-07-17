@@ -1,0 +1,52 @@
+"use client";
+
+import Link from "next/link";
+import { useState } from "react";
+
+export function ShellTab({
+  tabKey,
+  label,
+  href,
+  active,
+  closable,
+  onClose,
+}: {
+  tabKey: string;
+  label: string;
+  href: string;
+  active: boolean;
+  closable?: boolean;
+  onClose?: () => void;
+}) {
+  const [hover, setHover] = useState(false);
+
+  return (
+    <div
+      className="relative inline-flex"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      <Link
+        href={href}
+        aria-current={active ? "page" : undefined}
+        className={active ? "hca-tab hca-tab-active" : "hca-tab"}
+      >
+        {label}
+      </Link>
+      {closable && hover && onClose ? (
+        <button
+          type="button"
+          aria-label={`关闭 ${label}`}
+          className="hca-shell-tab-close"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onClose();
+          }}
+        >
+          ×
+        </button>
+      ) : null}
+    </div>
+  );
+}

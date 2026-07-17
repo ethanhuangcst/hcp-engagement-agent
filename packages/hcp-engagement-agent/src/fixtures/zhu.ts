@@ -28,7 +28,7 @@ export function sampleZhuTwin(asOf = "2026-07-17"): VirtualTwin {
       title: "主任医师 / 教授",
       disambiguation_status: "resolved",
       specialties: ["肾移植", "泌尿外科"],
-      external_ids: { openalex: "A5040172093" },
+      external_ids: { openalex: "A5101900734" },
       tags: {
         hcp_tier: "T1",
         role_tags: ["kol", "kme", "administrator"],
@@ -37,7 +37,7 @@ export function sampleZhuTwin(asOf = "2026-07-17"): VirtualTwin {
       },
     },
     research: {
-      author_ids: { openalex: "A5040172093" },
+      author_ids: { openalex: "A5101900734" },
       themes: ["肾移植", "噬菌体", "BK病毒"],
     },
   };

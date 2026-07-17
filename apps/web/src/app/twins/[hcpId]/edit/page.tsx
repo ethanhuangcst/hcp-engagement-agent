@@ -74,7 +74,7 @@ export default function TwinEditPage() {
   return (
     <div className="space-y-6">
       <BackNavBar
-        label="返回详情"
+        label="返回资料"
         href={`/twins/${encodeURIComponent(hcpId)}`}
         actions={<span className="text-sm font-medium">修改分身</span>}
       />

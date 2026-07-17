@@ -13,6 +13,7 @@ import {
   authorIdsFromOpenAlex,
   fetchOpenAlexAuthor,
   fetchOpenAlexWorks,
+  openAlexDisplayMatchesHcp,
   pubsFromOpenAlexWorks,
   searchOpenAlexAuthors,
   themesFromOpenAlex,
@@ -62,15 +63,42 @@ export async function runBuildStages(
     ...(twin.research?.author_ids ?? twin.profile.external_ids ?? {}),
   };
 
-  if (!hasActiveP0AuthorId(authorIds)) {
-    const hits = await searchOpenAlexAuthors(http, nameEn || nameZh, twin.profile.hospital);
-    const best = hits[0];
-    if (best) {
+  const resolveOpenAlex = async () => {
+    const hits = await searchOpenAlexAuthors(
+      http,
+      nameEn || nameZh,
+      twin.profile.hospital,
+    );
+    const best =
+      hits.find((h) => openAlexDisplayMatchesHcp(h.display_name, nameZh, nameEn)) ??
+      hits[0];
+    if (best && openAlexDisplayMatchesHcp(best.display_name, nameZh, nameEn)) {
       authorIds = {
         ...authorIds,
         openalex: best.id,
         orcid: best.orcid ?? authorIds.orcid ?? null,
       };
+      return;
+    }
+    // 无一姓名匹配命中：清空错误 openalex，避免灌入他人文献
+    if (authorIds.openalex) {
+      authorIds = { ...authorIds, openalex: null };
+    }
+  };
+
+  if (!authorIds.openalex) {
+    await resolveOpenAlex();
+  } else {
+    const author = await fetchOpenAlexAuthor(http, authorIds.openalex);
+    if (
+      !author ||
+      !openAlexDisplayMatchesHcp(author.display_name, nameZh, nameEn)
+    ) {
+      // 误绑（如 fixture A5040172093=Austin S. Ankney）→ 重消歧
+      authorIds = { ...authorIds, openalex: null };
+      await resolveOpenAlex();
+    } else {
+      authorIds = { ...authorIds, ...authorIdsFromOpenAlex(author) };
     }
   }
 

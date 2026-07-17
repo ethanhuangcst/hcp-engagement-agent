@@ -12,7 +12,8 @@ export const ZHU_HCP_ID = "hcp_zhu_tongyu_zs";
 export const ZHU_AUTHOR_IDS: AuthorIds = {
   orcid: null,
   pubmed_author: null,
-  openalex: "A5040172093",
+  /** 肾移植 / Tongyu Zhu（非 A5040172093=Austin S. Ankney 核物理误绑） */
+  openalex: "A5101900734",
   google_scholar: "Yby_S-sAAAAJ",
   scopus_author_id: null,
   cnki_scholar: null,

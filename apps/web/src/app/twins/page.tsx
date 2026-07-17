@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { TagBadges } from "@/components/TagBadges";
 import { useHcpContext } from "@/store/hcp-context";
@@ -17,11 +18,11 @@ type TwinRow = {
 };
 
 export default function TwinsListPage() {
+  const router = useRouter();
   const [items, setItems] = useState<TwinRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
-  const setSelected = useHcpContext((s) => s.setSelected);
+  const openTwin = useHcpContext((s) => s.openTwin);
 
   const load = async () => {
     setLoading(true);
@@ -43,30 +44,12 @@ export default function TwinsListPage() {
   };
 
   useEffect(() => {
-    // 列表 ≠ 选定分身：清空持久化上下文，避免 Specimen / 洞察 Tab 残留
-    setSelected(null);
     void load();
-  }, [setSelected]);
+  }, []);
 
-  const pending = pendingDeleteId
-    ? items.find((t) => t.hcp_id === pendingDeleteId)
-    : null;
-
-  const confirmDelete = async () => {
-    if (!pendingDeleteId) return;
-    const res = await fetch(
-      `/api/twins/${encodeURIComponent(pendingDeleteId)}`,
-      { method: "DELETE" },
-    );
-    if (!res.ok) {
-      const data = await res.json();
-      setError(data?.error?.message ?? "删除失败");
-      return;
-    }
-    const ctx = useHcpContext.getState();
-    if (ctx.selectedHcpId === pendingDeleteId) ctx.setSelected(null);
-    setPendingDeleteId(null);
-    await load();
+  const onOpen = (row: TwinRow) => {
+    openTwin(row.hcp_id, row.name_zh);
+    router.push(`/twins/${encodeURIComponent(row.hcp_id)}`);
   };
 
   return (
@@ -92,30 +75,6 @@ export default function TwinsListPage() {
         <p className="text-sm text-[var(--hca-danger)]" role="alert">
           {error}
         </p>
-      )}
-
-      {pending && (
-        <div className="rounded-[var(--radius-md)] border border-[var(--hca-line)] bg-[var(--hca-surface)] px-4 py-3">
-          <p className="text-sm">
-            确认删除「{pending.name_zh}」？删除后不可从列表恢复，洞察与一人一策将收回。
-          </p>
-          <div className="mt-2.5 flex gap-2">
-            <button
-              type="button"
-              className="hca-btn-primary"
-              onClick={() => void confirmDelete()}
-            >
-              确认删除
-            </button>
-            <button
-              type="button"
-              className="rounded-[var(--radius-md)] px-3 py-1.5 text-sm text-[var(--hca-ink-muted)] hover:bg-[var(--hca-accent-soft)]"
-              onClick={() => setPendingDeleteId(null)}
-            >
-              取消
-            </button>
-          </div>
-        </div>
       )}
 
       <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--hca-line)] bg-[var(--hca-surface)]">
@@ -169,24 +128,12 @@ export default function TwinsListPage() {
                 <TagBadges tags={row.tags} />
               </div>
               <div className="flex flex-row gap-1.5 md:flex-col">
-                <Link
-                  href={`/twins/${encodeURIComponent(row.hcp_id)}`}
-                  className="hca-btn-primary px-2 py-1.5"
-                >
-                  打开
-                </Link>
-                <Link
-                  href={`/twins/${encodeURIComponent(row.hcp_id)}/edit`}
-                  className="rounded-[var(--radius-md)] border border-[var(--hca-line)] px-2 py-1.5 text-center text-sm"
-                >
-                  修改
-                </Link>
                 <button
                   type="button"
-                  className="rounded-[var(--radius-md)] px-2 py-1.5 text-sm text-[var(--hca-ink-muted)] hover:bg-[var(--hca-accent-soft)]"
-                  onClick={() => setPendingDeleteId(row.hcp_id)}
+                  className="hca-btn-primary px-2 py-1.5"
+                  onClick={() => onOpen(row)}
                 >
-                  删除
+                  打开
                 </button>
               </div>
             </div>

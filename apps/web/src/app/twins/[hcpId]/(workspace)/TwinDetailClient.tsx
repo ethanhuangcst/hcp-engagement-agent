@@ -1,10 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { AuthorIdsTable } from "@/components/AuthorIdsTable";
-import { BackNavBar } from "@/components/BackNavBar";
 import { BuildProgress } from "@/components/BuildProgress";
 import { CareerTimeline } from "@/components/CareerTimeline";
 import { TagBadges } from "@/components/TagBadges";
@@ -17,13 +16,11 @@ type Insights = {
 
 export default function TwinDetailClient() {
   const params = useParams<{ hcpId: string }>();
-  const router = useRouter();
   const hcpId = decodeURIComponent(params.hcpId);
-  const { setSelected } = useHcpContext();
+  const { openTwin } = useHcpContext();
   const [twin, setTwin] = useState<VirtualTwin | null>(null);
   const [insights, setInsights] = useState<Insights | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pendingDelete, setPendingDelete] = useState(false);
   const [runId, setRunId] = useState<string | null>(null);
   const [building, setBuilding] = useState(false);
 
@@ -38,12 +35,12 @@ export default function TwinDetailClient() {
       return;
     }
     setTwin(tData.twin);
-    setSelected(hcpId, tData.twin?.profile?.name_zh);
+    openTwin(hcpId, tData.twin?.profile?.name_zh ?? hcpId);
     if (iRes.ok) {
       const iData = await iRes.json();
       setInsights(iData.insights);
     }
-  }, [hcpId, setSelected]);
+  }, [hcpId, openTwin]);
 
   useEffect(() => {
     void reload();
@@ -86,19 +83,6 @@ export default function TwinDetailClient() {
     [reload],
   );
 
-  const onDelete = async () => {
-    const res = await fetch(`/api/twins/${encodeURIComponent(hcpId)}`, {
-      method: "DELETE",
-    });
-    if (!res.ok) {
-      const data = await res.json();
-      setError(data?.error?.message ?? "删除失败");
-      return;
-    }
-    setSelected(null);
-    router.push("/twins");
-  };
-
   const doingNow =
     typeof insights?.doing_now === "string"
       ? insights.doing_now
@@ -130,67 +114,26 @@ export default function TwinDetailClient() {
       }
     | undefined;
 
+  const insightsHref = `/twins/${encodeURIComponent(hcpId)}/insights`;
+
   return (
     <div className="space-y-6">
-      <BackNavBar
-        label="返回列表"
-        href="/twins"
-        actions={
-          <>
-            <button
-              type="button"
-              className="hca-btn-primary px-3 py-1.5"
-              disabled={building}
-              onClick={() => void onBuild()}
-            >
-              {building ? "构建中…" : "构建情报"}
-            </button>
-            <Link
-              href={`/twins/${encodeURIComponent(hcpId)}/edit`}
-              className="rounded-[var(--radius-md)] border border-[var(--hca-line)] bg-[var(--hca-surface)] px-3 py-1.5 text-sm"
-            >
-              修改
-            </Link>
-            <button
-              type="button"
-              onClick={() => setPendingDelete(true)}
-              className="rounded-[var(--radius-md)] px-3 py-1.5 text-sm text-[var(--hca-ink-muted)] hover:bg-[var(--hca-surface)]"
-            >
-              删除
-            </button>
-          </>
-        }
-      />
+      <div className="flex flex-wrap justify-end gap-2">
+        <button
+          type="button"
+          className="hca-btn-primary px-3 py-1.5"
+          disabled={building}
+          onClick={() => void onBuild()}
+        >
+          {building ? "构建中…" : "构建情报"}
+        </button>
+      </div>
 
       {error ? (
         <p className="text-sm text-[var(--hca-danger)]" role="alert">
           {error}
         </p>
       ) : null}
-
-      {pendingDelete && (
-        <div className="rounded-[var(--radius-md)] border border-[var(--hca-line)] bg-[var(--hca-surface)] px-4 py-3">
-          <p className="text-sm">
-            确认删除「{twin.profile.name_zh}」？删除后不可从列表恢复。
-          </p>
-          <div className="mt-2.5 flex gap-2">
-            <button
-              type="button"
-              className="hca-btn-primary"
-              onClick={() => void onDelete()}
-            >
-              确认删除
-            </button>
-            <button
-              type="button"
-              className="rounded-[var(--radius-md)] px-3 py-1.5 text-sm text-[var(--hca-ink-muted)]"
-              onClick={() => setPendingDelete(false)}
-            >
-              取消
-            </button>
-          </div>
-        </div>
-      )}
 
       <div className="space-y-2">
         <h1 className="font-[family-name:var(--font-display)] text-[28px] font-medium leading-tight">
@@ -234,8 +177,14 @@ export default function TwinDetailClient() {
         <p className="text-xs text-[var(--hca-ink-muted)]">一句话洞察</p>
         <p className="mt-1.5 text-sm leading-relaxed">
           {doingNow ??
-            "尚未写入洞察草稿。点击「构建情报」跑 Stage A–E（live）后可见。"}
+            "尚未写入洞察。可构建情报，或在「HCP洞察」Tab 合成一句话洞察（与详情同源）。"}
         </p>
+        <Link
+          href={insightsHref}
+          className="mt-2 inline-block text-[13px] text-[var(--hca-accent)] hover:underline"
+        >
+          打开 HCP 洞察报表
+        </Link>
       </div>
 
       <AuthorIdsTable ids={ids as Record<string, string | null | undefined>} />

@@ -1,3 +1,9 @@
+"use client";
+
+import { localizeCareerKind, localizeCareerText } from "@/i18n/career";
+import { t } from "@/i18n";
+import { useHcpContext } from "@/store/hcp-context";
+
 type CareerNode = {
   title?: string;
   org?: string;
@@ -14,17 +20,24 @@ function yearOf(n: CareerNode): string {
 }
 
 export function CareerTimeline({ career }: { career?: Record<string, unknown> }) {
+  const locale = useHcpContext((s) => s.locale);
+  const tr = (key: Parameters<typeof t>[1]) => t(locale, key);
+
   const nodes: CareerNode[] = [];
   const current = career?.positions_current;
   if (Array.isArray(current)) {
     for (const n of current) {
-      if (n && typeof n === "object") nodes.push(n as CareerNode);
+      if (n && typeof n === "object") {
+        nodes.push({ ...(n as CareerNode), kind: "current" });
+      }
     }
   }
   const past = career?.positions_past;
   if (Array.isArray(past)) {
     for (const n of past) {
-      if (n && typeof n === "object") nodes.push(n as CareerNode);
+      if (n && typeof n === "object") {
+        nodes.push({ ...(n as CareerNode), kind: "past" });
+      }
     }
   }
   const edu = career?.education;
@@ -47,7 +60,7 @@ export function CareerTimeline({ career }: { career?: Record<string, unknown> })
   if (nodes.length === 0) {
     return (
       <p className="text-sm text-[var(--hca-ink-muted)]">
-        暂无职业轨迹节点。确认保存后可由情报构建补齐（MVP-2）。
+        {tr("career.empty")}
       </p>
     );
   }
@@ -55,12 +68,16 @@ export function CareerTimeline({ career }: { career?: Record<string, unknown> })
   return (
     <div className="space-y-0">
       {nodes.map((n, i) => {
-        const role = n.title ?? n.role ?? "职位";
-        const org = n.org ?? "";
+        const rawRole = n.title ?? n.role ?? tr("career.role.default");
+        const role = localizeCareerText(rawRole, locale);
+        const org = n.org ? localizeCareerText(n.org, locale) : "";
+        const kindLabel = localizeCareerKind(n.kind, locale, (key) =>
+          tr(key as Parameters<typeof t>[1]),
+        );
         const last = i === nodes.length - 1;
         return (
           <div
-            key={`${yearOf(n)}-${role}-${i}`}
+            key={`${yearOf(n)}-${rawRole}-${i}`}
             className="flex min-h-[52px] gap-3.5"
           >
             <div className="w-12 shrink-0 pt-0.5 text-right font-[family-name:var(--font-mono)] text-xs text-[var(--hca-ink-muted)]">
@@ -78,9 +95,9 @@ export function CareerTimeline({ career }: { career?: Record<string, unknown> })
               {org ? (
                 <p className="text-xs text-[var(--hca-ink-muted)]">{org}</p>
               ) : null}
-              {n.kind ? (
+              {kindLabel ? (
                 <p className="font-[family-name:var(--font-mono)] text-[11px] text-[var(--hca-ink-muted)]">
-                  {n.kind}
+                  {kindLabel}
                 </p>
               ) : null}
             </div>

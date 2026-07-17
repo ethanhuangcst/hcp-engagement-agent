@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { themesFromOpenAlex } from "./openalex.js";
+import { openAlexDisplayMatchesHcp, themesFromOpenAlex } from "./openalex.js";
+
+describe("openAlexDisplayMatchesHcp", () => {
+  it("rejects unrelated Latin author for 朱同玉", () => {
+    expect(
+      openAlexDisplayMatchesHcp("Austin S. Ankney", "朱同玉", "Tongyu Zhu"),
+    ).toBe(false);
+  });
+  it("accepts Tongyu Zhu", () => {
+    expect(openAlexDisplayMatchesHcp("Tongyu Zhu", "朱同玉", "Tongyu Zhu")).toBe(
+      true,
+    );
+  });
+});
 
 describe("themesFromOpenAlex", () => {
   it("does not let work-level Computer science outrank cardiology for medical authors", () => {

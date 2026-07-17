@@ -71,18 +71,19 @@ describe("MVP-2 build_twin live pipeline (injected HTTP, not twin fixture stages
       "api.openalex.org/authors?search": {
         results: [
           {
-            id: "https://openalex.org/authors/A5040172093",
+            id: "https://openalex.org/authors/A5101900734",
             display_name: "Tongyu Zhu",
             orcid: "https://orcid.org/0000-0002-6197-0698",
             last_known_institutions: [{ display_name: "Zhongshan Hospital Fudan" }],
+            x_concepts: [{ display_name: "Medicine", score: 0.9 }],
           },
         ],
       },
-      "api.openalex.org/authors/A5040172093": {
-        id: "https://openalex.org/authors/A5040172093",
+      "api.openalex.org/authors/A5101900734": {
+        id: "https://openalex.org/authors/A5101900734",
         display_name: "Tongyu Zhu",
         orcid: "https://orcid.org/0000-0002-6197-0698",
-        x_concepts: [{ display_name: "Kidney transplantation", score: 80 }],
+        x_concepts: [{ display_name: "Kidney transplantation", score: 80, level: 2 }],
         last_known_institutions: [{ display_name: "Zhongshan Hospital Fudan" }],
         affiliations: [
           { institution: { display_name: "Fudan University" }, years: [2010] },

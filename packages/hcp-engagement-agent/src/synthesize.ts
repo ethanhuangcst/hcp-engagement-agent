@@ -5,7 +5,9 @@ import {
   type VirtualTwin,
 } from "@hca/domain";
 import { getInsights, getTwin, upsertInsights } from "@hca/db";
+import { isLlmStrict } from "./config.js";
 import { createLlmClient, type LlmClient } from "./llm.js";
+import { ruleSynthesizeDoingNow } from "./rule-doing-now.js";
 import {
   agentError,
   SynthesizeDoingNowInputSchema,
@@ -90,12 +92,32 @@ export async function synthesizeDoingNow(
   const { hcpId, refresh = false } = parsed.data;
 
   const twin = await getTwin(hcpId);
-  const insights = await getInsights(hcpId);
-  if (!twin || !insights) {
-    throw agentError("INSIGHTS_NOT_FOUND", "无 Twin 或 Insights 骨架", {
-      repair_hint: "先完成分身确认保存并写入 Insights",
-      details: { hcpId, hasTwin: Boolean(twin), hasInsights: Boolean(insights) },
+  if (!twin) {
+    throw agentError("INSIGHTS_NOT_FOUND", "无 Twin", {
+      repair_hint: "先完成分身确认保存",
+      details: { hcpId },
     });
+  }
+  let insights = await getInsights(hcpId);
+  if (!insights) {
+    // MVP-2：允许仅有 Twin 时从公开字段合成骨架（验收不强制已跑 Stage）
+    insights = {
+      hcp_id: hcpId,
+      as_of: twin.meta.as_of,
+      interest_directions: (twin.research?.themes ?? []).map((t) => ({
+        title: String(t),
+        analysis: "从 research.themes 派生的兴趣轴草稿",
+        confidence: "medium",
+      })),
+      opportunities: [
+        {
+          title: "学术文献 / 主题讨论切入",
+          priority: "medium",
+          note: "不假设处方或进院意愿",
+        },
+      ],
+      evidence: [],
+    };
   }
 
   const existing = insights.doing_now;
@@ -113,46 +135,57 @@ export async function synthesizeDoingNow(
     );
   }
 
+  const persist = async (doing_now: DoingNow) => {
+    const asOf = doing_now.as_of || new Date().toISOString().slice(0, 10);
+    const nextInsights: HcpInsights = {
+      ...insights,
+      doing_now,
+      as_of: asOf,
+    };
+    await upsertInsights(nextInsights);
+    return { doing_now, reused: false as const };
+  };
+
   const llm =
     deps?.llm ??
     (() => {
       const c = createLlmClient();
-      if ("error" in c) throw c.error;
+      if ("error" in c) return null;
       return c;
     })();
 
-  let result;
+  if (!llm) {
+    if (isLlmStrict()) {
+      const c = createLlmClient();
+      if ("error" in c) throw c.error;
+    }
+    return persist(ruleSynthesizeDoingNow(twin, insights));
+  }
+
   try {
-    result = await llm.chat([
+    const result = await llm.chat([
       { role: "system", content: SYSTEM },
       {
         role: "user",
         content: `请为以下 HCP 生成 doing_now JSON。\n\n${buildContext(twin, insights)}`,
       },
     ]);
-  } catch (err) {
-    throw err as AgentError;
-  }
-
-  const json = extractJsonObject(result.content);
-  const asOf = new Date().toISOString().slice(0, 10);
-  const draft = DoingNowSchema.safeParse({
-    ...(typeof json === "object" && json ? json : {}),
-    as_of: asOf,
-    llm: { provider: result.provider, model: result.model },
-  });
-  if (!draft.success) {
-    throw agentError("LLM_ERROR", "LLM 产出不符合 DoingNow 契约", {
-      details: { issues: draft.error.issues },
-      retryable: true,
+    const json = extractJsonObject(result.content);
+    const asOf = new Date().toISOString().slice(0, 10);
+    const draft = DoingNowSchema.safeParse({
+      ...(typeof json === "object" && json ? json : {}),
+      as_of: asOf,
+      llm: { provider: result.provider, model: result.model },
     });
+    if (!draft.success) {
+      throw agentError("LLM_ERROR", "LLM 产出不符合 DoingNow 契约", {
+        details: { issues: draft.error.issues },
+        retryable: true,
+      });
+    }
+    return persist(draft.data);
+  } catch (err) {
+    if (isLlmStrict()) throw err as AgentError;
+    return persist(ruleSynthesizeDoingNow(twin, insights));
   }
-
-  const nextInsights: HcpInsights = {
-    ...insights,
-    doing_now: draft.data,
-    as_of: asOf,
-  };
-  await upsertInsights(nextInsights);
-  return { doing_now: draft.data, reused: false };
 }
