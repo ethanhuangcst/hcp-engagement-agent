@@ -12,8 +12,15 @@ dist/
 coverage/
 *.tsbuildinfo
 
-# RAG 语料 / Qdrant 运行时（非 Twin 主库；主数据在香港 Postgres）
-data/**/*
+# data/ 运行时与历史本地树（非 Twin 主库；主数据在香港 Postgres）
+data/twins/
+data/engagements/
+data/tenants/
+data/qdrant/
+# 租户 SOP 语料禁止进库
+data/rag/corpus/tenants/**
+!data/rag/corpus/tenants/.gitkeep
+# 公开合规 / 学术种子语料纳入版本库：data/rag/corpus/{compliance,academic}/
 !data/**/.gitkeep
 
 # Qdrant 本地下载的二进制（用 scripts/start-qdrant.sh 获取）
