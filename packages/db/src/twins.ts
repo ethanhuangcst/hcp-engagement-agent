@@ -16,6 +16,7 @@ export type TwinListItem = {
   as_of: string | null;
   twin_version: number;
   tags: HcpTags | null;
+  /** Display summary only (同源字段摘要，供列表截断). */
   doing_now?: string;
 };
 
@@ -82,7 +83,14 @@ export async function listTwins(): Promise<TwinListItem[]> {
     doing_now: string | null;
   }>(
     `SELECT t.hcp_id, t.identity, t.tags, t.as_of::text, t.twin_version,
-            i.payload->>'doing_now' AS doing_now
+            COALESCE(
+              i.payload->'doing_now'->>'summary',
+              CASE
+                WHEN jsonb_typeof(i.payload->'doing_now') = 'string'
+                THEN i.payload->>'doing_now'
+                ELSE NULL
+              END
+            ) AS doing_now
      FROM hcp_twins t
      LEFT JOIN hcp_insights i ON i.hcp_id = t.hcp_id
      ORDER BY t.updated_at DESC`,
@@ -123,6 +131,41 @@ export async function getInsights(hcpId: string): Promise<HcpInsights | null> {
   const row = r.rows[0];
   if (!row) return null;
   return HcpInsightsSchema.parse(row.payload);
+}
+
+export async function updateTwinIdentity(
+  hcpId: string,
+  patch: {
+    name_zh?: string;
+    hospital?: string;
+    department?: string;
+    city?: string;
+    title?: string;
+  },
+): Promise<VirtualTwin | null> {
+  const twin = await getTwin(hcpId);
+  if (!twin) return null;
+  const next: VirtualTwin = {
+    ...twin,
+    identity: {
+      name_zh: patch.name_zh ?? twin.identity?.name_zh ?? twin.profile.name_zh,
+      name_en: twin.identity?.name_en ?? twin.profile.name_en,
+      hospital: patch.hospital ?? twin.identity?.hospital ?? twin.profile.hospital,
+      department:
+        patch.department ?? twin.identity?.department ?? twin.profile.department,
+      city: patch.city ?? twin.identity?.city ?? twin.profile.city,
+      title: patch.title ?? twin.identity?.title ?? twin.profile.title,
+    },
+    profile: {
+      ...twin.profile,
+      name_zh: patch.name_zh ?? twin.profile.name_zh,
+      hospital: patch.hospital ?? twin.profile.hospital,
+      department: patch.department ?? twin.profile.department,
+      city: patch.city ?? twin.profile.city,
+      title: patch.title ?? twin.profile.title,
+    },
+  };
+  return upsertTwin(next);
 }
 
 export async function updateTwinTags(

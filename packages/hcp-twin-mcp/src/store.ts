@@ -67,9 +67,9 @@ export function createMemoryStore(): TwinStore {
   };
 }
 
-export function createPostgresStore(): TwinStore {
+export function createPostgresStore(mode: "mock" | "live" = "live"): TwinStore {
   return {
-    mode: "live",
+    mode,
     ping: () => pingDatabase(),
     getTwin: dbGetTwin,
     upsertTwin: dbUpsertTwin,
@@ -80,6 +80,15 @@ export function createPostgresStore(): TwinStore {
   };
 }
 
-export function createStore(mode: "mock" | "live" = "mock"): TwinStore {
-  return mode === "live" ? createPostgresStore() : createMemoryStore();
+/**
+ * mock：resolve 等仍走 fixture（零外网）；落库与 BFF 共用 Postgres（有 DATABASE_URL 时）。
+ * 无 DATABASE_URL 时退回内存（纯单测）。
+ */
+export function createStore(mode: "mock" | "live" = "live"): TwinStore {
+  if (process.env.DATABASE_URL) {
+    return createPostgresStore(mode);
+  }
+  // 无 DATABASE_URL 时内存库；mode 仍区分 live/mock 采集行为
+  const mem = createMemoryStore();
+  return { ...mem, mode };
 }

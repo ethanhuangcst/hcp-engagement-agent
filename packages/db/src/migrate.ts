@@ -6,13 +6,17 @@ import { loadRootEnv } from "./load-env.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+const MIGRATIONS = ["001_mvp1_twins.sql", "002_mvp4_rag.sql"];
+
 async function main(): Promise<void> {
   loadRootEnv(join(__dirname, "../../.."));
-  const sqlPath = join(__dirname, "../migrations/001_mvp1_twins.sql");
-  const sql = readFileSync(sqlPath, "utf8");
   const pool = getPool();
-  await pool.query(sql);
-  console.log("Migrated: 001_mvp1_twins.sql");
+  for (const name of MIGRATIONS) {
+    const sqlPath = join(__dirname, "../migrations", name);
+    const sql = readFileSync(sqlPath, "utf8");
+    await pool.query(sql);
+    console.log(`Migrated: ${name}`);
+  }
   await closePool();
 }
 

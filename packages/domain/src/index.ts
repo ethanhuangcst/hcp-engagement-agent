@@ -26,10 +26,13 @@ export {
   TwinResearchSchema,
   TwinMetaSchema,
   VirtualTwinSchema,
+  DoingNowSchema,
+  DoingNowFieldSchema,
   HcpInsightsSchema,
   assertNoComplianceForbiddenFields,
   type TwinIdentity,
   type VirtualTwin,
+  type DoingNow,
   type HcpInsights,
 } from "./twin.js";
 

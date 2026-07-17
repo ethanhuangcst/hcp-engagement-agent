@@ -10,4 +10,17 @@ export {
   ZHU_HCP_ID,
   buildZhuTongyuTwin,
 } from "./tools.js";
+export {
+  buildTwinTool,
+  getTwinStatusTool,
+  pollHeatmapTool,
+  retagAfterCareerTool,
+  resetBuildQueueForTests,
+} from "./tools-build.js";
+export { runBuildStages, createBuildQueue } from "./build/pipeline.js";
+export {
+  buildZhuTongyuInsights,
+  ZHU_AUTHOR_IDS,
+  ZHU_TAGS,
+} from "./fixtures/zhu-tongyu.js";
 export { getTwinMode, startHttp, startStdio } from "./transport.js";

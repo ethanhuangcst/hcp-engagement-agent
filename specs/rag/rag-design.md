@@ -230,7 +230,7 @@ tenant_id?   # SOP 必填；全局种子为 null
 | 指南 | **按章节** | 标 `authority` |
 | 租户 SOP | 按小节/编号 | payload 强制 `tenant_id` |
 
-Parent-Document（小块召回、生成拉 parent）：**P2**，不进 MVP-4/5；MVP-7 可选。
+Parent-Document（小块召回、生成拉 parent）：**P2**，不进 MVP-3 闭环；可作为后置增强。
 
 ---
 
@@ -385,9 +385,8 @@ packages/medical-kb/
 
 | MVP | 目标 |
 |-----|------|
-| MVP-4 | 目录 + Qdrant 双 collection + Zod + health + 合规种子 + `retrieve_compliance` |
-| MVP-5 | Hybrid 学术检索 + `ingest_on_demand` + coverage |
-| MVP-7 | 租户 SOP + eval + 安全硬化 |
+| MVP-3 | 目录 + Qdrant 双 collection + Zod + health + 合规种子 + `retrieve_compliance` + Hybrid 学术检索 + `ingest_on_demand` + coverage |
+| 后置 | 租户 SOP + eval + 安全硬化 |
 
 总表：[`../1.product-definition.md`](../1.product-definition.md)。
 

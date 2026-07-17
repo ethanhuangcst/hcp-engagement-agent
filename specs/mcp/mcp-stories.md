@@ -13,7 +13,7 @@
 | 故事编号 | `US-MCP-NNN` |
 | 追溯 | 每条故事列出覆盖的 `F-MCP-*` / 主要 `I-MCP-*` |
 | 完成定义 | 本文件 AC 全部通过，且符合 [`../7.test-strategy.md`](../7.test-strategy.md) SMART DoD |
-| 实现批次 | 填 **MVP-1…MVP-7**，见 [`../1.product-definition.md`](../1.product-definition.md) |
+| 实现批次 | 填 **MVP-1…MVP-4**，见 [`../1.product-definition.md`](../1.product-definition.md) |
 
 ---
 
@@ -202,7 +202,7 @@ Feature: Twin / Insights 读取
 **So that** 用户能看到身份→职业→科研→热力→洞察的推进，且同人构建不并发冲突  
 
 **覆盖**：F-MCP-018–024、027–029 · I-MCP-002、I-MCP-003  
-**MVP**：MVP-2  
+**MVP**：MVP-1  
 
 ### 验收标准
 
@@ -253,7 +253,7 @@ Feature: build_twin 编排
 **So that** 排障不必绕过 BFF 产品路径，且生产采集质量可核对  
 
 **覆盖**：F-MCP-026、028、033、034 · I-MCP-008–010  
-**MVP**：MVP-2  
+**MVP**：MVP-1  
 
 ### 验收标准
 
@@ -293,13 +293,12 @@ Feature: Resources 与 live 验收
 | US-MCP-002 | 008–009、011–014 | I-MCP-001 | MVP-1 |
 | US-MCP-003 | 015–017 | I-MCP-006 | MVP-1 |
 | US-MCP-004 | 007、025 | I-MCP-004、005 | MVP-1 |
-| US-MCP-005 | 018–024、027–029 | I-MCP-002、003 | MVP-2 |
-| US-MCP-006 | 026、028、033–034 | I-MCP-008–010 | MVP-2 |
+| US-MCP-005 | 018–024、027–029 | I-MCP-002、003 | MVP-1 |
+| US-MCP-006 | 026、028、033–034 | I-MCP-008–010 | MVP-1 |
 
 ## 建议验收顺序
 
-1. MVP-1：US-MCP-001 → 002 → 004 → 003  
-2. MVP-2：US-MCP-005 → 006  
+1. MVP-1：US-MCP-001 → 002 → 004 → 003 → 005 → 006  
 
 ## 相关文档
 

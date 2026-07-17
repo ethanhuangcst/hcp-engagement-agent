@@ -15,7 +15,7 @@
 | Playwright 隔离 | Chromium **仅**本进程；`apps/web` 禁止依赖 playwright |
 | 共享主库 | 写香港 **Postgres**；与 BFF、Agent 共用 `DATABASE_URL` |
 | 合规 | 仅公开信息；禁止处方/统方/非公开 CRM；热力禁止拜访笔记冒充 |
-| 批次 | 功能与对外接口「实现批次」填 **MVP-1…MVP-7**（见 [`1.product-definition.md`](../1.product-definition.md)） |
+| 批次 | 功能与对外接口「实现批次」填 **MVP-1…MVP-4**（见 [`1.product-definition.md`](../1.product-definition.md)） |
 
 MCP 原语用法：对外暴露 **Tools（动作）** + **Resources（只读 URI）**；**Prompts 本包 P0 不做**（不注册 `registerPrompt`）。
 
@@ -41,14 +41,13 @@ Research Collector **仅**使用同时满足下列条件的源：公开 HTTP API
 
 ## 实现批次说明
 
-功能与接口「实现批次」填 **MVP-1…MVP-7**，见 [`1.product-definition.md`](../1.product-definition.md)。
+功能与接口「实现批次」填 **MVP-1…MVP-4**，见 [`1.product-definition.md`](../1.product-definition.md)。
 
 | MVP | 本规格重心 | 验收重心 |
 |-----|------------|----------|
-| **MVP-1** | 壳、Zod、mock、resolve、AuthorIds、tagging、读写 Twin、错误码 | 消歧候选 + 确认后可 `get_twin` |
-| **MVP-2** | `build_twin` Stage A–E、进度、Resources、热力节奏、live 验收 | 进度可查；职业/科研/热力/Insights 落库 |
+| **MVP-1** | 壳、Zod、CI mock、resolve、AuthorIds、tagging、确认保存、读写 Twin、`build_twin` Stage A–E、进度、Resources、热力节奏、live 验收 | 消歧→确认→可 `get_twin`；详情侧可触发构建并与 Web F-WEB-014 **同批**闭环 |
 
-旧 M0–M4 代号废止，统一用产品 MVP。
+旧 M0–M4 / 五批制废止，统一用产品 **4 批 MVP**（见产品定义）。
 
 ---
 
@@ -67,29 +66,29 @@ Research Collector **仅**使用同时满足下列条件的源：公开 HTTP API
 | 9 | F-MCP-009 | 合规采集边界 | 仅公开源；禁止处方/统方/非公开 CRM/私人手机微信号营销画像；活动不得用拜访笔记冒充 `events` | MVP-1 |
 | 10 | F-MCP-010 | Playwright 进程隔离 | Chromium 仅本 MCP；并发浏览器上下文有上限；`CRAWLER_HEADLESS` 可配 | MVP-1 |
 | 11 | F-MCP-011 | 外网限速与成本 | PubMed/NCBI（尊重 `NCBI_API_KEY` 配额）、OpenAlex、Playwright 导航：限速、超时、可重试；失败进结构化错误 | MVP-1 |
-| 12 | F-MCP-012 | 身份消歧（resolve） | 姓名+医院+科室 → `url_candidates[]`、候选 AuthorIds、`disambiguation_status`；**未确认前不强制入库完整 Twin**（可写草稿/会话态由 BFF 持有） | MVP-1 |
+| 12 | F-MCP-012 | 身份消歧（resolve） | 姓名+医院+科室 → **`candidates[]`（人候选）**、每候选 AuthorIds/tags 草稿、`disambiguation_status`；网页/库名进 `evidence[]`，不得当作人选主标题；**未确认前不强制入库完整 Twin** | MVP-1 |
 | 13 | F-MCP-013 | AuthorIds 绑定 | 权威在 `research.author_ids`；镜像在 `profile.external_ids`；活跃 P0：orcid / pubmed_author / openalex；`resolved` ⇒ ≥1 个活跃 P0 号非空 | MVP-1 |
 | 14 | F-MCP-014 | 文献灌库门禁 | Stage C 前校验数据字典 §3.2.1；未满足则**跳过/拒绝**论文灌库并返回可修复错误；禁止仅中文姓名灌库 | MVP-1 |
 | 15 | F-MCP-015 | 级别打标（Tagging） | 规则优先写 `profile.tags`：`hcp_tier` + `role_tags[]` + meta；禁止处方潜力；可选 LLM 建议，冲突时规则胜出 | MVP-1 |
 | 16 | F-MCP-016 | 打标触发点 | （1）`resolve_hcp_identity` 成功后可带 tags 草稿；（2）`build_twin` Stage A 末写入；（3）独立 `tag_hcp` 重算 | MVP-1 |
 | 17 | F-MCP-017 | 用户覆盖标签 | `tag_hcp` 接受覆盖载荷，`tag_method=user_override`；后续规则重算默认不静默覆盖 user_override（除非 `force_rule=true`） | MVP-1 |
-| 18 | F-MCP-018 | Twin 构建编排 | `build_twin(mode=full\|incremental)` → 立即返回 `runId`；后台跑 Stage A→E；**同一 `hcpId` 同时仅一个 active run**（冲突返回明确错误） | MVP-2 |
-| 19 | F-MCP-019 | Stage A 身份锚点 | 锁定主页 URL + AuthorIds + 基础 profile + tagging | MVP-2 |
-| 20 | F-MCP-020 | Stage B Career Collector | 医院/大学页 → education / positions / society_roles → `career-timeline.json`（或并入 twin） | MVP-2 |
-| 21 | F-MCP-021 | Stage C Research Collector | 按 author_ids 拉文 → recent_pubs、themes、trend_shift、lab；专利/基金 P1 | MVP-2 |
-| 22 | F-MCP-022 | Stage D Heatmap Collector | 会务/新闻 → events；窗：更早 \| d90 \| d60 \| d30；分桶 academic \| policy_media；空窗或失败 → `no_public_evidence`（**不阻断** Stage E） | MVP-2 |
-| 23 | F-MCP-023 | Stage E Insights 衍生 | 基于身份+职业+科研（及可用热力）写结构化草稿；D 失败时仍可出 Insights | MVP-2 |
-| 24 | F-MCP-024 | 构建进度查询 | `get_twin_status(runId)` → phase / progress / error；phase 对齐：身份→职业→科研→热力(可跳)→洞察 | MVP-2 |
+| 18 | F-MCP-018 | Twin 构建编排 | `build_twin(mode=full\|incremental)` → 立即返回 `runId`；后台跑 Stage A→E；**同一 `hcpId` 同时仅一个 active run**（冲突返回明确错误） | MVP-1 |
+| 19 | F-MCP-019 | Stage A 身份锚点 | 锁定主页 URL + AuthorIds + 基础 profile + tagging | MVP-1 |
+| 20 | F-MCP-020 | Stage B Career Collector | 医院/大学页 → education / positions / society_roles → `career-timeline.json`（或并入 twin） | MVP-1 |
+| 21 | F-MCP-021 | Stage C Research Collector | 按 author_ids 拉文 → recent_pubs、themes、trend_shift、lab；专利/基金 P1。`themes`：作者 `x_concepts` 为主、works 概念为辅；医学画像下过滤 Computer science 等噪声 level-0，专科 level≥1 优先于宽泛 Medicine | MVP-1 |
+| 22 | F-MCP-022 | Stage D Heatmap Collector | 会务/新闻 → events；窗：更早 \| d90 \| d60 \| d30；分桶 academic \| policy_media；空窗或失败 → `no_public_evidence`（**不阻断** Stage E） | MVP-1 |
+| 23 | F-MCP-023 | Stage E Insights 衍生 | 基于身份+职业+科研（及可用热力）写结构化草稿；D 失败时仍可出 Insights | MVP-1 |
+| 24 | F-MCP-024 | 构建进度查询 | `get_twin_status(runId)` → phase / progress / error；phase 对齐：身份→职业→科研→热力(可跳)→洞察 | MVP-1 |
 | 25 | F-MCP-025 | Twin / Insights 读取 | `get_twin` / `get_insights`；不存在时结构化 `NOT_FOUND`，不抛未捕获异常 | MVP-1 |
-| 26 | F-MCP-026 | MCP Resources（只读） | 注册 URI 模板 `twin://{hcpId}/career\|research\|heatmap`；`mimeType=application/json`；缺文件 → 可读错误；产品 UI 仍走 BFF | MVP-2 |
-| 27 | F-MCP-027 | 异步任务与队列 | 长任务进程内队列起步；可选 Redis；失败可重试；增量幂等边界写进 Tool description | MVP-2 |
-| 28 | F-MCP-028 | 热力监控节奏 | 每日/会前扫描；写 `last_polled_at`；非一次性爬取 | MVP-2 |
-| 29 | F-MCP-029 | 职业刷新后重打标 | career 季度/增量刷新成功后可调用 `tag_hcp`（尊重 user_override 规则） | MVP-2 |
+| 26 | F-MCP-026 | MCP Resources（只读） | 注册 URI 模板 `twin://{hcpId}/career\|research\|heatmap`；`mimeType=application/json`；缺文件 → 可读错误；产品 UI 仍走 BFF | MVP-1 |
+| 27 | F-MCP-027 | 异步任务与队列 | 长任务进程内队列起步；可选 Redis；失败可重试；增量幂等边界写进 Tool description | MVP-1 |
+| 28 | F-MCP-028 | 热力监控节奏 | 每日/会前扫描；写 `last_polled_at`；非一次性爬取 | MVP-1 |
+| 29 | F-MCP-029 | 职业刷新后重打标 | career 季度/增量刷新成功后可调用 `tag_hcp`（尊重 user_override 规则） | MVP-1 |
 | 30 | F-MCP-030 | 错误码目录 | 统一 `MCP_ERROR` 形状（见 §错误契约）；覆盖未消歧、缺文献号、源站失败、并发构建、校验失败 | MVP-1 |
 | 31 | F-MCP-031 | mock Fixture 路径 | CI 用朱同玉等 fixture 冒烟；零外网 | MVP-1 |
 | 32 | F-MCP-032 | Tool 契约测试 | Vitest + `TWIN_MODE=mock` 覆盖全部 Tool I/O 与主要错误码 | MVP-1 |
-| 33 | F-MCP-033 | KOL 样本对照验收 | 数据字典 §16：resolve / AuthorIds / specialties / tags 对照断言 | MVP-2 |
-| 34 | F-MCP-034 | 朱同玉 live 验收 | live 产出符合字典与 fixture 形状 | MVP-2 |
+| 33 | F-MCP-033 | KOL 样本对照验收 | 数据字典 §16：resolve / AuthorIds / specialties / tags 对照断言 | MVP-1 |
+| 34 | F-MCP-034 | 朱同玉 live 验收 | live 产出符合字典与 fixture 形状 | MVP-1 |
 | 35 | F-MCP-035 | 环境变量与配置 | `MCP_TRANSPORT`、`MCP_PORT`、`DATABASE_URL`、`HCA_DATA_DIR?`、`TWIN_MODE`、`CRAWLER_HEADLESS`、`NCBI_API_KEY`、`REDIS_URL` | MVP-1 |
 
 ---
@@ -100,16 +99,16 @@ BFF / Cursor / 外部 MCP Client 经 MCP 协议调用。浏览器**禁止**直�
 
 | 序号 | 接口编号 | 类型 | 接口名称 | 输入摘要（Zod 意向） | 输出摘要 | 副作用 | 幂等 | 实现批次 |
 |------|----------|------|----------|----------------------|----------|--------|------|----------|
-| 1 | I-MCP-001 | Tool | `resolve_hcp_identity` | `{ name: string, hospital: string, dept: string, city?: string }` | `{ disambiguation_status, hcpId?, url_candidates[], author_ids_draft?, tags_draft?, evidence? }` | 默认可不入库完整 Twin；若生成稳定 `hcpId` 须在出参标明 | 是 | MVP-1 |
-| 2 | I-MCP-002 | Tool | `build_twin` | `{ hcpId: string, mode: "full" \| "incremental" }` | `{ runId: string }`（立即） | 入队异步构建；写 twins 目录 | 否（incremental 可重复调用） | MVP-2 |
-| 3 | I-MCP-003 | Tool | `get_twin_status` | `{ runId: string }` | `{ runId, hcpId, phase, progress: 0..1, error?: MCP_ERROR, updated_at }` | 无 | 是 | MVP-2 |
+| 1 | I-MCP-001 | Tool | `resolve_hcp_identity` | `{ name: string, hospital: string, dept: string, city?: string }` | `{ disambiguation_status, candidates: [{ candidate_id, name_zh, name_en?, hospital, department, title?, distinguish, confidence, match_note, evidence[{kind,url?}], hcpId?, author_ids_draft?, tags_draft? }], persisted: false }` | 默认可不入库完整 Twin；每人候选可带稳定 `hcpId` | 是 | MVP-1 |
+| 2 | I-MCP-002 | Tool | `build_twin` | `{ hcpId: string, mode: "full" \| "incremental" }` | `{ runId: string }`（立即） | 入队异步构建；写 twins 目录 | 否（incremental 可重复调用） | MVP-1 |
+| 3 | I-MCP-003 | Tool | `get_twin_status` | `{ runId: string }` | `{ runId, hcpId, phase, progress: 0..1, error?: MCP_ERROR, updated_at }` | 无 | 是 | MVP-1 |
 | 4 | I-MCP-004 | Tool | `get_twin` | `{ hcpId: string }` | Twin JSON（对齐数据字典；含 `profile.tags`、`research.author_ids` 等） | 无 | 是 | MVP-1 |
 | 5 | I-MCP-005 | Tool | `get_insights` | `{ hcpId: string }` | Insights JSON（`doing_now` / `interest_directions` / `opportunities` 等） | 无 | 是 | MVP-1 |
 | 6 | I-MCP-006 | Tool | `tag_hcp` | `{ hcpId: string, force_rule?: boolean, override?: { hcp_tier?, role_tags? } }` | `{ tags: HcpTags }` | 写 `profile.tags`（及 twin.json 对应段） | 是（同入参重复调用结果稳定） | MVP-1 |
 | 7 | I-MCP-007 | Tool | `health_check` | `{}` | `{ ok: boolean, database_ok, twin_mode, playwright?: "ready"\|"skip"\|"down", version }` | 无 | 是 | MVP-1 |
-| 8 | I-MCP-008 | Resource | `twin://{hcpId}/career` | URI 模板 | career JSON · `application/json` | 无（只读） | — | MVP-2 |
-| 9 | I-MCP-009 | Resource | `twin://{hcpId}/research` | URI 模板 | research JSON · `application/json` | 无（只读） | — | MVP-2 |
-| 10 | I-MCP-010 | Resource | `twin://{hcpId}/heatmap` | URI 模板 | activity/heatmap 切片 JSON · `application/json` | 无（只读） | — | MVP-2 |
+| 8 | I-MCP-008 | Resource | `twin://{hcpId}/career` | URI 模板 | career JSON · `application/json` | 无（只读） | — | MVP-1 |
+| 9 | I-MCP-009 | Resource | `twin://{hcpId}/research` | URI 模板 | research JSON · `application/json` | 无（只读） | — | MVP-1 |
+| 10 | I-MCP-010 | Resource | `twin://{hcpId}/heatmap` | URI 模板 | activity/heatmap 切片 JSON · `application/json` | 无（只读） | — | MVP-1 |
 
 ### 接口与产品功能映射（摘）
 
@@ -179,7 +178,7 @@ Cursor 调试：Resources twin://…（只读，不替代 BFF）
 
 ## 依赖关系（简图）
 
-排期参考（已映射至 MVP-1 / MVP-2）：
+排期参考（已映射至 MVP-1 / MVP-1）：
 
 ```text
 M0 壳 / Zod / health / mock / 错误契约

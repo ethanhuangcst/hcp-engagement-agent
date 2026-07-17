@@ -76,12 +76,11 @@ export function buildZhuTongyuTwin(asOf = "2026-07-17"): VirtualTwin {
   };
 }
 
+/** Stage-E style skeleton: no final doing_now.summary (Agent owns display copy). */
 export function buildZhuTongyuInsights(asOf = "2026-07-17"): HcpInsights {
   return {
     hcp_id: ZHU_HCP_ID,
     as_of: asOf,
-    doing_now:
-      "肾移植临床与质控管理并行；公开叙事强调噬菌体、BK 病毒及 AI+移植",
     interest_directions: [
       { title: "噬菌体治疗", confidence: "medium" },
       { title: "移植后感染管理", confidence: "high" },

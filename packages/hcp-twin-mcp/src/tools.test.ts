@@ -28,8 +28,16 @@ describe("MVP-1 MCP tool contracts (TWIN_MODE=mock)", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.data.persisted).toBe(false);
-    expect(r.data.url_candidates.length).toBeGreaterThan(0);
-    expect(r.data.hcpId).toBe(ZHU_HCP_ID);
+    expect(r.data.candidates.length).toBeGreaterThan(0);
+    const primary = r.data.candidates[0];
+    expect(primary?.name_zh).toBe("朱同玉");
+    expect(primary?.hospital).toContain("中山");
+    expect(primary?.hcpId).toBe(ZHU_HCP_ID);
+    expect(primary?.evidence.some((e) => e.kind.includes("专家页") || e.kind === "OpenAlex")).toBe(
+      true,
+    );
+    // 网页名不得冒充人选主字段
+    expect(primary?.name_zh).not.toMatch(/专家页|OpenAlex|Author/i);
     expect(await store.getTwin(ZHU_HCP_ID)).toBeNull();
   });
 
@@ -48,12 +56,16 @@ describe("MVP-1 MCP tool contracts (TWIN_MODE=mock)", () => {
   });
 
   it("confirm → get_twin / get_insights / tag_hcp happy path", async () => {
-    await confirmAndSaveTwin(store, ZHU_HCP_ID);
+    const saved = await confirmAndSaveTwin(store, ZHU_HCP_ID);
+    expect(saved.ok).toBe(true);
 
     const twin = await getTwinTool(store, { hcpId: ZHU_HCP_ID });
     expect(twin.ok).toBe(true);
     if (!twin.ok) return;
-    const body = twin.data as { profile: { tags: { hcp_tier: string } }; research: { author_ids: object } };
+    const body = twin.data as {
+      profile: { tags: { hcp_tier: string } };
+      research: { author_ids: object };
+    };
     expect(body.profile.tags.hcp_tier).toBe("T1");
 
     const insights = await getInsightsTool(store, { hcpId: ZHU_HCP_ID });
@@ -65,7 +77,8 @@ describe("MVP-1 MCP tool contracts (TWIN_MODE=mock)", () => {
     });
     expect(tagged.ok).toBe(true);
     if (!tagged.ok) return;
-    const tags = (tagged.data as { tags: { tag_method: string; hcp_tier: string } }).tags;
+    const tags = (tagged.data as { tags: { tag_method: string; hcp_tier: string } })
+      .tags;
     expect(tags.tag_method).toBe("user_override");
     expect(tags.hcp_tier).toBe("T2");
 
@@ -74,7 +87,8 @@ describe("MVP-1 MCP tool contracts (TWIN_MODE=mock)", () => {
     expect(again.ok).toBe(true);
     if (!again.ok) return;
     expect(
-      (again.data as { tags: { tag_method: string; hcp_tier: string } }).tags.hcp_tier,
+      (again.data as { tags: { tag_method: string; hcp_tier: string } }).tags
+        .hcp_tier,
     ).toBe("T2");
 
     const forced = await tagHcpTool(store, {
@@ -105,14 +119,49 @@ describe("MVP-1 MCP tool contracts (TWIN_MODE=mock)", () => {
     });
     expect(empty.ok).toBe(true);
     if (empty.ok) expect(empty.data.disambiguation_status).toBe("unresolved");
+  });
 
-    const other = await resolveHcpIdentity(store, {
-      name: "张三",
-      hospital: "其他医院",
-      dept: "内科",
+  it("葛均波 + 中山医院 不得返回朱同玉", async () => {
+    const r = await resolveHcpIdentity(store, {
+      name: "葛均波",
+      hospital: "复旦大学附属中山医院",
+      dept: "心内科",
     });
-    expect(other.ok).toBe(true);
-    if (other.ok) expect(other.data.url_candidates).toEqual([]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.data.candidates.length).toBeGreaterThan(0);
+    expect(r.data.candidates.every((c) => c.name_zh === "葛均波")).toBe(true);
+    expect(r.data.candidates.some((c) => c.name_zh.includes("朱"))).toBe(false);
+    expect(r.data.candidates[0]?.hcpId).not.toBe(ZHU_HCP_ID);
+  });
+
+  it("confirm non-fixture persists queried identity", async () => {
+    const resolved = await resolveHcpIdentity(store, {
+      name: "葛均波",
+      hospital: "复旦大学附属中山医院",
+      dept: "心内科",
+    });
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    const c = resolved.data.candidates[0]!;
+    const saved = await confirmAndSaveTwin(store, {
+      hcpId: c.hcpId!,
+      name_zh: c.name_zh,
+      hospital: c.hospital,
+      department: c.department,
+      title: c.title,
+      tags_draft: c.tags_draft
+        ? { hcp_tier: c.tags_draft.hcp_tier, role_tags: c.tags_draft.role_tags }
+        : undefined,
+    });
+    expect(saved.ok).toBe(true);
+    if (!saved.ok) return;
+    const twin = await getTwinTool(store, { hcpId: saved.data.hcpId });
+    expect(twin.ok).toBe(true);
+    if (!twin.ok) return;
+    const body = twin.data as { profile: { name_zh: string; hospital: string } };
+    expect(body.profile.name_zh).toBe("葛均波");
+    expect(body.profile.hospital).toContain("中山");
   });
 
   it("get_insights / tag validation errors", async () => {

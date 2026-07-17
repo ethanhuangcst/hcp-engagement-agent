@@ -15,3 +15,7 @@ coverage/
 # RAG 语料 / Qdrant 运行时（非 Twin 主库；主数据在香港 Postgres）
 data/**/*
 !data/**/.gitkeep
+
+# Qdrant 本地下载的二进制（用 scripts/start-qdrant.sh 获取）
+tools/qdrant/
+.qdrant-initialized

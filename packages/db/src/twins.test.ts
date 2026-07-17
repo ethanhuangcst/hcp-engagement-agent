@@ -95,13 +95,21 @@ describe("@hca/db with mocked pg", () => {
     await upsertInsights({
       hcp_id: "hcp_test",
       as_of: "2026-07-17",
-      doing_now: "x",
+      doing_now: { summary: "x", as_of: "2026-07-17" },
     });
 
     query.mockResolvedValueOnce({
-      rows: [{ payload: { hcp_id: "hcp_test", as_of: "2026-07-17", doing_now: "x" } }],
+      rows: [
+        {
+          payload: {
+            hcp_id: "hcp_test",
+            as_of: "2026-07-17",
+            doing_now: { summary: "x", as_of: "2026-07-17" },
+          },
+        },
+      ],
     });
-    expect((await getInsights("hcp_test"))?.doing_now).toBe("x");
+    expect((await getInsights("hcp_test"))?.doing_now?.summary).toBe("x");
 
     query.mockResolvedValueOnce({ rows: [] });
     expect(await getInsights("missing")).toBeNull();

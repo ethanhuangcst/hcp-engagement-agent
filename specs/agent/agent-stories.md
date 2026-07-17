@@ -13,7 +13,7 @@
 | 故事编号 | `US-AGT-NNN` |
 | 追溯 | 每条故事列出覆盖的 `F-AGT-*` / 主要 `I-AGT-*` |
 | 完成定义 | 本文件 AC 全部通过，且符合 [`../7.test-strategy.md`](../7.test-strategy.md) SMART DoD |
-| 实现批次 | 填 **MVP-1…MVP-7**，见 [`../1.product-definition.md`](../1.product-definition.md) |
+| 实现批次 | 填 **MVP-1…MVP-4**，见 [`../1.product-definition.md`](../1.product-definition.md) |
 
 ---
 
@@ -24,7 +24,7 @@
 **So that** 洞察与方案生成可替换模型而不改对外能力名称  
 
 **覆盖**：F-AGT-001、001a–d、005、028 · I-AGT-005  
-**MVP**：MVP-3  
+**MVP**：MVP-2  
 
 ### 验收标准
 
@@ -65,7 +65,7 @@ Feature: LlmClient 与安全边界
 **So that** 访前准备不会面对互相矛盾的两套文案  
 
 **覆盖**：F-AGT-008、009、010 · I-AGT-001  
-**MVP**：MVP-3  
+**MVP**：MVP-2  
 
 ### 规则清单
 
@@ -105,7 +105,7 @@ Feature: synthesizeDoingNow
 **So that** 访前方案可执行、可审计，且不替代正式 MLR  
 
 **覆盖**：F-AGT-002–004、006、011–018、024–027、029 · I-AGT-002、004、006–009  
-**MVP**：MVP-6  
+**MVP**：MVP-4  
 
 ### 规则清单
 
@@ -172,7 +172,7 @@ Feature: proposeOptions 主路径
 **So that** 反馈能写回同一轮方案而不与开放闲聊混淆  
 
 **覆盖**：F-AGT-007、015、020、021 · I-AGT-003、I-AGT-010  
-**MVP**：MVP-6  
+**MVP**：MVP-4  
 
 ### 验收标准
 
@@ -206,7 +206,7 @@ Feature: revise_options
 **So that** 我能解释洞察、讨论渠道，而不与一人一策修订会话串线  
 
 **覆盖**：F-AGT-019、022、023 · I-AGT-003  
-**MVP**：MVP-7  
+**MVP**：MVP-4  
 
 ### 规则清单
 
@@ -246,7 +246,7 @@ Feature: open_chat
 **So that** CI 不依赖外网密钥，发版前仍有真实路径信心  
 
 **覆盖**：F-AGT-029、030  
-**MVP**：MVP-6（live 抽检不挡 PR）  
+**MVP**：MVP-4（live 抽检不挡 PR）  
 
 ### 验收标准
 
@@ -273,18 +273,17 @@ Feature: Agent 验收门禁
 
 | 用户故事 | F-AGT 覆盖 | 主要接口 | MVP |
 |----------|------------|----------|-----|
-| US-AGT-001 | 001、001a–d、005、028 | I-AGT-005 | MVP-3 |
-| US-AGT-002 | 008–010 | I-AGT-001 | MVP-3 |
-| US-AGT-003 | 002–004、006、011–018、024–027、029 | I-AGT-002、004、006–009 | MVP-6 |
-| US-AGT-004 | 007、015、020–021 | I-AGT-003、010 | MVP-6 |
-| US-AGT-005 | 019、022–023 | I-AGT-003 | MVP-7 |
-| US-AGT-006 | 029–030 | — | MVP-6 |
+| US-AGT-001 | 001、001a–d、005、028 | I-AGT-005 | MVP-2 |
+| US-AGT-002 | 008–010 | I-AGT-001 | MVP-2 |
+| US-AGT-003 | 002–004、006、011–018、024–027、029 | I-AGT-002、004、006–009 | MVP-4 |
+| US-AGT-004 | 007、015、020–021 | I-AGT-003、010 | MVP-4 |
+| US-AGT-005 | 019、022–023 | I-AGT-003 | MVP-4 |
+| US-AGT-006 | 029–030 | — | MVP-4 |
 
 ## 建议验收顺序
 
-1. MVP-3：US-AGT-001 → 002  
-2. MVP-6：US-AGT-003 → 004 → 006  
-3. MVP-7：US-AGT-005  
+1. MVP-2：US-AGT-001 → 002  
+2. MVP-4：US-AGT-003 → 004 → 005 → 006  
 
 ## 相关文档
 

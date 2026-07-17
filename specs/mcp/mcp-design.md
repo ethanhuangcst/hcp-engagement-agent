@@ -15,7 +15,8 @@ hcp_id × work(doi|pmid) × source_site → hit_status
 ## 流水线
 
 ```text
-Phase A  姓名+医院+科室 → AuthorIds（OpenAlex/ORCID/PubMed）
+Phase A  姓名+医院+科室 → **人候选** `candidates[]`（姓名/机构为主；网页与库名进 evidence）
+         + AuthorIds 草稿（OpenAlex/ORCID/PubMed）
          多候选 → needs_review；用户确认后 resolved
          Gate：orcid|pubmed_author|openalex ≥1
 Phase B  OpenAlex works → DOI 归并

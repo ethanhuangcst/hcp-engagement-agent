@@ -14,7 +14,7 @@
 | 合规 ingest | P0 种子库（RDPAC 等）策展；客户 SOP 上传 + `tenant_id`；**不按病种自动爬** |
 | Citation | 每条 chunk 含 source / version / as_of；Agent 生成须带 `academic_refs` + `compliance_refs` |
 | **数据驻留与安全** | 业务元数据（manifest）在**香港 Postgres**；语料源文件可暂存 `HCA_DATA_DIR/rag/corpus`；向量在内网 Qdrant；默认**不**用公有云向量 SaaS；Qdrant **不对公网暴露**；浏览器禁止直连 |
-| 批次 | 功能与对外接口「实现批次」填 **MVP-1…MVP-7**（见 [`../1.product-definition.md`](../1.product-definition.md)） |
+| 批次 | 功能与对外接口「实现批次」填 **MVP-1…MVP-4**（见 [`../1.product-definition.md`](../1.product-definition.md)） |
 
 ```text
 Twin specialty/themes ──► ingest_on_demand ──► academic_index (本地 Qdrant)
@@ -95,13 +95,12 @@ data/
 
 ## 实现批次说明
 
-功能与接口「实现批次」填 **MVP-1…MVP-7**，见 [`1.product-definition.md`](../1.product-definition.md)。
+功能与接口「实现批次」填 **MVP-1…MVP-4**，见 [`1.product-definition.md`](../1.product-definition.md)。
 
 | MVP | 本规格重心 | 验收重心 |
 |-----|------------|----------|
-| **MVP-4** | 双 collection、安全绑定、Hybrid 底座、合规种子与 `retrieve_compliance` | 抽检问法命中 `clause_id` |
-| **MVP-5** | `retrieve_academic`、按需 ingest、coverage、状态回写 | 专科可命中；同专科幂等跳过 |
-| **MVP-7** | 租户 SOP、eval、Parent-Document（增强） | 跨租户拒绝；回归集 |
+| **MVP-3** | 双 collection、安全绑定、Hybrid、合规种子与检索、学术按需 ingest / `retrieve_academic` | 合规抽检命中 `clause_id`；专科可命中 |
+| **后置** | 租户 SOP、eval、Parent-Document（增强） | 跨租户拒绝；回归集；不挡 MVP-3 闭环 |
 
 旧 R0–R4 代号废止，统一用产品 MVP。
 
@@ -111,37 +110,37 @@ data/
 
 | 序号 | 功能编号 | 功能名称 | 功能简述 | 实现批次 |
 |------|----------|----------|----------|----------|
-| 1 | F-RAG-001 | medical-kb 包壳 | `@hca/medical-kb`；供 Agent/BFF 库调用；无 Playwright；不依赖 Next UI | MVP-4 |
-| 2 | F-RAG-002 | Qdrant 双 Collection（本地） | 创建/维护 `academic_index` 与 `compliance_index`；持久化在 `data/qdrant/`；可按 `v{major}` 命名 | MVP-4 |
-| 3 | F-RAG-002a | 主题语料独立目录 | 源文件落 `data/rag/corpus/{academic,compliance,tenants/**}`；与 `packages/*` 代码分离；按 specialty/主题分子目录 | MVP-4 |
-| 4 | F-RAG-002b | 禁止公网暴露向量库 | Qdrant 默认绑定回环或 Docker 内网；compose **不**发布 6333 到公网；**绑定检查始终开启**（loopback/internal = safe）；非本机须 `QDRANT_ALLOW_NON_LOCAL=true` | MVP-4 |
-| 5 | F-RAG-002c | 默认禁止托管向量 SaaS | 配置层默认仅 `qdrant-local`；改用公有云向量须 ADR + 显式 `VECTOR_BACKEND` | MVP-4 |
-| 6 | F-RAG-002d | 运行时数据不入库 | `data/rag/corpus/**`、`data/qdrant/**`、manifest 内容 gitignore；仅保留目录 `.gitkeep` | MVP-4 |
-| 7 | F-RAG-003 | 输入 Zod 校验 | `retrieve_*` / `ingest_*` 入参 Zod；结构化错误无堆栈 | MVP-4 |
-| 8 | F-RAG-004 | Embedding（BGE-M3） | 中英混合 dense；**默认进程内或内网**（路径/`EMBEDDING_BASE_URL`）；公有云 API 仅显式例外且只传切块 | MVP-4 |
-| 9 | F-RAG-005 | Sparse / BM25 | 药名、MeSH、条款号等关键词路；与 dense 并行 | MVP-4 |
-| 10 | F-RAG-006 | Hybrid 融合 | RRF：dense ~0.7 + sparse ~0.3（可配）；召回池再 rerank | MVP-4 |
-| 11 | F-RAG-007 | Rerank | `bge-reranker-v2-m3`（或配置替代）；Top-N → top-5 | MVP-4 |
-| 12 | F-RAG-008 | 学术检索 | `retrieve_academic`：filter specialty / year / language；返回带 citation 的 chunks | MVP-5 |
-| 13 | F-RAG-009 | 合规检索 | `retrieve_compliance`：filter jurisdiction=CN、tenant_id；条款感知；供 Agent **强制**调用 | MVP-4 |
-| 14 | F-RAG-010 | Chunk 契约 / Citation | payload：`text, source, version, as_of, score` + 学术 `pmid/doi/authority` 或合规 `clause_id` | MVP-4 |
-| 15 | F-RAG-011 | 合规按条款切块 | 自本地 corpus 读入；按条款号切块；禁止整 PDF 糊成一块 | MVP-4 |
-| 16 | F-RAG-012 | 学术切块 | 摘要整段；全文按 section；指南按章节 + `authority`；切块结果入本地 Qdrant | MVP-5 |
-| 17 | F-RAG-013 | 合规种子灌库 | 从 `corpus/compliance` 灌 P0 准则；版本号 + effective_date；写 manifest | MVP-4 |
-| 18 | F-RAG-014 | 专科归一化 | 别名 → 受控 `specialty` / MeSH；禁止仅自由文本当 ingest query | MVP-5 |
-| 19 | F-RAG-015 | Coverage check | 按 specialty 判断 chunk/近窗文献是否充足 → ready \| sparse \| pending | MVP-5 |
-| 20 | F-RAG-016 | 按需学术 ingest | 拉取公开源后**先落** `corpus/academic/{specialty}/` 再 embed upsert；异步；不阻塞 Twin | MVP-5 |
-| 21 | F-RAG-017 | Ingest 状态回写 | 写 Postgres `rag_ingest_jobs` / `ingest_manifest`（`knowledge_status` · `knowledge_job_id` · 时间戳）；**不**写入 Twin JSON；UI 经 `get_ingest_status` 或联表 | MVP-5 |
-| 22 | F-RAG-018 | Ingest manifest | 更新 Postgres `ingest_manifest`（doc_id、版本、as_of、specialty、本地 path） | MVP-4 |
-| 23 | F-RAG-019 | 异步任务队列 | 可选 BullMQ `rag-ingest`；同 specialty 去重/互斥 | MVP-5 |
-| 24 | F-RAG-020 | 获取限流与版权 | NCBI 配额、OA/摘要优先；闭源不存全文；第三方仅作拉取源不写回其侧永久库 | MVP-5 |
-| 25 | F-RAG-021 | 租户 SOP 入库 | 文件进 `corpus/tenants/{id}/sop/`；写入**同一** `compliance_index`，payload 强制 `tenant_id`；跨租户检索拒绝；**不分租户 collection** | MVP-7 |
-| 26 | F-RAG-022 | Parent-Document（P2） | 小块召回、生成时可拉 parent 段落；**非 P0**；MVP-7 可选增强 | MVP-7 |
-| 27 | F-RAG-023 | 健康检查 | Qdrant 可达、双 collection、绑定地址安全摘要（是否 loopback/internal） | MVP-4 |
-| 28 | F-RAG-024 | 环境变量 | `DATABASE_URL`、`QDRANT_URL`（默认 localhost）、`EMBEDDING_MODEL`、`EMBEDDING_BASE_URL?`、`RERANK_MODEL?`、`RERANK_BASE_URL?`、`HCA_DATA_DIR?`、`NCBI_API_KEY?`、`VECTOR_BACKEND=qdrant-local`、`QDRANT_ALLOW_NON_LOCAL?`（默认 false） | MVP-4 |
-| 29 | F-RAG-025 | Eval 回归 | `data/rag/eval-set.json`；不含真实客户 SOP 明文 | MVP-7 |
-| 30 | F-RAG-026 | 契约与安全测试 | Vitest：双索引不串库、tenant 隔离；断言默认 URL 非公网；gitignore 覆盖 corpus/qdrant | MVP-4 |
-| 31 | F-RAG-027 | 朱同玉/专科验收 | 本地库可命中；合规可引用；新专科 on-demand 写入本地目录 | MVP-5 |
+| 1 | F-RAG-001 | medical-kb 包壳 | `@hca/medical-kb`；供 Agent/BFF 库调用；无 Playwright；不依赖 Next UI | MVP-3 |
+| 2 | F-RAG-002 | Qdrant 双 Collection（本地） | 创建/维护 `academic_index` 与 `compliance_index`；持久化在 `data/qdrant/`；可按 `v{major}` 命名 | MVP-3 |
+| 3 | F-RAG-002a | 主题语料独立目录 | 源文件落 `data/rag/corpus/{academic,compliance,tenants/**}`；与 `packages/*` 代码分离；按 specialty/主题分子目录 | MVP-3 |
+| 4 | F-RAG-002b | 禁止公网暴露向量库 | Qdrant 默认绑定回环或 Docker 内网；compose **不**发布 6333 到公网；**绑定检查始终开启**（loopback/internal = safe）；非本机须 `QDRANT_ALLOW_NON_LOCAL=true` | MVP-3 |
+| 5 | F-RAG-002c | 默认禁止托管向量 SaaS | 配置层默认仅 `qdrant-local`；改用公有云向量须 ADR + 显式 `VECTOR_BACKEND` | MVP-3 |
+| 6 | F-RAG-002d | 运行时数据不入库 | `data/rag/corpus/**`、`data/qdrant/**`、manifest 内容 gitignore；仅保留目录 `.gitkeep` | MVP-3 |
+| 7 | F-RAG-003 | 输入 Zod 校验 | `retrieve_*` / `ingest_*` 入参 Zod；结构化错误无堆栈 | MVP-3 |
+| 8 | F-RAG-004 | Embedding（BGE-M3） | 中英混合 dense；**默认进程内或内网**（路径/`EMBEDDING_BASE_URL`）；公有云 API 仅显式例外且只传切块 | MVP-3 |
+| 9 | F-RAG-005 | Sparse / BM25 | 药名、MeSH、条款号等关键词路；与 dense 并行 | MVP-3 |
+| 10 | F-RAG-006 | Hybrid 融合 | RRF：dense ~0.7 + sparse ~0.3（可配）；召回池再 rerank | MVP-3 |
+| 11 | F-RAG-007 | Rerank | `bge-reranker-v2-m3`（或配置替代）；Top-N → top-5 | MVP-3 |
+| 12 | F-RAG-008 | 学术检索 | `retrieve_academic`：filter specialty / year / language；返回带 citation 的 chunks | MVP-3 |
+| 13 | F-RAG-009 | 合规检索 | `retrieve_compliance`：filter jurisdiction=CN、tenant_id；条款感知；供 Agent **强制**调用 | MVP-3 |
+| 14 | F-RAG-010 | Chunk 契约 / Citation | payload：`text, source, version, as_of, score` + 学术 `pmid/doi/authority` 或合规 `clause_id` | MVP-3 |
+| 15 | F-RAG-011 | 合规按条款切块 | 自本地 corpus 读入；按条款号切块；禁止整 PDF 糊成一块 | MVP-3 |
+| 16 | F-RAG-012 | 学术切块 | 摘要整段；全文按 section；指南按章节 + `authority`；切块结果入本地 Qdrant | MVP-3 |
+| 17 | F-RAG-013 | 合规种子灌库 | 从 `corpus/compliance` 灌 P0 准则；版本号 + effective_date；写 manifest | MVP-3 |
+| 18 | F-RAG-014 | 专科归一化 | 别名 → 受控 `specialty` / MeSH；禁止仅自由文本当 ingest query | MVP-3 |
+| 19 | F-RAG-015 | Coverage check | 按 specialty 判断 chunk/近窗文献是否充足 → ready \| sparse \| pending | MVP-3 |
+| 20 | F-RAG-016 | 按需学术 ingest | 拉取公开源后**先落** `corpus/academic/{specialty}/` 再 embed upsert；异步；不阻塞 Twin | MVP-3 |
+| 21 | F-RAG-017 | Ingest 状态回写 | 写 Postgres `rag_ingest_jobs` / `ingest_manifest`（`knowledge_status` · `knowledge_job_id` · 时间戳）；**不**写入 Twin JSON；UI 经 `get_ingest_status` 或联表 | MVP-3 |
+| 22 | F-RAG-018 | Ingest manifest | 更新 Postgres `ingest_manifest`（doc_id、版本、as_of、specialty、本地 path） | MVP-3 |
+| 23 | F-RAG-019 | 异步任务队列 | 可选 BullMQ `rag-ingest`；同 specialty 去重/互斥 | MVP-3 |
+| 24 | F-RAG-020 | 获取限流与版权 | NCBI 配额、OA/摘要优先；闭源不存全文；第三方仅作拉取源不写回其侧永久库 | MVP-3 |
+| 25 | F-RAG-021 | 租户 SOP 入库 | 文件进 `corpus/tenants/{id}/sop/`；写入**同一** `compliance_index`，payload 强制 `tenant_id`；跨租户检索拒绝；**不分租户 collection** | 后置 |
+| 26 | F-RAG-022 | Parent-Document（P2） | 小块召回、生成时可拉 parent 段落；**非 P0**；后置 可选增强 | 后置 |
+| 27 | F-RAG-023 | 健康检查 | Qdrant 可达、双 collection、绑定地址安全摘要（是否 loopback/internal） | MVP-3 |
+| 28 | F-RAG-024 | 环境变量 | `DATABASE_URL`、`QDRANT_URL`（默认 localhost）、`EMBEDDING_MODEL`、`EMBEDDING_BASE_URL?`、`RERANK_MODEL?`、`RERANK_BASE_URL?`、`HCA_DATA_DIR?`、`NCBI_API_KEY?`、`VECTOR_BACKEND=qdrant-local`、`QDRANT_ALLOW_NON_LOCAL?`（默认 false） | MVP-3 |
+| 29 | F-RAG-025 | Eval 回归 | `data/rag/eval-set.json`；不含真实客户 SOP 明文 | 后置 |
+| 30 | F-RAG-026 | 契约与安全测试 | Vitest：双索引不串库、tenant 隔离；断言默认 URL 非公网；gitignore 覆盖 corpus/qdrant | MVP-3 |
+| 31 | F-RAG-027 | 朱同玉/专科验收 | 本地库可命中；合规可引用；新专科 on-demand 写入本地目录 | MVP-3 |
 
 ---
 
@@ -151,13 +150,13 @@ Agent / BFF 经包 API 调用；浏览器**禁止**直连 Qdrant。
 
 | 序号 | 接口编号 | 类型 | 接口名称 | 输入摘要 | 输出摘要 | 副作用 | 幂等 | 实现批次 |
 |------|----------|------|----------|----------|----------|--------|------|----------|
-| 1 | I-RAG-001 | API | `retrieve_academic` | `{ query, specialty?, themes?, year_from?, language?, top_k? }` | `{ chunks[] }`（含 citation 字段） | 无 | 是 | MVP-5 |
-| 2 | I-RAG-002 | API | `retrieve_compliance` | `{ query, jurisdiction?, tenant_id?, interaction_type?, top_k? }` | `{ chunks[] }`；可空（由 Agent gate 处理） | 无 | 是 | MVP-4 |
-| 3 | I-RAG-003 | API | `ingest_on_demand` | `{ specialty, themes?, hcpId?, force? }` | `{ jobId, knowledge_status }`（立即） | 异步写 Qdrant + manifest | 否（force 可重跑） | MVP-5 |
-| 4 | I-RAG-004 | API | `get_ingest_status` | `{ jobId }` 或 `{ specialty }` | `{ status, progress?, error? }` | 无 | 是 | MVP-5 |
-| 5 | I-RAG-005 | API | `seed_compliance` | `{ corpus_id?, paths? }` | `{ upserted, manifest_rev }` | 写 compliance_index + manifest | 是（同版本） | MVP-4 |
-| 6 | I-RAG-006 | API | `upsert_tenant_sop` | `{ tenant_id, docs[] }` | `{ upserted }` | 写 compliance + tenant 过滤字段 | 否 | MVP-7 |
-| 7 | I-RAG-007 | API | `health` | `{}` | `{ ok, qdrant, collections[], bind_safe?, embedding? }` | 无 | 是 | MVP-4 |
+| 1 | I-RAG-001 | API | `retrieve_academic` | `{ query, specialty?, themes?, year_from?, language?, top_k? }` | `{ chunks[] }`（含 citation 字段） | 无 | 是 | MVP-3 |
+| 2 | I-RAG-002 | API | `retrieve_compliance` | `{ query, jurisdiction?, tenant_id?, interaction_type?, top_k? }` | `{ chunks[] }`；可空（由 Agent gate 处理） | 无 | 是 | MVP-3 |
+| 3 | I-RAG-003 | API | `ingest_on_demand` | `{ specialty, themes?, hcpId?, force? }` | `{ jobId, knowledge_status }`（立即） | 异步写 Qdrant + manifest | 否（force 可重跑） | MVP-3 |
+| 4 | I-RAG-004 | API | `get_ingest_status` | `{ jobId }` 或 `{ specialty }` | `{ status, progress?, error? }` | 无 | 是 | MVP-3 |
+| 5 | I-RAG-005 | API | `seed_compliance` | `{ corpus_id?, paths? }` | `{ upserted, manifest_rev }` | 写 compliance_index + manifest | 是（同版本） | MVP-3 |
+| 6 | I-RAG-006 | API | `upsert_tenant_sop` | `{ tenant_id, docs[] }` | `{ upserted }` | 写 compliance + tenant 过滤字段 | 否 | 后置 |
+| 7 | I-RAG-007 | API | `health` | `{}` | `{ ok, qdrant, collections[], bind_safe?, embedding? }` | 无 | 是 | MVP-3 |
 
 ### Chunk 出参形状（意向）
 
@@ -222,9 +221,8 @@ Agent proposeOptions / chat
 ## 依赖关系（简图）
 
 ```text
-MVP-4 合规底座
-  └─► MVP-5 学术按需 + Hybrid retrieve
-        └─►（消费）MVP-6 一人一策 / MVP-7 Agent
+MVP-3 知识库（合规底座 + 学术按需 + Hybrid retrieve）
+  └─►（消费）MVP-4 Engagement / Agent
 ```
 
 检索管线（内部）：
@@ -255,7 +253,7 @@ Query
 
 | # | 问题 | 决定 | 落地 |
 |---|------|------|------|
-| 1 | Parent-Document 是否进 P0 | **不进 P0 / MVP-4–5**。保持架构 P2；最早作为 **MVP-7 可选增强**（F-RAG-022），不挡合规种子与按需学术闭环 | 召回仍用小块；生成侧暂不拉 parent |
+| 1 | Parent-Document 是否进 P0 | **不进 P0 / MVP-3**。保持架构 P2；最早作为 **后置可选增强**（F-RAG-022），不挡合规种子与按需学术闭环 | 召回仍用小块；生成侧暂不拉 parent |
 | 2 | 租户 SOP：metadata 过滤 vs 物理分 collection | **单一 `compliance_index` + payload `tenant_id` 强制过滤**；语料物理目录已按 `corpus/tenants/{id}/` 隔离。**不为每租户拆 Qdrant collection**（除非未来审计强制，另开 ADR） | 跨租户 → `TENANT_ISOLATION_VIOLATION` 或过滤为空 |
 | 3 | embedding/rerank 部署形态 | **默认：进程内模型或同机/内网推理服务**（`EMBEDDING_MODEL` / `RERANK_MODEL` 为本地路径或内网 URL）。公有云 embedding/rerank API **仅例外**：须显式配置，且只传切块文本、Key 仅服务端 | 见 §环境变量；禁止默认把整库上传云端 |
 | 4 | `knowledge_status` 写 Twin vs 仅 manifest | **权威在 Postgres**：`rag_ingest_jobs` + `ingest_manifest`。**不写入 Twin JSON / 数据字典 profile**（避免 Twin 混入 RAG 运维态）。UI/F-WEB-039 经 `get_ingest_status`（jobId 或 specialty）读取；列表若需展示，BFF **联表** job，或可选 `hcp_twins` **表级旁路列**镜像最近状态（非 twin JSONB 内字段） | F-RAG-017；字典不增 knowledge_* 文档字段 |
@@ -265,7 +263,7 @@ Query
 
 - **I-RAG-003 / F-RAG-017**：返回与回写的 `knowledge_status` 以 **job/manifest** 为准；Twin 确认保存不依赖写回 Twin 文档。
 - **I-RAG-006 / F-RAG-021**：SOP upsert 进同一合规 collection，payload 必填 `tenant_id`；检索过滤 `(tenant_id IS NULL OR tenant_id = current)`（全局种子可空租户）。
-- **F-RAG-022**：MVP-7 增强项；P0 实现与验收可不包含 Parent 拉回。
+- **F-RAG-022**：后置 增强项；P0 实现与验收可不包含 Parent 拉回。
 - **F-RAG-004/007/024**：实现优先本地/内网；云 API 走显式开关，测试默认 mock embedding。
 
 ---

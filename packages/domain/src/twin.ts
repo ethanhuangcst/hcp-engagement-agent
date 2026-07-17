@@ -83,10 +83,39 @@ export const VirtualTwinSchema = z
 
 export type VirtualTwin = z.infer<typeof VirtualTwinSchema>;
 
+/** Agent-owned one-line insight (数字分身列表/详情与 HCP 洞察同源). */
+export const DoingNowSchema = z.object({
+  summary: z.string().min(1),
+  analysis: z.string().optional(),
+  evidence_refs: z.array(z.string()).optional(),
+  as_of: z.string(),
+  confidence: z.enum(["high", "medium", "low"]).optional(),
+  llm: z
+    .object({
+      provider: z.string().min(1),
+      model: z.string().min(1),
+    })
+    .optional(),
+});
+
+export type DoingNow = z.infer<typeof DoingNowSchema>;
+
+/** Accept legacy string `doing_now` from early fixtures and coerce to object. */
+export const DoingNowFieldSchema = z.preprocess((value) => {
+  if (typeof value === "string" && value.trim()) {
+    return {
+      summary: value.trim(),
+      as_of: new Date().toISOString().slice(0, 10),
+      confidence: "medium",
+    };
+  }
+  return value;
+}, DoingNowSchema.optional());
+
 export const HcpInsightsSchema = z.object({
   hcp_id: z.string().min(1),
   as_of: z.string(),
-  doing_now: z.string().optional(),
+  doing_now: DoingNowFieldSchema,
   interest_directions: z.array(z.unknown()).optional(),
   opportunities: z.array(z.unknown()).optional(),
   evidence: z.array(z.unknown()).optional(),

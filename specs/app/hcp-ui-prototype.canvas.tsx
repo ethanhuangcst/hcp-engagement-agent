@@ -65,6 +65,7 @@ type TwinRow = {
   authorIds: AuthorIds;
 };
 
+/** 消歧候选：以人为主体；网页/库名只作依据，不得当主标题 */
 type HcpCandidate = {
   candidateId: string;
   name: string;
@@ -74,19 +75,31 @@ type HcpCandidate = {
   title: string;
   tier: "T1" | "T2" | "T3";
   roles: string[];
-  insight: string;
+  /** 一句话区分同名（业务可读，非源站名） */
+  distinguish: string;
   authorIds: AuthorIds;
+  /** 命中依据：医院专家页、OpenAlex 等——次级展示 */
+  evidence: { kind: string; url?: string }[];
   matchNote: string;
   confidence: "high" | "medium" | "low";
 };
+
+function confidenceLabel(c: HcpCandidate["confidence"]): string {
+  if (c === "high") return "匹配较稳";
+  if (c === "medium") return "需核对";
+  return "证据不足";
+}
 
 function mockSearchHcp(name: string, hospital: string, dept: string): HcpCandidate[] {
   const trimmed = name.trim();
   if (!trimmed || trimmed.includes("无此人") || trimmed.includes("查无")) {
     return [];
   }
-  const q = `${name}${hospital}${dept}`;
-  if (q.includes("朱") || q.includes("中山")) {
+  // 仅姓名命中朱同玉 fixture；禁止医院「中山」误出朱同玉（如葛均波）
+  const zhuByName =
+    name.includes("朱同玉") ||
+    (/tongyu/i.test(name) && /zhu/i.test(name));
+  if (zhuByName) {
     return [
       {
         candidateId: "c-zhu-zs",
@@ -97,16 +110,21 @@ function mockSearchHcp(name: string, hospital: string, dept: string): HcpCandida
         title: "主任医师 / 教授",
         tier: "T1",
         roles: ["KOL", "KME", "行政", "政策发声"],
-        insight: INSIGHT_ONE_LINER,
+        distinguish: "中山医院肾脏移植方向；与查询医院、科室一致",
         authorIds: {
           orcid: null,
           pubmed_author: null,
           google_scholar: "Yby_S-sAAAAJ",
-          openalex: null,
+          openalex: "A5040172093",
           scopus_author_id: null,
           cnki_scholar: null,
         },
-        matchNote: "医院专家页 + Scholar · high",
+        evidence: [
+          { kind: "医院专家页", url: "https://www.zs-hospital.sh.cn/" },
+          { kind: "OpenAlex", url: "https://openalex.org/authors/A5040172093" },
+          { kind: "Google Scholar" },
+        ],
+        matchNote: "姓名 + 医院 + 科室均对上",
         confidence: "high",
       },
       {
@@ -118,7 +136,7 @@ function mockSearchHcp(name: string, hospital: string, dept: string): HcpCandida
         title: "副主任医师",
         tier: "T3",
         roles: ["一线"],
-        insight: "证据不足，勿与中山肾移植朱同玉合并",
+        distinguish: "仅姓名相近，医院与专科不符——勿与中山肾移植合并",
         authorIds: {
           orcid: "0000-0009-9999-0000",
           pubmed_author: null,
@@ -127,7 +145,8 @@ function mockSearchHcp(name: string, hospital: string, dept: string): HcpCandida
           scopus_author_id: null,
           cnki_scholar: null,
         },
-        matchNote: "仅姓名命中 · low",
+        evidence: [{ kind: "公开检索弱命中" }],
+        matchNote: "只有姓名对上，机构不对",
         confidence: "low",
       },
     ];
@@ -142,7 +161,7 @@ function mockSearchHcp(name: string, hospital: string, dept: string): HcpCandida
       title: "待确认职称",
       tier: "T2",
       roles: ["KME"],
-      insight: "MCP 已回填公开页要点；请核对文献检索号后确认",
+      distinguish: "医院与科室与查询接近；请再核文献检索号",
       authorIds: {
         orcid: "0000-0001-2345-6789",
         pubmed_author: "1122334",
@@ -151,7 +170,12 @@ function mockSearchHcp(name: string, hospital: string, dept: string): HcpCandida
         scopus_author_id: null,
         cnki_scholar: null,
       },
-      matchNote: "模拟检索命中 · medium",
+      evidence: [
+        { kind: "医院公开页" },
+        { kind: "OpenAlex" },
+        { kind: "ORCID" },
+      ],
+      matchNote: "姓名与机构大致匹配",
       confidence: "medium",
     },
     {
@@ -163,7 +187,7 @@ function mockSearchHcp(name: string, hospital: string, dept: string): HcpCandida
       title: "主治医师",
       tier: "T3",
       roles: ["一线"],
-      insight: "次优候选，文献号不同",
+      distinguish: "同名异院；文献号与上一候选不同",
       authorIds: {
         orcid: null,
         pubmed_author: null,
@@ -172,7 +196,8 @@ function mockSearchHcp(name: string, hospital: string, dept: string): HcpCandida
         scopus_author_id: "99887766",
         cnki_scholar: null,
       },
-      matchNote: "同名异院 · 请人工消歧",
+      evidence: [{ kind: "公开检索弱命中" }, { kind: "Scopus" }],
+      matchNote: "同名不同医院，请人工判断",
       confidence: "low",
     },
   ];
@@ -187,7 +212,7 @@ function candidateToTwin(c: HcpCandidate, id: string): TwinRow {
     abbrev: c.name.slice(0, 1) || "新",
     tier: c.tier,
     roles: c.roles,
-    insight: c.insight,
+    insight: c.distinguish,
     asOf: "2026-07-16",
     authorIds: normalizeAuthorIds(c.authorIds),
   });
@@ -1040,12 +1065,9 @@ function TwinCreatePage({
   onQueried: (name: string, hospital: string, dept: string, candidates: HcpCandidate[]) => void;
 }) {
   const theme = useHostTheme();
-  const [name, setName] = useCanvasState("create-name", "朱同玉");
-  const [hospital, setHospital] = useCanvasState(
-    "create-hospital",
-    "复旦大学附属中山医院",
-  );
-  const [dept, setDept] = useCanvasState("create-dept", "肾脏移植科 / 泌尿外科");
+  const [name, setName] = useCanvasState("create-name", "");
+  const [hospital, setHospital] = useCanvasState("create-hospital", "");
+  const [dept, setDept] = useCanvasState("create-dept", "");
   const [querying, setQuerying] = useCanvasState("create-querying", false);
 
   return (
@@ -1056,7 +1078,8 @@ function TwinCreatePage({
         actions={<Text weight="medium">新增数字分身</Text>}
       />
       <Text tone="secondary" style={{ fontSize: 14, maxWidth: 520 }}>
-        填写基本信息后查询 HCP。系统调用 hcp-twin-mcp 在后台检索公开记录并回填文献号，供你消歧选择。
+        空白录入：自行填写姓名、医院、科室后查询 HCP。系统调用 hcp-twin-mcp
+        检索公开记录并回填文献号，供你消歧选择（不预填样例医生）。
       </Text>
 
       <div
@@ -1128,11 +1151,13 @@ function TwinCandidatesPage({
       <BackNavBar
         label="返回修改查询"
         onBack={onBack}
-        actions={<Text weight="medium">查询结果 · 请选择正确的 HCP</Text>}
+        actions={<Text weight="medium">找到以下医生 · 请点选正确的一位</Text>}
       />
-      <Text tone="secondary" style={{ fontSize: 13 }}>
-        共 {candidates.length} 条候选（hcp-twin-mcp）。核对医院与文献检索号后再选。
-      </Text>
+      <Stack gap={4}>
+        <Text tone="secondary" style={{ fontSize: 13 }}>
+          共 {candidates.length} 位可能匹配。先看姓名、医院、科室是否对得上；网页链接只是依据，不是人选本身。
+        </Text>
+      </Stack>
 
       {candidates.length === 0 ? (
         <div
@@ -1145,7 +1170,7 @@ function TwinCandidatesPage({
         >
           <Stack gap={10}>
             <Text style={{ fontSize: 14 }}>
-              未找到可信候选。可补充医院官网或 ORCID 链接后重试，或核对姓名与科室拼写。
+              未找到可信的医生人选。可补充医院官网或 ORCID 后重试，或核对姓名与科室拼写。
             </Text>
             <Text tone="tertiary" style={{ fontSize: 12 }}>
               系统未写入分身。提示：姓名填「无此人」可复现本空结果（原型）。
@@ -1156,57 +1181,136 @@ function TwinCandidatesPage({
           </Stack>
         </div>
       ) : (
-      <Stack gap={0}>
-        {candidates.map((c, i) => (
-          <div
-            key={c.candidateId}
-            style={{
-              borderBottom: `1px solid ${theme.stroke.tertiary}`,
-              padding: "16px 14px",
-              borderLeft:
-                c.confidence === "high"
-                  ? `2px solid ${theme.accent.primary}`
-                  : `2px solid ${theme.stroke.tertiary}`,
-              background:
-                c.confidence === "high" ? theme.fill.tertiary : "transparent",
-            }}
-          >
-            <Stack gap={8}>
-              <Row gap={8} align="center" wrap>
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontFamily: "ui-monospace, monospace",
-                    color: theme.text.tertiary,
-                  }}
-                >
-                  {String(i + 1).padStart(2, "0")}
-                </Text>
-                <Text weight="semibold" style={{ fontSize: 16 }}>
-                  {c.name}
-                </Text>
-                <Text tone="tertiary" style={{ fontSize: 12 }}>
-                  {c.nameEn}
-                </Text>
-                <TwinTags tier={c.tier} roles={c.roles} />
-              </Row>
-              <Text tone="secondary" style={{ fontSize: 13 }}>
-                {c.hospital} · {c.dept} · {c.title}
-              </Text>
-              <Text style={{ fontSize: 13, lineHeight: 1.5 }}>{c.insight}</Text>
-              <AuthorIdsPanel ids={c.authorIds} />
-              <Text tone="tertiary" style={{ fontSize: 12 }}>
-                {c.matchNote} · confidence {c.confidence}
-              </Text>
-              <Row gap={8}>
-                <Button variant="primary" onClick={() => onSelect(c)}>
-                  选择此记录
-                </Button>
-              </Row>
-            </Stack>
-          </div>
-        ))}
-      </Stack>
+        <Stack gap={12}>
+          {candidates.map((c, i) => {
+            const boundIds = [
+              c.authorIds.orcid && "ORCID",
+              c.authorIds.pubmed_author && "PubMed",
+              c.authorIds.google_scholar && "Scholar",
+              c.authorIds.openalex && "OpenAlex",
+              c.authorIds.scopus_author_id && "Scopus",
+            ].filter(Boolean) as string[];
+            return (
+              <div
+                key={c.candidateId}
+                style={{
+                  border: `1px solid ${theme.stroke.tertiary}`,
+                  borderRadius: 4,
+                  padding: "18px 16px",
+                  borderLeft:
+                    c.confidence === "high"
+                      ? `3px solid ${theme.accent.primary}`
+                      : `3px solid ${theme.stroke.tertiary}`,
+                  background: theme.bg.elevated,
+                }}
+              >
+                <Stack gap={10}>
+                  <Row gap={10} align="center" wrap>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontFamily: "ui-monospace, monospace",
+                        color: theme.text.tertiary,
+                        minWidth: 22,
+                      }}
+                    >
+                      {String(i + 1).padStart(2, "0")}
+                    </Text>
+                    <Text
+                      weight="semibold"
+                      style={{
+                        fontSize: 22,
+                        fontFamily:
+                          '"Source Serif 4", "Noto Serif SC", Georgia, serif',
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      {c.name}
+                    </Text>
+                    {c.nameEn !== "—" ? (
+                      <Text tone="tertiary" style={{ fontSize: 13 }}>
+                        {c.nameEn}
+                      </Text>
+                    ) : null}
+                    <Text
+                      tone="secondary"
+                      style={{
+                        fontSize: 12,
+                        marginLeft: "auto",
+                        color:
+                          c.confidence === "high"
+                            ? theme.text.primary
+                            : theme.text.tertiary,
+                      }}
+                    >
+                      {confidenceLabel(c.confidence)}
+                    </Text>
+                  </Row>
+
+                  <Text style={{ fontSize: 14, lineHeight: 1.45 }}>
+                    {c.hospital}
+                  </Text>
+                  <Text tone="secondary" style={{ fontSize: 13 }}>
+                    {c.dept}
+                    {c.title ? ` · ${c.title}` : ""}
+                  </Text>
+
+                  <TwinTags tier={c.tier} roles={c.roles} />
+
+                  <Text style={{ fontSize: 13, lineHeight: 1.55 }}>
+                    {c.distinguish}
+                  </Text>
+
+                  <Stack gap={4}>
+                    <Text tone="tertiary" style={{ fontSize: 11 }}>
+                      命中依据（供核对，非人选名称）
+                    </Text>
+                    <Row gap={6} wrap>
+                      {c.evidence.map((e) => (
+                        <Text
+                          key={`${c.candidateId}-${e.kind}`}
+                          tone="tertiary"
+                          style={{
+                            fontSize: 12,
+                            border: `1px solid ${theme.stroke.tertiary}`,
+                            borderRadius: 2,
+                            padding: "2px 8px",
+                          }}
+                        >
+                          {e.kind}
+                        </Text>
+                      ))}
+                      {boundIds.map((id) => (
+                        <Text
+                          key={`${c.candidateId}-id-${id}`}
+                          tone="tertiary"
+                          style={{
+                            fontSize: 12,
+                            fontFamily: "ui-monospace, monospace",
+                            border: `1px dashed ${theme.stroke.tertiary}`,
+                            borderRadius: 2,
+                            padding: "2px 8px",
+                          }}
+                        >
+                          {id} 已关联
+                        </Text>
+                      ))}
+                    </Row>
+                    <Text tone="tertiary" style={{ fontSize: 12 }}>
+                      {c.matchNote}
+                    </Text>
+                  </Stack>
+
+                  <Row gap={8}>
+                    <Button variant="primary" onClick={() => onSelect(c)}>
+                      就是这位
+                    </Button>
+                  </Row>
+                </Stack>
+              </div>
+            );
+          })}
+        </Stack>
       )}
     </Stack>
   );

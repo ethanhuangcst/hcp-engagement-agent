@@ -13,5 +13,6 @@ export {
   upsertInsights,
   getInsights,
   updateTwinTags,
+  updateTwinIdentity,
   type TwinListItem,
 } from "./twins.js";

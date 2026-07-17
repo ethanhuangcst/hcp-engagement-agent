@@ -93,7 +93,7 @@ Use **Zod** (or the SDK's preferred schema format) for input validation.
 
 | Tool | 幂等 | 说明 |
 |------|------|------|
-| `resolve_hcp_identity` | 是 | name + hospital + dept → hcpId；尽量回填 `external_ids` / `author_ids`；写入 `profile.tags`（`hcp_tier` + `role_tags`，见 `knowledge/hcp-twin/hcp-tagging.md`） |
+| `resolve_hcp_identity` | 是 | name + hospital + dept → `candidates[]`（人候选 + evidence）；尽量回填 `author_ids` / tags 草稿；见 `knowledge/hcp-twin/hcp-tagging.md` |
 | `build_twin` | 否 | 返回 `runId`；异步 collector；Stage C 前须满足 §3.2.1（≥1 个 P0 文献号） |
 | `get_twin_status` | 是 | phase / progress |
 | `get_twin` / `get_insights` | 是 | 读 Postgres |

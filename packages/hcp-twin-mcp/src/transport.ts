@@ -5,9 +5,26 @@ import { randomUUID } from "node:crypto";
 import { createStore } from "./store.js";
 import { createMcpServer } from "./server.js";
 
+/**
+ * 产品路径默认 live。mock 仅允许 CI / 显式放行：
+ * - Vitest 设置 `VITEST=true`
+ * - 或 `ALLOW_TWIN_MOCK=1`
+ * 裸 `TWIN_MODE=mock` 在产品进程中会被拒绝并回落 live（打 stderr 警告）。
+ */
 export function getTwinMode(): "mock" | "live" {
   const m = (process.env.TWIN_MODE ?? "live").toLowerCase();
-  return m === "mock" ? "mock" : "live";
+  if (m !== "mock") return "live";
+  const allow =
+    process.env.VITEST === "true" ||
+    process.env.ALLOW_TWIN_MOCK === "1" ||
+    process.env.ALLOW_TWIN_MOCK === "true";
+  if (!allow) {
+    console.error(
+      "[hcp-twin-mcp] TWIN_MODE=mock 被忽略：产品路径强制 live。CI 请设 VITEST 或 ALLOW_TWIN_MOCK=1",
+    );
+    return "live";
+  }
+  return "mock";
 }
 
 export async function startStdio(): Promise<void> {
@@ -19,7 +36,7 @@ export async function startStdio(): Promise<void> {
 
 export async function startHttp(port = Number(process.env.MCP_PORT ?? 3200)): Promise<void> {
   const store = createStore(getTwinMode());
-  const server = createMcpServer(store);
+  /** 每会话独立 McpServer：SDK 禁止同一 Server 二次 connect */
   const transports = new Map<string, StreamableHTTPServerTransport>();
 
   const httpServer = createServer(async (req, res) => {
@@ -49,7 +66,8 @@ export async function startHttp(port = Number(process.env.MCP_PORT ?? 3200)): Pr
         const id = transport!.sessionId;
         if (id) transports.delete(id);
       };
-      await server.connect(transport);
+      const sessionServer = createMcpServer(store);
+      await sessionServer.connect(transport);
     }
 
     if (!transport) {
