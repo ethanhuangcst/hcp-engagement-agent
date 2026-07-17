@@ -58,7 +58,7 @@ Feature: medical-kb 壳与安全边界
 
 ### 规则清单
 
-- Embedding / Rerank：**默认进程内或内网**；公有云 API 仅显式例外。
+- Embedding / Rerank：**默认进程内小模型**（可换更大模型）；公有云 API 仅显式例外。见 [`../ToDo.md`](../ToDo.md)。
 - `knowledge_status` 权威在 `rag_ingest_jobs` / manifest；不写 Twin JSON。
 - 租户 SOP：同一合规索引 + `tenant_id` 过滤；不分 collection。
 - Qdrant 绑定检查始终开启；开发用 localhost 即安全。

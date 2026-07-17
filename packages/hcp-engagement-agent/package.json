@@ -21,6 +21,7 @@
   "dependencies": {
     "@hca/db": "*",
     "@hca/domain": "*",
+    "@hca/medical-kb": "*",
     "openai": "^6.39.0",
     "zod": "^4.4.0"
   },

@@ -6,7 +6,11 @@ import {
   health,
   retrieveCompliance,
   seedCompliance,
-} from "./api.js";
+  ingestOnDemand,
+  retrieveAcademic,
+  getIngestStatus,
+  coverageCheck,
+} from "./index.js";
 import { assertSafeQdrantUrl } from "./security.js";
 import { rrfFuse, Bm25Index } from "./hybrid.js";
 
@@ -176,5 +180,68 @@ describe("MVP-4 medical-kb against live Qdrant + real embeddings", () => {
       top_k: 3,
     });
     expect(chunks.every((c) => c.index === "compliance")).toBe(true);
+  });
+});
+
+describe("MVP-3 academic ingest + retrieve (live Qdrant)", () => {
+  let jobId: string;
+
+  beforeAll(async () => {
+    const h = await health();
+    if (!h.qdrant) {
+      throw new Error("Qdrant 未就绪");
+    }
+    await ensureDualCollectionsWithProbe();
+  }, 300_000);
+
+  it("ingest_on_demand kidney_transplant eventually ready or sparse", async () => {
+    const started = await ingestOnDemand({
+      specialty: "kidney_transplant",
+      force: true,
+    });
+    jobId = started.jobId;
+    expect(started.knowledge_status).toBe("pending");
+
+    let finalStatus: "ready" | "sparse" | "pending" | "failed" =
+      started.knowledge_status;
+    for (let i = 0; i < 45; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      const st = await getIngestStatus({ jobId });
+      finalStatus = st.knowledge_status;
+      if (finalStatus === "ready" || finalStatus === "sparse") break;
+      if (finalStatus === "failed") break;
+    }
+    expect(["ready", "sparse"]).toContain(finalStatus);
+
+    const cov = await coverageCheck("kidney_transplant");
+    expect(cov.chunk_count).toBeGreaterThanOrEqual(1);
+  }, 300_000);
+
+  it("retrieve_academic with specialty filter hits academic chunks only", async () => {
+    const { chunks } = await retrieveAcademic({
+      query: "BK病毒 肾移植 监测",
+      specialty: "kidney_transplant",
+      top_k: 5,
+    });
+    expect(chunks.length).toBeGreaterThan(0);
+    expect(chunks.every((c) => c.index === "academic")).toBe(true);
+    expect(chunks.every((c) => c.specialty === "kidney_transplant")).toBe(true);
+    expect(chunks.every((c) => !c.clause_id)).toBe(true);
+  });
+
+  it("concurrent ingest without force returns INGEST_IN_PROGRESS or existing", async () => {
+    await ingestOnDemand({ specialty: "phage_therapy", force: true });
+    try {
+      const first = await ingestOnDemand({ specialty: "phage_therapy" });
+      expect(["ready", "pending"]).toContain(first.knowledge_status);
+    } catch (err) {
+      expect(err).toMatchObject({ code: "INGEST_IN_PROGRESS" });
+    }
+  }, 120_000);
+
+  it("SPECIALTY_UNRESOLVED for garbage specialty", async () => {
+    await expect(
+      ingestOnDemand({ specialty: "完全无效的专科标签" }),
+    ).rejects.toMatchObject({ code: "SPECIALTY_UNRESOLVED" });
   });
 });

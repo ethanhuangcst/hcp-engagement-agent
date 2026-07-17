@@ -4,6 +4,11 @@ export const AgentErrorCodeSchema = z.enum([
   "VALIDATION_ERROR",
   "INSIGHTS_NOT_FOUND",
   "DOING_NOW_INPUT_INSUFFICIENT",
+  "COMPLIANCE_RETRIEVAL_EMPTY",
+  "COMPLIANCE_REJECTED",
+  "RAG_UNAVAILABLE",
+  "CHAT_MODE_MISMATCH",
+  "OPTIONS_NOT_FOUND",
   "LLM_CONFIG_INVALID",
   "LLM_AUTH_FAILED",
   "LLM_TIMEOUT",
@@ -36,7 +41,8 @@ export function agentError(
   const retryableDefault =
     code === "LLM_TIMEOUT" ||
     code === "LLM_RATE_LIMITED" ||
-    code === "LLM_ERROR";
+    code === "LLM_ERROR" ||
+    code === "RAG_UNAVAILABLE";
   return {
     code,
     message,
@@ -53,6 +59,42 @@ export const SynthesizeDoingNowInputSchema = z.object({
 
 export type SynthesizeDoingNowInput = z.infer<
   typeof SynthesizeDoingNowInputSchema
+>;
+
+export const ProposeOptionsInputSchema = z.object({
+  hcpId: z.string().min(1),
+  tenantId: z.string().optional(),
+  productContext: z.string().optional(),
+});
+
+export type ProposeOptionsInput = z.infer<typeof ProposeOptionsInputSchema>;
+
+export const ChatAttachmentSchema = z.object({
+  name: z.string().min(1),
+  mime: z.string().optional(),
+  summary: z.string().optional(),
+});
+
+export const ChatInputSchema = z.object({
+  mode: z.enum(["open_chat", "revise_options"]),
+  sessionId: z.string().min(1).optional(),
+  hcpId: z.string().min(1),
+  message: z.string().min(1),
+  optionRunId: z.string().min(1).optional(),
+  optionId: z.string().min(1).optional(),
+  attachments: z.array(ChatAttachmentSchema).optional(),
+});
+
+export type ChatInput = z.infer<typeof ChatInputSchema>;
+
+export const RunComplianceGateInputSchema = z.object({
+  hcpId: z.string().min(1),
+  optionRunId: z.string().min(1),
+  optionId: z.string().min(1).optional(),
+});
+
+export type RunComplianceGateInput = z.infer<
+  typeof RunComplianceGateInputSchema
 >;
 
 export const LlmChatMessageSchema = z.object({

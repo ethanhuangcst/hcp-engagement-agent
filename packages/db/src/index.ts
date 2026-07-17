@@ -16,3 +16,12 @@ export {
   updateTwinIdentity,
   type TwinListItem,
 } from "./twins.js";
+
+export {
+  upsertEngagementOptions,
+  getEngagementOptionsRun,
+  getLatestEngagementOptions,
+  upsertChatSession,
+  getChatSession,
+  listChatSessions,
+} from "./engagement.js";

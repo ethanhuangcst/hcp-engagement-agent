@@ -2,6 +2,7 @@ import { z } from "zod";
 import { getMcp } from "@/lib/mcp";
 import { loadRootEnv } from "@/lib/env";
 import { jsonOk, jsonError } from "@/lib/api";
+import { triggerKnowledgeIngest } from "@/lib/rag-ingest";
 
 const Schema = z.object({
   hcpId: z.string().min(1),
@@ -11,6 +12,8 @@ const Schema = z.object({
   department: z.string().min(1).optional(),
   title: z.string().nullable().optional(),
   city: z.string().optional(),
+  specialties: z.array(z.string()).optional(),
+  themes: z.array(z.string()).optional(),
   author_ids_draft: z
     .record(z.string(), z.string().nullable().optional())
     .optional(),
@@ -18,6 +21,7 @@ const Schema = z.object({
     .object({
       hcp_tier: z.string().optional(),
       role_tags: z.array(z.string()).optional(),
+      specialties: z.array(z.string()).optional(),
     })
     .optional(),
 });
@@ -35,8 +39,22 @@ export async function POST(req: Request) {
   try {
     const result = await getMcp().confirmAndSaveTwin(parsed.data);
     if (!result.ok) return jsonError(result.error, 400);
-    // MVP-1：确认仅落库身份；build_twin 由详情显式触发，禁止此处 stub runId。
-    return jsonOk(result.data as object);
+    let knowledge_jobs: Awaited<ReturnType<typeof triggerKnowledgeIngest>> = [];
+    try {
+      knowledge_jobs = await triggerKnowledgeIngest({
+        hcpId: parsed.data.hcpId,
+        department: parsed.data.department,
+        specialties: parsed.data.specialties,
+        themes: parsed.data.themes,
+        tags_draft: parsed.data.tags_draft,
+      });
+    } catch {
+      /* fire-and-forget: confirm must not fail on ingest errors */
+    }
+    return jsonOk({
+      ...(result.data as object),
+      knowledge_jobs,
+    });
   } catch (err) {
     return jsonError(
       {

@@ -44,3 +44,24 @@ export {
   type McpErrorCode,
   type McpError,
 } from "./mcp-error.js";
+
+export {
+  EngagementRefSchema,
+  EngagementOptionSchema,
+  GateStatusSchema,
+  GateFindingSchema,
+  GateResultSchema,
+  EngagementOptionsRunSchema,
+  ChatModeSchema,
+  ChatMessageSchema,
+  ChatSessionSchema,
+  type EngagementRef,
+  type EngagementOption,
+  type GateStatus,
+  type GateFinding,
+  type GateResult,
+  type EngagementOptionsRun,
+  type ChatMode,
+  type ChatMessage,
+  type ChatSession,
+} from "./engagement.js";

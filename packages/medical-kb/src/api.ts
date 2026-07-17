@@ -21,7 +21,12 @@ import {
   getQdrantUrl,
 } from "./config.js";
 import { embedQuery, embedTexts, embeddingDim, rerank } from "./embedding.js";
-import { Bm25Index, rrfFuse } from "./hybrid.js";
+import { rrfFuse } from "./hybrid.js";
+import {
+  bm25Search,
+  ensureBm25ForCollection,
+  invalidateBm25Cache,
+} from "./bm25-cache.js";
 import {
   ensureCollections,
   getQdrantClient,
@@ -29,9 +34,6 @@ import {
   pingQdrant,
 } from "./qdrant.js";
 import { assertSafeQdrantUrl } from "./security.js";
-
-const bm25Cache = new Bm25Index();
-let bm25Ready = false;
 
 function packageFixturesRoot(): string {
   return resolve(dirname(fileURLToPath(import.meta.url)), "../fixtures/compliance");
@@ -231,7 +233,7 @@ export async function seedCompliance(raw: unknown = {}): Promise<{
     });
   }
 
-  bm25Ready = false;
+  invalidateBm25Cache(COMPLIANCE_COLLECTION);
   return { upserted: points.length, manifest_rev: rev };
 }
 
@@ -265,12 +267,10 @@ async function loadCompliancePayloadsForBm25(): Promise<
 async function ensureBm25(): Promise<
   Array<{ id: string; text: string; payload: Record<string, unknown> }>
 > {
-  const rows = await loadCompliancePayloadsForBm25();
-  if (!bm25Ready) {
-    bm25Cache.rebuild(rows.map((r) => ({ id: r.id, text: r.text })));
-    bm25Ready = true;
-  }
-  return rows;
+  return ensureBm25ForCollection(
+    COMPLIANCE_COLLECTION,
+    loadCompliancePayloadsForBm25,
+  );
 }
 
 export async function retrieveCompliance(
@@ -302,7 +302,11 @@ export async function retrieveCompliance(
   });
 
   const corpus = await ensureBm25();
-  const sparseHits = bm25Cache.search(query, Math.max(top_k * 4, 20));
+  const sparseHits = bm25Search(
+    COMPLIANCE_COLLECTION,
+    query,
+    Math.max(top_k * 4, 20),
+  );
 
   const denseRanked = dense.map((d) => ({
     id: String(d.id),

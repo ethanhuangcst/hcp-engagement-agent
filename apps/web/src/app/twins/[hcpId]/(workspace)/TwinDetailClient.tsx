@@ -23,6 +23,45 @@ export default function TwinDetailClient() {
   const [error, setError] = useState<string | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
   const [building, setBuilding] = useState(false);
+  const [knowledgeStatus, setKnowledgeStatus] = useState<
+    Record<string, string>
+  >({});
+
+  const specialtyKey = (twin?.profile.specialties ?? []).join("|");
+
+  useEffect(() => {
+    const specialties = twin?.profile.specialties ?? [];
+    if (specialties.length === 0) return;
+    let cancelled = false;
+    const poll = async () => {
+      for (const specialty of specialties) {
+        try {
+          const res = await fetch(
+            `/api/rag/ingest/status?specialty=${encodeURIComponent(specialty)}`,
+          );
+          if (!res.ok) continue;
+          const data = (await res.json()) as {
+            knowledge_status?: string;
+            status?: string;
+          };
+          if (cancelled) return;
+          setKnowledgeStatus((prev) => ({
+            ...prev,
+            [specialty]:
+              data.knowledge_status ?? data.status ?? "pending",
+          }));
+        } catch {
+          /* ignore poll errors */
+        }
+      }
+    };
+    void poll();
+    const timer = setInterval(() => void poll(), 12_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [specialtyKey, twin]);
 
   const reload = useCallback(async () => {
     const [tRes, iRes] = await Promise.all([
@@ -102,6 +141,7 @@ export default function TwinDetailClient() {
   const ids =
     twin.research?.author_ids ?? twin.profile.external_ids ?? undefined;
   const themes = (twin.research?.themes as string[] | undefined) ?? [];
+  const specialties = twin.profile.specialties ?? [];
   const pubs =
     (twin.research?.recent_pubs as
       | Array<{ title?: string; year?: number | null; url?: string | null }>
@@ -148,6 +188,23 @@ export default function TwinDetailClient() {
           hcp:{twin.meta.hcp_id} · as_of {twin.meta.as_of}
           {twin.meta.build_mode ? ` · build ${twin.meta.build_mode}` : ""}
         </p>
+        {specialties.length > 0 ? (
+          <p className="text-[11px] text-[var(--hca-ink-muted)]">
+            学术知识库：
+            {specialties.map((s) => {
+              const st = knowledgeStatus[s] ?? "pending";
+              const label =
+                st === "ready"
+                  ? "已就绪"
+                  : st === "sparse"
+                    ? "偏少"
+                    : st === "failed"
+                      ? "失败"
+                      : "构建中";
+              return `${s} ${label}`;
+            }).join(" · ")}
+          </p>
+        ) : null}
       </div>
 
       {runId ? (

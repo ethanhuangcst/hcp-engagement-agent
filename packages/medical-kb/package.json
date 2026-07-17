@@ -15,6 +15,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "seed:compliance": "tsx src/cli/seed-compliance.ts",
+    "ingest:academic": "tsx src/cli/ingest-academic.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },

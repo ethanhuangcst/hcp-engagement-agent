@@ -188,10 +188,11 @@ Feature: 新增数字分身（查询与确认）
     Then 进度状态随 `get_twin_status` 推进更新，而不是内存 stub 或一直空白无反馈
 
   Scenario: 保存后可触发专科知识按需准备
-    Given 分身已确认保存且带有专科或主题信息
+    Given 分身已确认保存且带有可归一化的专科或主题信息
     When 保存流程完成
-    Then 系统可异步触发该专科相关的知识库按需灌注
-    And 该过程不阻塞用户继续浏览已保存分身的基本信息
+    Then 系统异步触发该专科 `ingest_on_demand` 并在响应中带回 knowledge_jobs（jobId / status）
+    And 该过程不阻塞用户进入已保存分身工作台
+    And 用户可在资料页或状态接口查询灌注进度
 
   Scenario: 无法消歧时给出可修复提示
     Given 查询未找到可信候选或用户拒绝所有候选

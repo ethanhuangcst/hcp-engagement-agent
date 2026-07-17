@@ -36,7 +36,13 @@ type ResolveData = {
   persisted?: boolean;
 };
 
-type Step = "form" | "candidates" | "confirm";
+type Step = "form" | "candidates" | "confirm" | "saved";
+
+type KnowledgeJob = {
+  specialty: string;
+  jobId: string;
+  knowledge_status: string;
+};
 
 function confidenceLabel(c: string): string {
   if (c === "high") return "匹配较稳";
@@ -73,6 +79,10 @@ export default function NewTwinPage() {
   );
   const [step, setStep] = useState<Step>("form");
   const [saving, setSaving] = useState(false);
+  const [knowledgeJobs, setKnowledgeJobs] = useState<KnowledgeJob[] | null>(
+    null,
+  );
+  const [savedHcpId, setSavedHcpId] = useState<string | null>(null);
 
   useEffect(() => {
     setSelected(null);
@@ -141,6 +151,15 @@ export default function NewTwinPage() {
       const savedId =
         typeof data?.hcpId === "string" ? data.hcpId : hcpId;
       setSelected(savedId, selected.name_zh);
+      const jobs = Array.isArray(data?.knowledge_jobs)
+        ? (data.knowledge_jobs as KnowledgeJob[])
+        : [];
+      if (jobs.length > 0) {
+        setSavedHcpId(savedId);
+        setKnowledgeJobs(jobs);
+        setStep("saved");
+        return;
+      }
       router.push(`/twins/${encodeURIComponent(savedId)}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -273,6 +292,38 @@ export default function NewTwinPage() {
             })}
           </ul>
         )}
+      </div>
+    );
+  }
+
+  if (step === "saved" && savedHcpId) {
+    const statusLine = (knowledgeJobs ?? [])
+      .map(
+        (j) =>
+          `${j.specialty}: ${
+            j.knowledge_status === "ready"
+              ? "知识库已就绪"
+              : j.knowledge_status === "sparse"
+                ? "知识库偏少，可稍后补灌"
+                : "学术知识库构建中…"
+          }`,
+      )
+      .join(" · ");
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-[var(--hca-accent)]">分身已保存。</p>
+        {statusLine ? (
+          <p className="text-[13px] text-[var(--hca-ink-muted)]">{statusLine}</p>
+        ) : null}
+        <button
+          type="button"
+          className="hca-btn-primary"
+          onClick={() =>
+            router.push(`/twins/${encodeURIComponent(savedHcpId)}`)
+          }
+        >
+          进入工作台
+        </button>
       </div>
     );
   }

@@ -27,6 +27,10 @@ export function getComplianceCorpusRoot(): string {
   return resolve(getCorpusRoot(), "compliance");
 }
 
+export function getAcademicCorpusRoot(): string {
+  return resolve(getCorpusRoot(), "academic");
+}
+
 export function getQdrantUrl(): string {
   return process.env.QDRANT_URL ?? "http://127.0.0.1:6333";
 }

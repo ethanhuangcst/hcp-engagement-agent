@@ -6,7 +6,11 @@ import { loadRootEnv } from "./load-env.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const MIGRATIONS = ["001_mvp1_twins.sql", "002_mvp4_rag.sql"];
+const MIGRATIONS = [
+  "001_mvp1_twins.sql",
+  "002_mvp4_rag.sql",
+  "003_mvp4_engagement.sql",
+];
 
 async function main(): Promise<void> {
   loadRootEnv(join(__dirname, "../../.."));

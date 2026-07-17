@@ -23,7 +23,9 @@ Twin specialty/themes（自动）──► academic_index
 Agent：retrieve_academic ‖ retrieve_compliance（强制 citation）
 ```
 
-检索：BGE-M3 dense + BM25 → RRF（~0.7 / 0.3）→ bge-reranker-v2-m3 → top-5。
+检索：dense（MVP-3 默认进程内小模型）+ BM25 → RRF（~0.7 / 0.3）→ 进程内小 rerank → top-5；更大模型见 [`../ToDo.md`](../ToDo.md)。
+
+**实现注记（2026-07-18）**：`@hca/medical-kb` 已导出 `ingestOnDemand` / `getIngestStatus` / `retrieveAcademic` / `coverageCheck` / `normalizeSpecialty`；fixtures 位于 `packages/medical-kb/fixtures/academic/{specialty}/chunks.jsonl`。Web BFF：`POST /api/rag/ingest`、`GET /api/rag/ingest/status`；Twin 确认路由 fire-and-forget 触发 ingest 并在响应中带 `knowledge_jobs`。Agent 包 `retrieveAcademicForAgent` / `retrieveComplianceForAgent` 为 validation + 转发薄层。
 
 ---
 
@@ -186,7 +188,7 @@ jurisdiction: CN
 
 | Collection | 命名 | 向量 |
 |------------|------|------|
-| 学术 | `academic_index` 或 `academic_index_v{major}` | BGE-M3 dense（维数随模型）；sparse 存 BM25/或 BGE sparse |
+| 学术 | `academic_index` 或 `academic_index_v{major}` | dense（维数随模型）；sparse 存 BM25 |
 | 合规 | `compliance_index` 或 `compliance_index_v{major}` | 同上 |
 
 - 版本化：大改切块/embedding 升 `v{major}`；ingest **可重建**，不原地破坏性迁移。  
@@ -241,9 +243,9 @@ Query
   │
   ├─ academic_index
   │     filter: specialty / themes / year / language
-  │     dense: BGE-M3  ‖  sparse: BM25（药名、MeSH、关键词）
+  │     dense: 进程内小模型（可换） ‖  sparse: BM25（药名、MeSH、关键词）
   │     fuse: RRF（dense≈0.7, sparse≈0.3，可配）
-  │     rerank: bge-reranker-v2-m3（召回池 → top-5）
+  │     rerank: 进程内小模型（召回池 → top-5）
   │
   └─ compliance_index
         filter: jurisdiction=CN, tenant_id
@@ -256,8 +258,8 @@ Query
 | `top_k` 出参 | 5 |
 | 召回池（rerank 前） | 约 20（可配） |
 | RRF 权重 | dense 0.7 / sparse 0.3 |
-| Embedding | BGE-M3（进程内或内网 URL） |
-| Rerank | bge-reranker-v2-m3（可关：仅 Hybrid，质量下降） |
+| Embedding | MVP-3 默认 Xenova `bge-small-zh`；可经 env 换更大模型 |
+| Rerank | MVP-3 默认 Xenova `bge-reranker-base`；可关：仅 Hybrid |
 
 出参统一 `RagChunk`（见功能规格）；`index` 字段标明 `academic` \| `compliance`。Agent 截断冗长 `text`，保留 citation 字段。
 
@@ -304,7 +306,7 @@ Query
 
 入参 Zod；错误码见功能规格（`QDRANT_UNAVAILABLE`、`TENANT_ISOLATION_VIOLATION`、`INGEST_IN_PROGRESS` 等）。
 
-异步：同 specialty 互斥（DB 锁或 BullMQ `rag-ingest`）；可选队列属 R3+。
+异步：同 specialty 互斥（进程内 + DB 状态）；BullMQ 属后置（多实例时），见 [`../ToDo.md`](../ToDo.md)。
 
 ---
 
@@ -346,7 +348,7 @@ packages/medical-kb/
   src/
     api/           retrieve_*, ingest_*, seed_*, health
     qdrant/        client、collection bootstrap、bind 校验
-    embed/         BGE-M3 client
+    embed/         embedding client（默认进程内小模型）
     sparse/        BM25
     retrieve/      hybrid + RRF + rerank（academic / compliance）
     chunk/         compliance_clauses.ts · academic_sections.ts

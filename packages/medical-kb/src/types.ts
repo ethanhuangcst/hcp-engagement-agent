@@ -101,5 +101,45 @@ export const SeedComplianceInputSchema = z.object({
   paths: z.array(z.string()).optional(),
 });
 
+export const AcademicSeedChunkSchema = z.object({
+  text: z.string().min(1),
+  specialty: z.string().min(1),
+  as_of: z.string(),
+  version: z.string().min(1),
+  pmid: z.string().optional(),
+  doi: z.string().optional(),
+  source: z.string().min(1),
+  year: z.number().int().optional(),
+  language: z.string().optional(),
+  authority: z.string().optional(),
+});
+
+export type AcademicSeedChunk = z.infer<typeof AcademicSeedChunkSchema>;
+
+export const RetrieveAcademicInputSchema = z.object({
+  query: z.string().min(1),
+  specialty: z.string().optional(),
+  themes: z.array(z.string()).optional(),
+  year_from: z.number().int().optional(),
+  language: z.string().optional(),
+  top_k: z.number().int().positive().max(20).optional(),
+});
+
+export const IngestOnDemandInputSchema = z.object({
+  specialty: z.string().min(1),
+  themes: z.array(z.string()).optional(),
+  hcpId: z.string().optional(),
+  force: z.boolean().optional(),
+});
+
+export const GetIngestStatusInputSchema = z
+  .object({
+    jobId: z.string().optional(),
+    specialty: z.string().optional(),
+  })
+  .refine((v) => Boolean(v.jobId || v.specialty), {
+    message: "jobId 或 specialty 至少提供一个",
+  });
+
 export const ACADEMIC_COLLECTION = "academic_index";
 export const COMPLIANCE_COLLECTION = "compliance_index";

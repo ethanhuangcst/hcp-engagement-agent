@@ -9,7 +9,7 @@
 | 原则 | 要求 |
 |------|------|
 | 双索引 | `academic_index` ‖ `compliance_index`；**禁止混库**；过滤/切块/失败策略分离 |
-| 检索 | Dense（BGE-M3）+ Sparse（BM25）→ RRF（~0.7/0.3）→ rerank（bge-reranker-v2-m3）→ top-5 |
+| 检索 | Dense（MVP-3 默认进程内小模型，如 Xenova `bge-small-zh`）+ Sparse（BM25）→ RRF（~0.7/0.3）→ rerank（默认进程内小模型）→ top-5；更大模型见后置升级 |
 | 学术 ingest | Twin `specialty/themes` **按需**灌注；不做全科 / 全 PubMed 预灌 |
 | 合规 ingest | P0 种子库（RDPAC 等）策展；客户 SOP 上传 + `tenant_id`；**不按病种自动爬** |
 | Citation | 每条 chunk 含 source / version / as_of；Agent 生成须带 `academic_refs` + `compliance_refs` |
@@ -117,23 +117,23 @@ data/
 | 5 | F-RAG-002c | 默认禁止托管向量 SaaS | 配置层默认仅 `qdrant-local`；改用公有云向量须 ADR + 显式 `VECTOR_BACKEND` | MVP-3 |
 | 6 | F-RAG-002d | 运行时数据不入库 | `data/rag/corpus/**`、`data/qdrant/**`、manifest 内容 gitignore；仅保留目录 `.gitkeep` | MVP-3 |
 | 7 | F-RAG-003 | 输入 Zod 校验 | `retrieve_*` / `ingest_*` 入参 Zod；结构化错误无堆栈 | MVP-3 |
-| 8 | F-RAG-004 | Embedding（BGE-M3） | 中英混合 dense；**默认进程内或内网**（路径/`EMBEDDING_BASE_URL`）；公有云 API 仅显式例外且只传切块 | MVP-3 |
+| 8 | F-RAG-004 | Embedding（进程内默认） | MVP-3 **默认**进程内小模型（如 Xenova `bge-small-zh`）；可经 `EMBEDDING_MODEL` / `EMBEDDING_BASE_URL` 换更大模型。BGE-M3 等为**后置升级**，不挡 MVP-3 验收 | MVP-3 |
 | 9 | F-RAG-005 | Sparse / BM25 | 药名、MeSH、条款号等关键词路；与 dense 并行 | MVP-3 |
 | 10 | F-RAG-006 | Hybrid 融合 | RRF：dense ~0.7 + sparse ~0.3（可配）；召回池再 rerank | MVP-3 |
-| 11 | F-RAG-007 | Rerank | `bge-reranker-v2-m3`（或配置替代）；Top-N → top-5 | MVP-3 |
+| 11 | F-RAG-007 | Rerank | MVP-3 **默认**进程内小 rerank（如 Xenova `bge-reranker-base`）；Top-N → top-5。`bge-reranker-v2-m3` 为**后置升级** | MVP-3 |
 | 12 | F-RAG-008 | 学术检索 | `retrieve_academic`：filter specialty / year / language；返回带 citation 的 chunks | MVP-3 |
 | 13 | F-RAG-009 | 合规检索 | `retrieve_compliance`：filter jurisdiction=CN、tenant_id；条款感知；供 Agent **强制**调用 | MVP-3 |
 | 14 | F-RAG-010 | Chunk 契约 / Citation | payload：`text, source, version, as_of, score` + 学术 `pmid/doi/authority` 或合规 `clause_id` | MVP-3 |
 | 15 | F-RAG-011 | 合规按条款切块 | 自本地 corpus 读入；按条款号切块；禁止整 PDF 糊成一块 | MVP-3 |
-| 16 | F-RAG-012 | 学术切块 | 摘要整段；全文按 section；指南按章节 + `authority`；切块结果入本地 Qdrant | MVP-3 |
+| 16 | F-RAG-012 | 学术切块 | MVP-3：**摘要/fixture 整段切块**入本地 Qdrant 即可验收。全文按 section、指南按章节为**后置增强** | MVP-3 |
 | 17 | F-RAG-013 | 合规种子灌库 | 从 `corpus/compliance` 灌 P0 准则；版本号 + effective_date；写 manifest | MVP-3 |
 | 18 | F-RAG-014 | 专科归一化 | 别名 → 受控 `specialty` / MeSH；禁止仅自由文本当 ingest query | MVP-3 |
 | 19 | F-RAG-015 | Coverage check | 按 specialty 判断 chunk/近窗文献是否充足 → ready \| sparse \| pending | MVP-3 |
-| 20 | F-RAG-016 | 按需学术 ingest | 拉取公开源后**先落** `corpus/academic/{specialty}/` 再 embed upsert；异步；不阻塞 Twin | MVP-3 |
+| 20 | F-RAG-016 | 按需学术 ingest | **先落** `corpus/academic/{specialty}/` 再 embed upsert；异步不阻塞 Twin。MVP-3 允许 **fixture / 本地语料优先**；在线 PubMed 拉取为可选增强 | MVP-3 |
 | 21 | F-RAG-017 | Ingest 状态回写 | 写 Postgres `rag_ingest_jobs` / `ingest_manifest`（`knowledge_status` · `knowledge_job_id` · 时间戳）；**不**写入 Twin JSON；UI 经 `get_ingest_status` 或联表 | MVP-3 |
 | 22 | F-RAG-018 | Ingest manifest | 更新 Postgres `ingest_manifest`（doc_id、版本、as_of、specialty、本地 path） | MVP-3 |
-| 23 | F-RAG-019 | 异步任务队列 | 可选 BullMQ `rag-ingest`；同 specialty 去重/互斥 | MVP-3 |
-| 24 | F-RAG-020 | 获取限流与版权 | NCBI 配额、OA/摘要优先；闭源不存全文；第三方仅作拉取源不写回其侧永久库 | MVP-3 |
+| 23 | F-RAG-019 | 异步任务与互斥 | MVP-3：**进程内异步** + 同 specialty 互斥/去重即可。BullMQ/Redis 为**后置**（多实例/高并发时再上） | MVP-3 |
+| 24 | F-RAG-020 | 获取与版权底线 | MVP-3：**摘要 / OA / fixture 优先**；闭源不存全文；第三方仅作拉取源。完整 NCBI 配额限速管线见 [`ToDo.md`](../ToDo.md)，不挡本批验收 | MVP-3 |
 | 25 | F-RAG-021 | 租户 SOP 入库 | 文件进 `corpus/tenants/{id}/sop/`；写入**同一** `compliance_index`，payload 强制 `tenant_id`；跨租户检索拒绝；**不分租户 collection** | 后置 |
 | 26 | F-RAG-022 | Parent-Document（P2） | 小块召回、生成时可拉 parent 段落；**非 P0**；后置 可选增强 | 后置 |
 | 27 | F-RAG-023 | 健康检查 | Qdrant 可达、双 collection、绑定地址安全摘要（是否 loopback/internal） | MVP-3 |
@@ -264,12 +264,14 @@ Query
 - **I-RAG-003 / F-RAG-017**：返回与回写的 `knowledge_status` 以 **job/manifest** 为准；Twin 确认保存不依赖写回 Twin 文档。
 - **I-RAG-006 / F-RAG-021**：SOP upsert 进同一合规 collection，payload 必填 `tenant_id`；检索过滤 `(tenant_id IS NULL OR tenant_id = current)`（全局种子可空租户）。
 - **F-RAG-022**：后置 增强项；P0 实现与验收可不包含 Parent 拉回。
-- **F-RAG-004/007/024**：实现优先本地/内网；云 API 走显式开关，测试默认 mock embedding。
+- **F-RAG-004/007/024**：MVP-3 以进程内小模型为验收默认；更大模型与云 API 走显式配置，见 [`ToDo.md`](../ToDo.md)。
+- **F-RAG-019/020**：不强制 BullMQ / 完整 NCBI 配额；底线是异步不阻塞 + 不存闭源全文。
 
 ---
 
 ## 相关文档
 
+- 待办与降级说明：[`../ToDo.md`](../ToDo.md)
 - 产品 MVP：[`../1.product-definition.md`](../1.product-definition.md)
 - 架构：[`3.architecture.md`](../3.architecture.md) §5.3、§8（数据驻留）
 - 依赖：[`4.install-dependencies.md`](../4.install-dependencies.md) §0、§6、§7.5

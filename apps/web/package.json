@@ -14,6 +14,7 @@
     "@hca/db": "*",
     "@hca/domain": "*",
     "@hca/hcp-engagement-agent": "*",
+    "@hca/medical-kb": "*",
     "@hca/mcp-client": "*",
     "@tanstack/react-query": "^5.90.0",
     "next": "16.2.0",
