@@ -5,6 +5,12 @@ node_modules/
 !.env.example
 knowledge/
 specs/0.prompts.md
+samectx-notes/
+
+# Build / test artifacts
+dist/
+coverage/
+*.tsbuildinfo
 
 # RAG 语料 / Qdrant 运行时（非 Twin 主库；主数据在香港 Postgres）
 data/**/*

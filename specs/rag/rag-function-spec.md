@@ -274,3 +274,4 @@ Query
 - 设计（触发与合规手灌）：[`rag-design.md`](./rag-design.md)
 - 灌注研究：[`../../knowledge/rag-medical-knowledge-base/ingest-feasibility-and-ops.md`](../../knowledge/rag-medical-knowledge-base/ingest-feasibility-and-ops.md)
 - Skill：rag-implementation
+- 用户故事与 AC：[`rag-stories.md`](./rag-stories.md)

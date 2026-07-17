@@ -215,9 +215,11 @@ Stage A 身份+AuthorIds+tags
 
 ## Open questions
 
-- [ ] `resolve_hcp_identity` 是否在消歧成功时写入 `hcp_twins.identity`，还是完全由 BFF「确认并保存」后首次入库
+- [x] `resolve_hcp_identity` 是否在消歧成功时写入 `hcp_twins.identity`，还是完全由 BFF「确认并保存」后首次入库  
+  **决定（MVP-1）**：resolve **不**入库完整 Twin（`persisted: false`）。首次入库由 BFF 调 `confirmAndSaveTwin` / `@hca/db.upsertTwin`（确认并保存）完成。
 - [ ] Stage D 失败时 Stage E 是否仍可基于论文+职业出 Insights（建议：可，热力标空窗）
-- [ ] `tag_hcp` 是否允许在 Twin 未 `build` 完成时仅凭 resolve 草稿打标并入库
+- [x] `tag_hcp` 是否允许在 Twin 未 `build` 完成时仅凭 resolve 草稿打标并入库  
+  **决定（MVP-1）**：`tag_hcp` 要求 Twin 已入库；未入库返回 `NOT_FOUND`。resolve 仅返回 `tags_draft`。
 
 ---
 
@@ -234,3 +236,4 @@ Stage A 身份+AuthorIds+tags
 - 文献站点优先级：[`../../knowledge/mcp-hcp-virtual-twin/literature-sources.md`](../../knowledge/mcp-hcp-virtual-twin/literature-sources.md)
 - 文献矩阵设计：[`mcp-design.md`](./mcp-design.md)
 - 模式：项目 skill `mcp-server-patterns`；官方 [MCP docs](https://modelcontextprotocol.io)
+- 用户故事与 AC：[`mcp-stories.md`](./mcp-stories.md)

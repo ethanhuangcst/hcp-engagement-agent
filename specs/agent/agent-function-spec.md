@@ -310,3 +310,4 @@ A0 壳 / Zod / LlmClient（默认 qwen）/ Postgres 持久化
 - UI：[`6.ui-guideline.md`](../6.ui-guideline.md)
 - MCP：[`../mcp/mcp-function-spec.md`](../mcp/mcp-function-spec.md)
 - Skills：cn-hcp-pro、cn-hcp-compliance、agent-builder
+- 用户故事与 AC：[`agent-stories.md`](./agent-stories.md)

@@ -490,6 +490,40 @@ function TagChip({
   );
 }
 
+/** 子页返回导航：secondary + 箭头，独立条，避免 ghost 淹没在操作区 */
+function BackNavBar({
+  label,
+  onBack,
+  actions,
+}: {
+  label: string;
+  onBack: () => void;
+  actions?: JSX.Element | null;
+}) {
+  const theme = useHostTheme();
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+        flexWrap: "wrap",
+        padding: "10px 12px",
+        background: theme.fill.secondary,
+        border: `1px solid ${theme.stroke.tertiary}`,
+        borderLeft: `3px solid ${theme.accent.primary}`,
+        borderRadius: 4,
+      }}
+    >
+      <Button variant="secondary" onClick={onBack}>
+        ← {label}
+      </Button>
+      {actions ? <Row gap={8}>{actions}</Row> : null}
+    </div>
+  );
+}
+
 function TwinTags({ tier, roles }: { tier: string; roles: string[] }) {
   const tierVariant =
     tier === "T1" ? "tier1" : tier === "T2" ? "tier2" : "tier3";
@@ -929,23 +963,24 @@ function TwinDetailPage({
   onConfirmSave?: () => void;
 }) {
   const theme = useHostTheme();
+  const backLabel = mode === "confirm" ? "返回候选" : "返回列表";
   return (
     <Stack gap={24}>
-      <Row gap={8}>
-        <Button variant="ghost" onClick={onBack}>
-          {mode === "confirm" ? "返回候选" : "返回列表"}
-        </Button>
-        {mode === "saved" && onEdit ? (
-          <Button variant="secondary" onClick={onEdit}>
-            修改
-          </Button>
-        ) : null}
-        {mode === "confirm" && onConfirmSave ? (
-          <Button variant="primary" onClick={onConfirmSave}>
-            确认并保存
-          </Button>
-        ) : null}
-      </Row>
+      <BackNavBar
+        label={backLabel}
+        onBack={onBack}
+        actions={
+          mode === "saved" && onEdit ? (
+            <Button variant="secondary" onClick={onEdit}>
+              修改
+            </Button>
+          ) : mode === "confirm" && onConfirmSave ? (
+            <Button variant="primary" onClick={onConfirmSave}>
+              确认并保存
+            </Button>
+          ) : null
+        }
+      />
       {mode === "confirm" ? (
         <Text tone="secondary" style={{ fontSize: 13 }}>
           已根据 hcp-twin-mcp 查询结果生成分身预览。核对 ORCID 等文献号后确认保存。
@@ -988,8 +1023,8 @@ function TwinDetailPage({
           <Button variant="primary" onClick={onConfirmSave}>
             确认并保存
           </Button>
-          <Button variant="ghost" onClick={onBack}>
-            返回候选
+          <Button variant="secondary" onClick={onBack}>
+            ← 返回候选
           </Button>
         </Row>
       ) : null}
@@ -1015,12 +1050,11 @@ function TwinCreatePage({
 
   return (
     <Stack gap={24}>
-      <Row gap={8} align="center">
-        <Button variant="ghost" onClick={onBack}>
-          返回列表
-        </Button>
-        <Text weight="medium">新增数字分身</Text>
-      </Row>
+      <BackNavBar
+        label="返回列表"
+        onBack={onBack}
+        actions={<Text weight="medium">新增数字分身</Text>}
+      />
       <Text tone="secondary" style={{ fontSize: 14, maxWidth: 520 }}>
         填写基本信息后查询 HCP。系统调用 hcp-twin-mcp 在后台检索公开记录并回填文献号，供你消歧选择。
       </Text>
@@ -1091,12 +1125,11 @@ function TwinCandidatesPage({
   const theme = useHostTheme();
   return (
     <Stack gap={20}>
-      <Row gap={8} align="center">
-        <Button variant="ghost" onClick={onBack}>
-          返回修改查询
-        </Button>
-        <Text weight="medium">查询结果 · 请选择正确的 HCP</Text>
-      </Row>
+      <BackNavBar
+        label="返回修改查询"
+        onBack={onBack}
+        actions={<Text weight="medium">查询结果 · 请选择正确的 HCP</Text>}
+      />
       <Text tone="secondary" style={{ fontSize: 13 }}>
         共 {candidates.length} 条候选（hcp-twin-mcp）。核对医院与文献检索号后再选。
       </Text>
@@ -1195,12 +1228,11 @@ function TwinEditPage({
 
   return (
     <Stack gap={24}>
-      <Row gap={8} align="center">
-        <Button variant="ghost" onClick={onBack}>
-          返回列表
-        </Button>
-        <Text weight="medium">修改数字分身</Text>
-      </Row>
+      <BackNavBar
+        label="返回列表"
+        onBack={onBack}
+        actions={<Text weight="medium">修改数字分身</Text>}
+      />
 
       <div
         style={{
