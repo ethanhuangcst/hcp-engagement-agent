@@ -36,7 +36,7 @@ Master Retrieval-Augmented Generation (RAG) to build LLM applications that provi
 - **Milvus**: High performance, on-premise
 - **Chroma**: Lightweight, easy to use, local development
 - **Qdrant**: Fast, filtered search, Rust-based — **本项目主推**
-- **pgvector**: PostgreSQL extension, SQL integration — 本项目不用 Postgres 主库
+- **pgvector**: PostgreSQL extension — 本项目**业务主库为香港 Postgres**，向量仍用 Qdrant（不用 pgvector 作主向量库）
 
 ### 2. Embeddings
 

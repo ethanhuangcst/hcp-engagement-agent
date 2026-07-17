@@ -2,7 +2,8 @@
 
 > as_of：2026-07-16 · 包名建议 `@hca/hcp-engagement-agent`  
 > 依据：[`1.product-definition.md`](../1.product-definition.md)、[`3.architecture.md`](../3.architecture.md) §5.4、[`4.install-dependencies.md`](../4.install-dependencies.md) §8、[`../app/app-function-spec.md`](../app/app-function-spec.md)、[`../../knowledge/agent-hcp-engagement/design-direction.md`](../../knowledge/agent-hcp-engagement/design-direction.md)、**agent-builder**、cn-hcp-pro / cn-hcp-compliance  
-> 范围：`packages/hcp-engagement-agent` — 决策与对话层（**LlmClient 默认 Qwen** + 一句话洞察 + 5 Capabilities + 薄 LangGraph + **open_chat / revise_options**）。**不是**爬虫、不是向量库；学术/合规检索经 `medical-kb`，Twin 事实经本地 JSON。
+> 设计：[`agent-design.md`](./agent-design.md)  
+> 范围：`packages/hcp-engagement-agent` — 决策与对话层（**LlmClient 默认 Qwen** + 一句话洞察 + 5 Capabilities + 薄 LangGraph + **open_chat / revise_options**）。**不是**爬虫、不是向量库；学术/合规检索经 `medical-kb`，Twin 事实经香港 Postgres。
 
 ## 0. 结论（先读）
 
@@ -14,7 +15,7 @@
 | **LLM 接入** | 后台经 **Provider 适配层**调用模型；**默认 Qwen**（DashScope OpenAI 兼容）；可用配置切换其它兼容提供方；**禁止**浏览器持有 API Key |
 | Knowledge | cn-hcp-pro / 合规模板按需；RAG 仅经 tool_result；勿塞满 twin.json / 整库 |
 | 合规 | Options 路径：`retrieve_compliance` **不可跳过**；生成后 Fail-fast；输出**不替代**正式 MLR |
-| 批次 | 功能与对外接口「实现批次」**默认 TBD** |
+| 批次 | 功能与对外接口「实现批次」填 **MVP-1…MVP-7**（见 [`1.product-definition.md`](../1.product-definition.md)） |
 
 ```text
 感知层   hcp-twin-mcp        → Twin / Insights 骨架（事实字段）
@@ -63,17 +64,15 @@
 
 ## 实现批次说明
 
-排期时再填入下表代号；当前表内一律 **TBD**。
+功能与接口「实现批次」填 **MVP-1…MVP-7**，见 [`1.product-definition.md`](../1.product-definition.md)。
 
-| 批次 | 目标 | 验收重心 |
-|------|------|----------|
-| **A0** | Agent 壳 + LLM 接入 | loop、Zod、**LLM Provider 适配（默认 Qwen）**、环境变量、session/options/insights 可写 |
-| **A1** | 五 Capability | 5 tools 可测；合规检索硬约束 |
-| **A2** | 一句话洞察 | `synthesizeDoingNow`；数字分身与 HCP 洞察同源 |
-| **A3** | 提案主路径 | 薄 LangGraph → Options + 双引用 |
-| **A4** | Chat 模式 + 修订 | `open_chat` / `revise_options`、流式、附件 |
-| **A5** | 合规与验收 | Fail-fast、朱同玉 Options + doing_now 文案 |
-| **TBD** | 未排期（默认） | 已定义、顺序待定 |
+| MVP | 本规格重心 | 验收重心 |
+|-----|------------|----------|
+| **MVP-3** | LlmClient、`synthesizeDoingNow`、同源消费 | 列表/详情/洞察同一 `doing_now` |
+| **MVP-6** | 5 Tools、薄 LangGraph、`proposeOptions`、闸门、`revise_options` | 3–5 方案 + 双引用 + 闸门结果 |
+| **MVP-7** | `open_chat`、流式、附件上下文 | 与一人一策 mode 不混用 |
+
+旧 A0–A5 代号废止。
 
 ---
 
@@ -81,40 +80,40 @@
 
 | 序号 | 功能编号 | 功能名称 | 功能简述 | 实现批次 |
 |------|----------|----------|----------|----------|
-| 1 | F-AGT-001 | Agent 壳与循环 | 模型 loop：context + capabilities → act 或 respond；包内无 Playwright/爬虫 | TBD |
-| 2 | F-AGT-001a | 后台 LLM Provider 适配层 | 统一 `LlmClient`（chat / chatStream / tool-calling）；业务与具体厂商 SDK 解耦；**默认 provider=`qwen`** | TBD |
-| 3 | F-AGT-001b | 默认 Qwen（DashScope） | 经 OpenAI 兼容端点调用 `qwen-plus` / `qwen-max`（可配）；`openai` SDK + `DASHSCOPE_*` | TBD |
-| 4 | F-AGT-001c | 配置切换提供方 | `LLM_PROVIDER` + `LLM_MODEL` + `LLM_BASE_URL` + `LLM_API_KEY`（或厂商专用键）；支持至少：`qwen`（默认）、`openai_compatible`（任意兼容端点）；新增厂商只加 adapter，不改 Capabilities | TBD |
-| 5 | F-AGT-001d | Key 与调用边界 | Key 仅服务端（Agent/BFF 进程）；浏览器禁止直连 LLM；请求写 `model` / `provider` 入 Option/session metadata 便于审计 | TBD |
-| 6 | F-AGT-002 | 薄 LangGraph 主路径 | `get_twin_insights` → academic ‖ compliance → gate → generate → compliance_check → persist；勿硬编码百步旅程 | TBD |
-| 7 | F-AGT-003 | 短 system / Skill 注入 | cn-hcp-pro 输出模板与人设**短**载入；禁止全文塞 prompt | TBD |
-| 8 | F-AGT-004 | Context 保护 | 截断冗长 RAG；Insights 经 tool 注入，不整包 twin.json | TBD |
-| 9 | F-AGT-005 | Zod 入参校验 | 对外入口与各 Capability 入参 Zod；结构化错误无堆栈 | TBD |
-| 10 | F-AGT-006 | Options JSON 落盘 | 写 `data/engagements/{tenant?}/{hcpId}/options/{runId}.json`；原子写 | TBD |
-| 11 | F-AGT-007 | Session JSON 落盘 | 写 `.../sessions/{sessionId}.json`；区分 `mode`（open_chat / revise_options）；每轮持久化 | TBD |
-| 12 | F-AGT-008 | 一句话洞察合成 | `synthesizeDoingNow`：经 `LlmClient` 生成 `doing_now.summary`（1–3 句）+ 可选 `analysis`；写回 `insights.json`；推断可追溯 | TBD |
-| 13 | F-AGT-009 | 数字分身一句话洞察消费 | 支撑 F-WEB-005/007：列表截断 + 详情摘要条；与 HCP 洞察同源字段 | TBD |
-| 14 | F-AGT-010 | HCP 洞察一句话洞察消费 | 支撑 F-WEB-018：摘要条 + 可选分析段；禁止与数字分身两套文案 | TBD |
-| 15 | F-AGT-011 | Capability：读 Insights | `get_twin_insights(hcpId)` → insights（含 doing_now / opportunities / interest_directions / tags 旁注） | TBD |
-| 16 | F-AGT-012 | Capability：学术检索 | `retrieve_academic` → medical-kb；按 specialty/themes 过滤；结果带 citation | TBD |
-| 17 | F-AGT-013 | Capability：合规检索 | `retrieve_compliance` **强制**（Options 路径）；tenant 过滤 SOP；无命中 → gate 降级/拒敏 | TBD |
-| 18 | F-AGT-014 | Capability：提案 Options | `propose_engagement_options` → 经 `LlmClient` 生成 3–5 条；UI 字段 + `academic_refs` + `compliance_refs` | TBD |
-| 19 | F-AGT-015 | Capability：修订 Options | `revise_engagement`：session + 反馈（+ 附件元数据）→ 写回 Options/消息 | TBD |
-| 20 | F-AGT-016 | 合规 gate（检索后） | 敏感互动无合规 chunk → 拒答或标注「需人工合规确认」 | TBD |
-| 21 | F-AGT-017 | 合规 Fail-fast（生成后） | cn-hcp-compliance；通过 / 附条件 / 拒绝 | TBD |
-| 22 | F-AGT-018 | Permissions 硬边界 | 不编造说明书外疗效；院内旁注机构同意+代表备案；不替代 MLR；不用处方/统方 | TBD |
-| 23 | F-AGT-019 | Agent Web UI · chat 模式 | `mode=open_chat`：标准多轮对话；经 `LlmClient` 流式/非流式；模型自主选 tool | TBD |
-| 24 | F-AGT-020 | 一人一策 · 修订模式 | `mode=revise_options`：页底短对话；必须绑当前方案；默认走 `revise_engagement` | TBD |
-| 25 | F-AGT-021 | 对话路径编排 | chat/修订均不强制重跑全图；模型决定是否再检索 | TBD |
-| 26 | F-AGT-022 | 流式输出 | `LlmClient.chatStream` → BFF SSE；对齐 F-WEB-034 | TBD |
-| 27 | F-AGT-023 | 附件上下文 | 仅 chat 类请求；摘要进 context，不默认可执行任意文件 | TBD |
-| 28 | F-AGT-024 | 租户产品上下文 | 适应症/SOP 来自 tenants 或 compliance 检索；**不写入** Twin | TBD |
-| 29 | F-AGT-025 | 标签与渠道缺省 | 消费 `profile.tags`：T1→偏 MSL；行政/政策→慎促销 | TBD |
-| 30 | F-AGT-026 | 机会 → Option 映射 | 以 `insights.opportunities` 为主输入 | TBD |
-| 31 | F-AGT-027 | 结构化错误 | 无 Twin、LLM 不可达、RAG/gate 失败 → `AGENT_ERROR` / `LLM_*` | TBD |
-| 32 | F-AGT-028 | LLM 与运行配置 | 见 §2.3 环境变量；缺 Key 时启动失败或 health=`llm:down`（可配严格模式） | TBD |
-| 33 | F-AGT-029 | 契约测试 | Vitest：mock `LlmClient`；5 tools、doing_now、双引用、合规、chat mode；另测 provider 解析 | TBD |
-| 34 | F-AGT-030 | 朱同玉验收 | live Qwen（或配置的 provider）下 doing_now + Options + open_chat | TBD |
+| 1 | F-AGT-001 | Agent 壳与循环 | 模型 loop：context + capabilities → act 或 respond；包内无 Playwright/爬虫 | MVP-3 |
+| 2 | F-AGT-001a | 后台 LLM Provider 适配层 | 统一 `LlmClient`（chat / chatStream / tool-calling）；业务与具体厂商 SDK 解耦；**默认 provider=`qwen`** | MVP-3 |
+| 3 | F-AGT-001b | 默认 Qwen（DashScope） | 经 OpenAI 兼容端点调用 `qwen-plus` / `qwen-max`（可配）；`openai` SDK + `DASHSCOPE_*` | MVP-3 |
+| 4 | F-AGT-001c | 配置切换提供方 | `LLM_PROVIDER` + `LLM_MODEL` + `LLM_BASE_URL` + `LLM_API_KEY`（或厂商专用键）；支持至少：`qwen`（默认）、`openai_compatible`（任意兼容端点）；新增厂商只加 adapter，不改 Capabilities | MVP-3 |
+| 5 | F-AGT-001d | Key 与调用边界 | Key 仅服务端（Agent/BFF 进程）；浏览器禁止直连 LLM；请求写 `model` / `provider` 入 Option/session metadata 便于审计 | MVP-3 |
+| 6 | F-AGT-002 | 薄 LangGraph 主路径 | `get_twin_insights` → academic ‖ compliance → gate → generate → compliance_check → persist；勿硬编码百步旅程 | MVP-6 |
+| 7 | F-AGT-003 | 短 system / Skill 注入 | cn-hcp-pro 输出模板与人设**短**载入；禁止全文塞 prompt | MVP-6 |
+| 8 | F-AGT-004 | Context 保护 | 截断冗长 RAG；Insights 经 tool 注入，不整包 twin.json | MVP-6 |
+| 9 | F-AGT-005 | Zod 入参校验 | 对外入口与各 Capability 入参 Zod；结构化错误无堆栈 | MVP-3 |
+| 10 | F-AGT-006 | Options 入库 | 写 Postgres `engagement_options`；事务写 | MVP-6 |
+| 11 | F-AGT-007 | Session 入库 | 写 Postgres `chat_sessions`；区分 `mode`（open_chat / revise_options）；每轮持久化 | MVP-6 |
+| 12 | F-AGT-008 | 一句话洞察合成 | `synthesizeDoingNow`：经 `LlmClient` 生成 `doing_now.summary`（1–3 句）+ 可选 `analysis`；写回 `insights.json`；推断可追溯 | MVP-3 |
+| 13 | F-AGT-009 | 数字分身一句话洞察消费 | 支撑 F-WEB-005/007：列表截断 + 详情摘要条；与 HCP 洞察同源字段 | MVP-3 |
+| 14 | F-AGT-010 | HCP 洞察一句话洞察消费 | 支撑 F-WEB-018：摘要条 + 可选分析段；禁止与数字分身两套文案 | MVP-3 |
+| 15 | F-AGT-011 | Capability：读 Insights | `get_twin_insights(hcpId)` → insights（含 doing_now / opportunities / interest_directions / tags 旁注） | MVP-6 |
+| 16 | F-AGT-012 | Capability：学术检索 | `retrieve_academic` → medical-kb；按 specialty/themes 过滤；结果带 citation | MVP-6 |
+| 17 | F-AGT-013 | Capability：合规检索 | `retrieve_compliance` **强制**（Options 路径）；tenant 过滤 SOP；无命中 → gate 降级/拒敏 | MVP-6 |
+| 18 | F-AGT-014 | Capability：提案 Options | `propose_engagement_options` → 经 `LlmClient` 生成 3–5 条；UI 字段 + `academic_refs` + `compliance_refs` | MVP-6 |
+| 19 | F-AGT-015 | Capability：修订 Options | `revise_engagement`：session + 反馈（+ 附件元数据）→ 写回 Options/消息 | MVP-6 |
+| 20 | F-AGT-016 | 合规 gate（检索后） | 敏感互动无合规 chunk → 拒答或标注「需人工合规确认」 | MVP-6 |
+| 21 | F-AGT-017 | 合规 Fail-fast（生成后） | cn-hcp-compliance；通过 / 附条件 / 拒绝 | MVP-6 |
+| 22 | F-AGT-018 | Permissions 硬边界 | 不编造说明书外疗效；院内旁注机构同意+代表备案；不替代 MLR；不用处方/统方 | MVP-6 |
+| 23 | F-AGT-019 | Agent Web UI · chat 模式 | `mode=open_chat`：标准多轮对话；经 `LlmClient` 流式/非流式；模型自主选 tool | MVP-7 |
+| 24 | F-AGT-020 | 一人一策 · 修订模式 | `mode=revise_options`：页底短对话；必须绑当前方案；默认走 `revise_engagement` | MVP-6 |
+| 25 | F-AGT-021 | 对话路径编排 | chat/修订均不强制重跑全图；模型决定是否再检索 | MVP-6 |
+| 26 | F-AGT-022 | 流式输出 | `LlmClient.chatStream` → BFF SSE；对齐 F-WEB-034 | MVP-7 |
+| 27 | F-AGT-023 | 附件上下文 | 仅 chat 类请求；摘要进 context，不默认可执行任意文件 | MVP-7 |
+| 28 | F-AGT-024 | 租户产品上下文 | 适应症/SOP 来自 tenants 或 compliance 检索；**不写入** Twin | MVP-6 |
+| 29 | F-AGT-025 | 标签与渠道缺省 | 消费 `profile.tags`：T1→偏 MSL；行政/政策→慎促销 | MVP-6 |
+| 30 | F-AGT-026 | 机会 → Option 映射 | 以 `insights.opportunities` 为主输入 | MVP-6 |
+| 31 | F-AGT-027 | 结构化错误 | 无 Twin、LLM 不可达、RAG/gate 失败 → `AGENT_ERROR` / `LLM_*` | MVP-6 |
+| 32 | F-AGT-028 | LLM 与运行配置 | 见 §2.3 环境变量；缺 Key 时启动失败或 health=`llm:down`（可配严格模式） | MVP-3 |
+| 33 | F-AGT-029 | 契约测试 | Vitest：mock `LlmClient`；5 tools、doing_now、双引用、合规、chat mode；另测 provider 解析 | MVP-6 |
+| 34 | F-AGT-030 | 朱同玉验收 | live Qwen（或配置的 provider）下 doing_now + Options + open_chat | MVP-6 |
 
 ---
 
@@ -126,11 +125,11 @@ BFF（及测试）调用本包 API；浏览器只调 BFF。下列 **Capability**
 
 | 序号 | 接口编号 | 类型 | 接口名称 | 输入摘要 | 输出摘要 | 副作用 | 幂等 | 实现批次 |
 |------|----------|------|----------|----------|----------|--------|------|----------|
-| 1 | I-AGT-001 | API | `synthesizeDoingNow` | `{ hcpId, refresh?: boolean }` | `{ doing_now: { summary, analysis?, evidence_refs?, as_of } }` | 写 `insights.doing_now`（数字分身与 HCP 洞察共用） | 是（同 Twin 版本重复调用结果应稳定） | TBD |
-| 2 | I-AGT-002 | API | `proposeOptions` | `{ hcpId, tenantId?, productContext? }` | `{ runId, options[3..5], gate_result? }` | 写 options JSON；内部跑提案主路径 | 否 | TBD |
-| 3 | I-AGT-003 | API | `chat` | `{ mode: "open_chat" \| "revise_options", sessionId?, hcpId, message, optionRunId?, attachments? }` | `{ sessionId, mode, messages[], options? }`（可流式） | 写/更新 session；`revise_options` 可改 options | 否 | TBD |
-| 4 | I-AGT-004 | API | `runComplianceGate` | `{ hcpId, optionRunId }` | `{ status: pass\|conditional\|reject, findings[] }` | 可回写 options 旁注 | 是 | TBD |
-| 5 | I-AGT-005 | API | `health`（可选） | `{}` | `{ ok, llm: { provider, model, reachable }, data_dir_writable, medical_kb? }` | 无 | 是 | TBD |
+| 1 | I-AGT-001 | API | `synthesizeDoingNow` | `{ hcpId, refresh?: boolean }` | `{ doing_now: { summary, analysis?, evidence_refs?, as_of } }` | 写 `insights.doing_now`（数字分身与 HCP 洞察共用） | 是（同 Twin 版本重复调用结果应稳定） | MVP-3 |
+| 2 | I-AGT-002 | API | `proposeOptions` | `{ hcpId, tenantId?, productContext? }` | `{ runId, options[3..5], gate_result? }` | 写 options JSON；内部跑提案主路径 | 否 | MVP-6 |
+| 3 | I-AGT-003 | API | `chat` | `{ mode: "open_chat" \| "revise_options", sessionId?, hcpId, message, optionRunId?, attachments? }` | `{ sessionId, mode, messages[], options? }`（可流式） | 写/更新 session；`revise_options` 可改 options | 否 | MVP-6 |
+| 4 | I-AGT-004 | API | `runComplianceGate` | `{ hcpId, optionRunId }` | `{ status: pass\|conditional\|reject, findings[] }` | 可回写 options 旁注 | 是 | MVP-6 |
+| 5 | I-AGT-005 | API | `health`（可选） | `{}` | `{ ok, llm: { provider, model, reachable }, database_ok, medical_kb? }` | 无 | 是 | MVP-3 |
 
 #### Chat 模式约定（Agent Web UI）
 
@@ -163,7 +162,8 @@ Agent 业务（loop / LangGraph / synthesize）
 | `LLM_API_KEY` | — | 通用键；`qwen` 时可用 `DASHSCOPE_API_KEY` 作为别名 |
 | `DASHSCOPE_API_KEY` | — | **Qwen 默认路径**推荐填写 |
 | `DASHSCOPE_BASE_URL` | DashScope 官方兼容 endpoint | 可选 |
-| `HCA_DATA_DIR` | `./data` | 与 web / MCP 共卷 |
+| `DATABASE_URL` | （必填） | 香港 Postgres；与 web / MCP 共用 |
+| `HCA_DATA_DIR` | `./data` | 可选；仅 RAG 语料根 |
 | `LLM_TIMEOUT_MS` | 实现自定 | 超时 → `LLM_TIMEOUT` |
 | `LLM_MAX_RETRIES` | 实现自定 | 可重试错误 |
 
@@ -182,11 +182,11 @@ Agent 业务（loop / LangGraph / synthesize）
 
 | 序号 | 接口编号 | 类型 | 接口名称 | 输入摘要 | 输出摘要 | 副作用 | 幂等 | 实现批次 |
 |------|----------|------|----------|----------|----------|--------|------|----------|
-| 6 | I-AGT-006 | Tool | `get_twin_insights` | `{ hcpId }` | Insights（含 `doing_now`） | 无 | 是 | TBD |
-| 7 | I-AGT-007 | Tool | `retrieve_academic` | `{ hcpId, query?, specialty?, themes? }` | `{ chunks[] }` + citations | 无 | 是 | TBD |
-| 8 | I-AGT-008 | Tool | `retrieve_compliance` | `{ hcpId, tenantId?, interaction_type? }` | `{ chunks[] }`；**propose 路径必调** | 无 | 是 | TBD |
-| 9 | I-AGT-009 | Tool | `propose_engagement_options` | `{ hcpId, academic_refs?, compliance_refs? }` | `{ runId, options[3..5] }` | 写 options/ | 否 | TBD |
-| 10 | I-AGT-010 | Tool | `revise_engagement` | `{ sessionId, hcpId, feedback, optionRunId? }` | 修订后 options + 助手回复 | 写 session / options | 否 | TBD |
+| 6 | I-AGT-006 | Tool | `get_twin_insights` | `{ hcpId }` | Insights（含 `doing_now`） | 无 | 是 | MVP-6 |
+| 7 | I-AGT-007 | Tool | `retrieve_academic` | `{ hcpId, query?, specialty?, themes? }` | `{ chunks[] }` + citations | 无 | 是 | MVP-6 |
+| 8 | I-AGT-008 | Tool | `retrieve_compliance` | `{ hcpId, tenantId?, interaction_type? }` | `{ chunks[] }`；**propose 路径必调** | 无 | 是 | MVP-6 |
+| 9 | I-AGT-009 | Tool | `propose_engagement_options` | `{ hcpId, academic_refs?, compliance_refs? }` | `{ runId, options[3..5] }` | 写 options/ | 否 | MVP-6 |
+| 10 | I-AGT-010 | Tool | `revise_engagement` | `{ sessionId, hcpId, feedback, optionRunId? }` | 修订后 options + 助手回复 | 写 session / options | 否 | MVP-6 |
 
 > **工具表仍保持 5 个**（agent-builder）。一句话洞察是 **I-AGT-001 包级 API**（固定短链路：读 Twin 摘要 → `LlmClient` → 写 `doing_now`），不占用模型选 tool 名额。`open_chat` 内若需刷新洞察，BFF/harness 可再调 I-AGT-001——P0 不把 `synthesize_doing_now` 加成第 6 个 Tool。
 
@@ -262,7 +262,7 @@ Agent Web UI（HCP Engagement Agent Tab）
 ## 依赖关系（简图）
 
 ```text
-A0 壳 / Zod / LlmClient（默认 qwen）/ 落盘
+A0 壳 / Zod / LlmClient（默认 qwen）/ Postgres 持久化
   └─► A1 五 Capability + medical-kb 客户端
         └─► A2 synthesizeDoingNow（数字分身 ‖ HCP 洞察同源）
               └─► A3 proposeOptions 主路径 + 双引用
@@ -299,6 +299,9 @@ A0 壳 / Zod / LlmClient（默认 qwen）/ 落盘
 
 ## 相关文档
 
+- 设计：[`agent-design.md`](./agent-design.md)
+- 产品 MVP：[`../1.product-definition.md`](../1.product-definition.md)
+- 构建提示：[`initial-prompt.md`](./initial-prompt.md)
 - 设计方向：[`../../knowledge/agent-hcp-engagement/design-direction.md`](../../knowledge/agent-hcp-engagement/design-direction.md)
 - 架构：[`3.architecture.md`](../3.architecture.md) §5.4
 - 依赖：[`4.install-dependencies.md`](../4.install-dependencies.md) §8（Qwen / DashScope）

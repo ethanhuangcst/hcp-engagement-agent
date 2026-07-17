@@ -2,9 +2,10 @@
 node_modules/
 .env
 .env.*
+!.env.example
 knowledge/
 specs/0.prompts.md
 
-# 本地运行时数据（不提交 JSON / Qdrant 内容；目录骨架由 .gitkeep 追踪）
+# RAG 语料 / Qdrant 运行时（非 Twin 主库；主数据在香港 Postgres）
 data/**/*
 !data/**/.gitkeep

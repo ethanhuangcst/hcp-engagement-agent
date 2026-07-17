@@ -85,7 +85,7 @@ Use **Zod** (or the SDK's preferred schema format) for input validation.
 | 规则 | 原因 |
 |------|------|
 | **Playwright 仅在本 MCP 进程** | `apps/web` 禁止依赖 playwright |
-| 输出写 `HCA_DATA_DIR/twins/{hcpId}/` | 与 BFF、Agent 共享 JSON 卷 |
+| 输出写香港 Postgres | 与 BFF、Agent 共用 `DATABASE_URL` |
 | 浏览器只调 BFF；BFF 用 `mcp-client` | 安全与 Key 隔离 |
 | `TWIN_MODE=mock` 仅 CI；产品验收用 `live` | 见 stack §5.4 |
 
@@ -96,10 +96,10 @@ Use **Zod** (or the SDK's preferred schema format) for input validation.
 | `resolve_hcp_identity` | 是 | name + hospital + dept → hcpId；尽量回填 `external_ids` / `author_ids`；写入 `profile.tags`（`hcp_tier` + `role_tags`，见 `knowledge/hcp-twin/hcp-tagging.md`） |
 | `build_twin` | 否 | 返回 `runId`；异步 collector；Stage C 前须满足 §3.2.1（≥1 个 P0 文献号） |
 | `get_twin_status` | 是 | phase / progress |
-| `get_twin` / `get_insights` | 是 | 读本地 JSON |
+| `get_twin` / `get_insights` | 是 | 读 Postgres |
 | `tag_hcp` | 是 | 可选：按公开证据重算级别标签（规则优先） |
 
-**AuthorIds（论文检索）**：`orcid` · `pubmed_author` · `google_scholar` · `openalex`（P0）及 Scopus/WoS/S2/CNKI（P1+）。权威副本在 `research.author_ids`；见数据字典 §3.2。
+**AuthorIds（论文检索 · 活跃）**：`orcid` · `pubmed_author` · `openalex`（P0）；Europe PMC / Crossref（P1）；试验登记旁证（P2）。须公开 API、国内可访问、免登录、无爬虫。见 `literature-sources.md` 与数据字典 §3.2。
 
 **Tags（级别打标）**：主标 `hcp_tier`（T1/T2/T3/unclassified）+ 辅标 `role_tags[]`；禁止处方潜力打标。见数据字典 §3.5。
 

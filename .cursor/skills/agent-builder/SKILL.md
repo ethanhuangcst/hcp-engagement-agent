@@ -153,7 +153,7 @@ Agent **不是**爬虫、不是向量库；是决策与对话层。
 
 | Tool | 作用 |
 |------|------|
-| `get_twin_insights` | 读 `data/twins/{hcpId}/insights.json` |
+| `get_twin_insights` | 读 Postgres `hcp_insights` |
 | `retrieve_academic` | medical-kb → 专科过滤 |
 | `retrieve_compliance` | **强制**；无命中则 gate |
 | `propose_engagement_options` | 3–5 条 Options → JSON |

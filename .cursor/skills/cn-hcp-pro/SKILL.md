@@ -112,7 +112,7 @@ description: |
 - 产品/疾病领域与**已提供的适应症边界**（无说明书则禁止编造疗效声明）
 - 目标：认知 / 观念转化 / 路径规范 / 研究合作 / 患者管理…
 - 可用渠道与组织：代表、MSL、市场、数字化、预算阶段
-- Twin / Insights：职业轨迹、科研主题、活动热力、兴趣点（有则优先用 `get_twin_insights` 或读 `data/twins/`）
+- Twin / Insights：职业轨迹、科研主题、活动热力、兴趣点（有则优先用 `get_twin_insights` 或读 Postgres Twin / Insights）
 
 ### 2. 分层与旅程定位
 

@@ -41,7 +41,7 @@
 4. **P0 Tools（仅 5 个）**  
    `get_twin_insights` · `retrieve_academic` · `retrieve_compliance`（提案路径**强制**）· `propose_engagement_options` · `revise_engagement`
 5. **LLM**：后台 `LlmClient` 适配层；**默认 Qwen（DashScope）**；配置可切换 OpenAI 兼容提供方；Key 不进浏览器。
-6. **落盘**：Options / sessions 写入 `HCA_DATA_DIR/engagements/`；与 Twin JSON 共卷约定见架构。
+6. **持久化**：Options / sessions 写入香港 **Postgres**；与 Twin 共用 `DATABASE_URL`（见架构 / 安装规格）。
 
 非目标（明确不要做）：爬虫/Playwright、自建向量库、多 Agent 路由、自动办会、CRM 回写、替代 MLR、无处方/统方数据。
 
@@ -73,7 +73,7 @@
 | 模式 | 入口 | 行为 |
 |------|------|------|
 | 一句话洞察 | 后台 / Twin 完成后 | `synthesizeDoingNow` → `doing_now.summary` + 可选 `analysis` |
-| 提案 | 一人一策「生成方案」 | 薄编排：Insights → 学术‖合规检索 → gate → Options → 合规检查 → 落盘 |
+| 提案 | 一人一策「生成方案」 | 薄编排：Insights → 学术‖合规检索 → gate → Options → 合规检查 → 写入 Postgres |
 | Chat · 开放 | Agent Web UI | `open_chat`：模型自主选 tool；不强制绑 Option |
 | Chat · 修订 | 一人一策页底 | `revise_options`：必须绑当前方案；优先 `revise_engagement` |
 
@@ -86,7 +86,7 @@ LOOP:
   模型看到：短 system + 会话 + tool_results
   模型决定：调用 capability 或回复用户
   若 act：执行 → 结果写入 context → 继续
-  若 respond：返回 Options / 修订稿 / 对话答复 → 落盘
+  若 respond：返回 Options / 修订稿 / 对话答复 → 写入 Postgres
 ```
 
 - Knowledge：cn-hcp-pro 模板短载入；RAG 仅经 `retrieve_*` 的 tool_result；Twin 经 `get_twin_insights`，勿塞满 `twin.json`。

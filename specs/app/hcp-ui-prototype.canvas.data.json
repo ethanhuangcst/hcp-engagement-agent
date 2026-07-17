@@ -1,0 +1,269 @@
+{
+  "page": "options",
+  "twin-view": "detail",
+  "active-twin": "zhu",
+  "option-tab": "o1",
+  "agent-drag-origin": null,
+  "agent-active": "s1784196367954",
+  "agent-sessions-cookie": [
+    {
+      "id": "s1784196367954",
+      "title": "新建对话",
+      "messages": [
+        {
+          "role": "assistant",
+          "text": "新会话已创建。"
+        }
+      ]
+    },
+    {
+      "id": "s1784196365054",
+      "title": "新建对话",
+      "messages": [
+        {
+          "role": "assistant",
+          "text": "新会话已创建。"
+        }
+      ]
+    },
+    {
+      "id": "s1",
+      "title": "朱同玉 · 噬菌体方案",
+      "messages": [
+        {
+          "role": "user",
+          "text": "方案 1 的合规边界如何收紧？"
+        },
+        {
+          "role": "assistant",
+          "text": "保持 MSL 科学交流；禁止促销话术；输出须送 MLR。"
+        }
+      ]
+    },
+    {
+      "id": "s2",
+      "title": "新建对话",
+      "messages": [
+        {
+          "role": "assistant",
+          "text": "我是 HCP Engagement Agent。可上传附件并讨论一人一策。历史会话原型写入持久化状态（生产用浏览器 cookie）。"
+        }
+      ]
+    }
+  ],
+  "edit-target": null,
+  "twins": [
+    {
+      "id": "zhu",
+      "name": "朱同玉",
+      "hospital": "复旦大学附属中山医院",
+      "dept": "肾脏移植科 / 泌尿外科",
+      "abbrev": "朱",
+      "tier": "T1",
+      "roles": [
+        "KOL",
+        "KME",
+        "行政",
+        "政策发声"
+      ],
+      "insight": "肾移植临床与质控管理并行；公开叙事强调噬菌体、BK 病毒及 AI+移植",
+      "asOf": "2026-07-16",
+      "authorIds": {
+        "orcid": null,
+        "pubmed_author": null,
+        "google_scholar": "Yby_S-sAAAAJ",
+        "openalex": null,
+        "scopus_author_id": null,
+        "cnki_scholar": null
+      }
+    },
+    {
+      "id": "xue",
+      "name": "薛武军",
+      "hospital": "西安交通大学第一附属医院",
+      "dept": "肾脏病医院 / 肾移植",
+      "abbrev": "薛",
+      "tier": "T1",
+      "roles": [
+        "KOL",
+        "KME",
+        "行政"
+      ],
+      "insight": "肾移植组织配型与免疫抑制路径并重；质控与学科建设叙事突出",
+      "asOf": "2026-07-16",
+      "authorIds": {
+        "orcid": "0000-0002-1111-2222",
+        "pubmed_author": null,
+        "google_scholar": null,
+        "openalex": "A5012345678",
+        "scopus_author_id": "56012345678",
+        "cnki_scholar": null
+      }
+    },
+    {
+      "id": "lin",
+      "name": "林涛",
+      "hospital": "四川大学华西医院",
+      "dept": "泌尿外科 / 肾移植",
+      "abbrev": "林",
+      "tier": "T2",
+      "roles": [
+        "KOL",
+        "KME"
+      ],
+      "insight": "活体肾移植与指南规范并进；区域学术影响力强于全国政策发声",
+      "asOf": "2026-07-16",
+      "authorIds": {
+        "orcid": "0000-0003-3333-4444",
+        "pubmed_author": "9876543",
+        "google_scholar": null,
+        "openalex": null,
+        "scopus_author_id": null,
+        "cnki_scholar": null
+      }
+    },
+    {
+      "id": "new-1784207237131",
+      "name": "新分身",
+      "hospital": "待填写医院",
+      "dept": "待填写科室",
+      "abbrev": "新",
+      "tier": "T3",
+      "roles": [
+        "一线"
+      ],
+      "insight": "构建完成后生成一句话洞察",
+      "asOf": "2026-07-16",
+      "authorIds": {
+        "orcid": null,
+        "pubmed_author": null,
+        "google_scholar": null,
+        "openalex": null,
+        "scopus_author_id": null,
+        "cnki_scholar": null
+      }
+    },
+    {
+      "id": "new-1784207467196",
+      "name": "新分身",
+      "hospital": "待填写医院",
+      "dept": "待填写科室",
+      "abbrev": "新",
+      "tier": "T3",
+      "roles": [
+        "一线"
+      ],
+      "insight": "构建完成后生成一句话洞察",
+      "asOf": "2026-07-16",
+      "authorIds": {
+        "orcid": null,
+        "pubmed_author": null,
+        "google_scholar": null,
+        "openalex": null,
+        "scopus_author_id": null,
+        "cnki_scholar": null
+      }
+    },
+    {
+      "id": "hcp-1784209405877",
+      "name": "朱同玉",
+      "hospital": "复旦大学附属中山医院",
+      "dept": "肾脏移植科 / 泌尿外科",
+      "abbrev": "朱",
+      "tier": "T1",
+      "roles": [
+        "KOL",
+        "KME",
+        "行政",
+        "政策发声"
+      ],
+      "insight": "肾移植临床与质控管理并行；公开叙事强调噬菌体、BK 病毒及 AI+移植",
+      "asOf": "2026-07-16",
+      "authorIds": {
+        "orcid": null,
+        "pubmed_author": null,
+        "google_scholar": "Yby_S-sAAAAJ",
+        "openalex": null,
+        "scopus_author_id": null,
+        "cnki_scholar": null
+      }
+    },
+    {
+      "id": "hcp-1784209418612",
+      "name": "朱同玉",
+      "hospital": "复旦大学附属中山医院",
+      "dept": "肾脏移植科 / 泌尿外科",
+      "abbrev": "朱",
+      "tier": "T1",
+      "roles": [
+        "KOL",
+        "KME",
+        "行政",
+        "政策发声"
+      ],
+      "insight": "肾移植临床与质控管理并行；公开叙事强调噬菌体、BK 病毒及 AI+移植",
+      "asOf": "2026-07-16",
+      "authorIds": {
+        "orcid": null,
+        "pubmed_author": null,
+        "google_scholar": "Yby_S-sAAAAJ",
+        "openalex": null,
+        "scopus_author_id": null,
+        "cnki_scholar": null
+      }
+    }
+  ],
+  "pending-twin": null,
+  "mcp-candidates": [
+    {
+      "candidateId": "c-zhu-zs",
+      "name": "朱同玉",
+      "nameEn": "Tongyu Zhu",
+      "hospital": "复旦大学附属中山医院",
+      "dept": "肾脏移植科 / 泌尿外科",
+      "title": "主任医师 / 教授",
+      "tier": "T1",
+      "roles": [
+        "KOL",
+        "KME",
+        "行政",
+        "政策发声"
+      ],
+      "insight": "肾移植临床与质控管理并行；公开叙事强调噬菌体、BK 病毒及 AI+移植",
+      "authorIds": {
+        "orcid": null,
+        "pubmed_author": null,
+        "google_scholar": "Yby_S-sAAAAJ",
+        "openalex": null,
+        "scopus_author_id": null,
+        "cnki_scholar": null
+      },
+      "matchNote": "医院专家页 + Scholar · high",
+      "confidence": "high"
+    },
+    {
+      "candidateId": "c-zhu-other",
+      "name": "朱同玉",
+      "nameEn": "Tongyu Zhu",
+      "hospital": "其他机构（同名待核）",
+      "dept": "外科",
+      "title": "副主任医师",
+      "tier": "T3",
+      "roles": [
+        "一线"
+      ],
+      "insight": "证据不足，勿与中山肾移植朱同玉合并",
+      "authorIds": {
+        "orcid": "0000-0009-9999-0000",
+        "pubmed_author": null,
+        "google_scholar": null,
+        "openalex": null,
+        "scopus_author_id": null,
+        "cnki_scholar": null
+      },
+      "matchNote": "仅姓名命中 · low",
+      "confidence": "low"
+    }
+  ],
+  "create-querying": false
+}
