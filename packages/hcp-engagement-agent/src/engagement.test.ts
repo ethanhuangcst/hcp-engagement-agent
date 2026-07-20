@@ -118,17 +118,16 @@ describe("proposeOptions + chat (integration)", () => {
 
     const open = await chat({
       mode: "open_chat",
-      hcpId: ZHU_HCP_ID,
-      message: "访前我该先看哪些公开主题？",
+      message: "国内唐氏综合征领域可关注哪些科室与机构？",
     });
     expect(open.mode).toBe("open_chat");
     expect(open.sessionId).not.toBe(revised.sessionId);
+    expect(open.messages.at(-1)?.content).toBeTruthy();
 
     await expect(
       chat({
         mode: "open_chat",
         sessionId: revised.sessionId,
-        hcpId: ZHU_HCP_ID,
         message: "混用应失败",
       }),
     ).rejects.toMatchObject({ code: "CHAT_MODE_MISMATCH" });

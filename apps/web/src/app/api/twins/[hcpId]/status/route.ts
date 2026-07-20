@@ -18,7 +18,7 @@ export async function GET(req: Request, ctx: Ctx) {
       {
         code: "NOT_FOUND",
         message: "尚无构建进度",
-        repair_hint: "在详情页点击「构建情报」触发 build_twin",
+        repair_hint: "在 HCP资料「智能体情报构建」区点击「构建情报」触发 build_twin",
       },
       404,
     );

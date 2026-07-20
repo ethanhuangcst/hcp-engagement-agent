@@ -1,3 +1,4 @@
+import type { ReactElement } from "react";
 import {
   Button,
   Code,
@@ -561,7 +562,7 @@ function BackNavBar({
 }: {
   label: string;
   onBack: () => void;
-  actions?: JSX.Element | null;
+  actions?: ReactElement | null;
 }) {
   const theme = useHostTheme();
   return (
@@ -846,7 +847,7 @@ function AppChrome({
           }}
         >
           <Text weight="medium" style={{ fontSize: 13, letterSpacing: "0.02em" }}>
-            hcp engagement
+            HCP Engagement 智能助理
           </Text>
           <Text tone="tertiary" style={{ fontSize: 12 }}>
             ·
@@ -915,14 +916,11 @@ function TwinListPage({
     <Stack gap={20}>
       <Row align="end" justify="space-between" wrap gap={12}>
         <Stack gap={6}>
-          <Text tone="secondary" style={{ fontSize: 12 }}>
-            数字分身
-          </Text>
           <H1 style={{ fontSize: 28, fontWeight: 500, margin: 0 }}>
-            HCP数字分身列表
+            HCP列表
           </H1>
           <Text tone="secondary" style={{ fontSize: 14 }}>
-            共 {twins.length} 位医生分身 · 每一行是一位独立 HCP
+            共 {twins.length} 位HCP
           </Text>
         </Stack>
         <Button variant="primary" onClick={onAdd}>
@@ -1054,20 +1052,34 @@ function TwinProfilePane({
   const theme = useHostTheme();
   return (
     <Stack gap={24}>
-      <Row align="start" justify="space-between" wrap gap={12}>
-        <Stack gap={8}>
-          <H1 style={{ fontSize: 28, fontWeight: 500, margin: 0 }}>{twin.name}</H1>
-          <TwinTags tier={twin.tier} roles={twin.roles} />
-          <Text tone="secondary" style={{ fontSize: 13 }}>
-            {twin.hospital} · {twin.dept}
+      <Stack gap={8}>
+        <H1 style={{ fontSize: 28, fontWeight: 500, margin: 0 }}>{twin.name}</H1>
+        <TwinTags tier={twin.tier} roles={twin.roles} />
+        <Text tone="secondary" style={{ fontSize: 13 }}>
+          {twin.hospital} · {twin.dept}
+        </Text>
+      </Stack>
+
+      {showBuildIntel ? (
+        <div
+          style={{
+            border: `1px solid ${theme.stroke.tertiary}`,
+            borderRadius: 4,
+            padding: "12px 16px",
+            background: theme.bg.elevated,
+          }}
+        >
+          <Row align="center" justify="space-between" wrap gap={12}>
+            <Text style={{ fontSize: 14, fontWeight: 500 }}>智能体情报构建</Text>
+            <Button variant="secondary" onClick={onBuildIntel}>
+              重新构建情报
+            </Button>
+          </Row>
+          <Text tone="secondary" style={{ fontSize: 12, marginTop: 10 }}>
+            情报构建状态· Stage A–E 完成（100%）
           </Text>
-        </Stack>
-        {showBuildIntel ? (
-          <Button variant="secondary" onClick={onBuildIntel}>
-            构建情报
-          </Button>
-        ) : null}
-      </Row>
+        </div>
+      ) : null}
 
       <div
         style={{
@@ -2063,7 +2075,7 @@ function OptionsPage({ twin }: { twin: TwinRow }) {
         }}
       >
         <Text weight="medium" style={{ fontSize: 13, marginBottom: 8 }}>
-          与 Agent 讨论本方案（mode=revise_options · {opt.id}）
+          与 Agent 讨论本方案（mode=revise_options · {opt.id}；本机保存）
         </Text>
         <Stack gap={8}>
           {miniLog.map((m, i) => (
@@ -2121,16 +2133,16 @@ function OptionsPage({ twin }: { twin: TwinRow }) {
 function AgentPage() {
   const theme = useHostTheme();
   const [sessions, setSessions] = useCanvasState<ChatSession[]>(
-    "agent-sessions-cookie",
+    "agent-sessions-local",
     [
       {
         id: "s1",
-        title: "朱同玉 · 噬菌体方案",
+        title: "唐氏领域找人",
         messages: [
-          { role: "user", text: "方案 1 的合规边界如何收紧？" },
+          { role: "user", text: "找到国内唐氏综合征相关顶尖 HCP？" },
           {
             role: "assistant",
-            text: "保持 MSL 科学交流；禁止促销话术；输出须送 MLR。",
+            text: "（通用 Agent）可从儿科遗传、产前诊断、康复等科室与国家儿童医学中心等机构入手；不绑定当前打开的分身。",
           },
         ],
       },
@@ -2140,7 +2152,7 @@ function AgentPage() {
         messages: [
           {
             role: "assistant",
-            text: "我是 HCP Engagement Agent。可上传附件并讨论一人一策。历史会话原型写入持久化状态（生产用浏览器 cookie）。",
+            text: "我是 HCP Engagement Agent（通用开放对话）。不默认绑定数字分身；一人一策修订请用工作台页底。历史写入本机 localStorage。",
           },
         ],
       },
@@ -2163,13 +2175,9 @@ function AgentPage() {
   return (
     <Stack gap={16}>
       <Stack gap={4}>
-        <Text tone="secondary" style={{ fontSize: 12 }}>
-          HCP Engagement Agent
-        </Text>
-        <H1 style={{ fontSize: 24, fontWeight: 500, margin: 0 }}>对话式智能体</H1>
-        <Text tone="tertiary" style={{ fontSize: 12 }}>
-          历史存 cookie（原型：持久化 state）· 可上传附件 · 右上角手柄拖动 resize
-        </Text>
+        <H1 style={{ fontSize: 24, fontWeight: 500, margin: 0 }}>
+          HCP Engagement 智能助理
+        </H1>
       </Stack>
 
       <div style={{ display: "flex", gap: 16, alignItems: "stretch" }}>
@@ -2391,7 +2399,7 @@ function TwinBuildingPage({
   return (
     <Stack gap={20}>
       <Text tone="secondary" style={{ fontSize: 12 }}>
-        Twin 构建进度
+        情报构建状态
       </Text>
       <H1 style={{ fontSize: 24, fontWeight: 500, margin: 0 }}>
         正在补齐 · {twin.name}

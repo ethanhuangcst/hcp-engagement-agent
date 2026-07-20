@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 export function ShellTab({
-  tabKey,
+  tabKey: _tabKey,
   label,
   href,
   active,
@@ -18,6 +18,7 @@ export function ShellTab({
   closable?: boolean;
   onClose?: () => void;
 }) {
+  void _tabKey;
   const [hover, setHover] = useState(false);
 
   return (

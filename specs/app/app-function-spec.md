@@ -27,16 +27,16 @@
 | 2 | F-WEB-002 | Specimen Index | 聚焦某姓名分身标签时显示该 HCP 缩写 + 置信点；列表 / Agent / 新增向导为「—」 | MVP-1 |
 | 3 | F-WEB-003 | 列表默认顶栏 | 未打开姓名标签时顶栏仅「HCP数字分身」「HCP Engagement Agent」；洞察/一人一策不出现在顶栏 | MVP-1 |
 | 4 | F-WEB-004 | 打开分身姓名标签 | 列表「打开」插入姓名标签并进入工作台（默认 HCP资料）；可同时打开多位；悬停圆形 `×` 或「关闭本页」仅关 Tab | MVP-1 |
-| 5 | F-WEB-005 | 数字分身列表 | 表格式列表：序号、姓名、`hcp:id`、医院/科室、一句话洞察、级别标签、as_of；「共 N 位」；行操作**仅打开** | MVP-1 |
+| 5 | F-WEB-005 | 数字分身列表 | 标题「HCP列表」；表格式列表：序号、姓名、`hcp:id`、医院/科室、一句话洞察、级别标签、as_of；「共 N 位HCP」；行操作**仅打开**；排除系统占位 `_agent_general` | MVP-1 |
 | 6 | F-WEB-006 | 级别标签展示 | 渲染 `hcp_tier` + `role_tags`（对比底色，最多主标+3 辅标）；数据来自 Twin `profile.tags` | MVP-1 |
-| 7 | F-WEB-007 | 分身工作台 · HCP资料 | 子 Tab 壳 + HCP资料：姓名、标签、一句话洞察、文献号、职业轨迹；右侧修改/删除/关闭本页；「构建情报」仅本子 Tab | MVP-1 |
+| 7 | F-WEB-007 | 分身工作台 · HCP资料 | 子 Tab 壳 + HCP资料：姓名、标签、**智能体情报构建**常驻区、一句话洞察、文献号、职业轨迹；右侧修改/删除/关闭本页；构建按钮仅本子 Tab | MVP-1 |
 | 8 | F-WEB-008 | 删除分身 | 工作台内确认删除；移除 Twin；关闭该姓名标签并回列表或其它已开标签 | MVP-1 |
 | 9 | F-WEB-009 | 修改分身（基本信息） | 工作台「修改」进入编辑；保存后回 HCP资料并保持姓名标签打开 | MVP-1 |
 | 10 | F-WEB-010 | 新增分身入口 | 「新增数字分身」进入**空白**录入页（姓名/医院/科室/城市均不预填样例 HCP）；主按钮文案为「查询 HCP」（非「构建分身」）；朱同玉等仅作验收手工填写或 fixture，不作表单默认值 | MVP-1 |
 | 11 | F-WEB-011 | 查询 HCP（MCP 消歧） | 提交姓名+医院+科室 → BFF → `resolve_hcp_identity`；展示**以人为主体**的候选（姓名 Display、医院/科室/职称、区分同名说明）；文献号与网页源为次级「命中依据」，禁止把网页名当主标题 | MVP-1 |
 | 12 | F-WEB-012 | 选择候选医生 | 主按钮「就是这位」；进入分身预览详情（未落盘）；匹配度中文：匹配较稳 / 需核对 / 证据不足 | MVP-1 |
 | 13 | F-WEB-013 | 确认并保存分身 | 「确认并保存」写入香港 Postgres（身份 / 标签 / AuthorIds 等已确认字段）；**不自动**触发 `build_twin`（由详情「构建情报」显式启动）；进入已保存详情 | MVP-1 |
-| 14 | F-WEB-014 | Twin 构建进度 | 长任务返回 `runId`；UI 阶段文字（身份锁定→职业→科研→洞察）；轮询或 SSE `get_twin_status`；与 MCP Stage A–E **同批** | MVP-1 |
+| 14 | F-WEB-014 | 智能体情报构建（常驻） | HCP资料常驻「智能体情报构建」区（无「收起进度」）。未构建：「尚无情报」+ 按钮「构建情报」；已入库：展示 A–E 完成态 +「重新构建情报」；构建中轮询 `get_twin_status`，文案「情报构建状态· …」。与 MCP Stage A–E **同批** | MVP-1 |
 | 15 | F-WEB-015 | 文献检索号码展示 | 详情/候选/洞察侧展示 AuthorIds 表（orcid、pubmed_author、google_scholar、openalex、scopus、cnki）；空值「待绑定」 | MVP-1 |
 | 16 | F-WEB-016 | 职业轨迹时间轴 | HCP资料：垂直脊线 + 节点；**展示文案随界面 locale**（默认 zh-CN 中文类型/职衔）；无节点诚实空态 | MVP-1 |
 | 17 | F-WEB-017 | HCP 洞察（工作台子 Tab） | 工作台内打开洞察：姓名、标签、as_of、twin_version；可选导出；无返回分身条 | MVP-2 |
@@ -51,12 +51,12 @@
 | 26 | F-WEB-026 | 一人一策选项卡 | 工作台子 Tab：3–5 条方案水平选项卡；字段：动作/负责人/渠道/主题/成功信号/合规旁注/优先级/引用 | MVP-4 |
 | 27 | F-WEB-027 | 生成 Engagement 方案 | 「生成方案」→ BFF → Agent；基于当前 Twin 洞察与机会生成 Options 并写入 Postgres | MVP-4 |
 | 28 | F-WEB-028 | 送合规闸门检查 | 「送合规闸门检查」→ 调用/提示 cn-hcp-compliance 闸门；展示通过/附条件/拒绝结构化结果 | MVP-4 |
-| 29 | F-WEB-029 | 一人一策页底短对话 | 嵌入「与 Agent 讨论本方案」；`mode=revise_options` + 当前 `optionRunId`；完整对话导流 Agent Tab（`open_chat`） | MVP-4 |
-| 30 | F-WEB-030 | Agent 对话主界面（chat 模式） | 标准对话：`mode=open_chat` → BFF → Agent；消息流、气泡、Markdown（标题克制）；与一人一策页底 `revise_options` 分 mode | MVP-4 |
-| 31 | F-WEB-031 | Agent 历史会话 | 左栏会话列表；新建会话；生产用浏览器 cookie（或等价本地持久化）存历史索引 | MVP-4 |
+| 29 | F-WEB-029 | 一人一策页底短对话 | 嵌入「与 Agent 讨论本方案」；`mode=revise_options` + 当前 `optionRunId`；聊天记录 **localStorage**（按 hcpId+runId+optionId）；typing 提示；Enter 发送 / Shift+Enter 换行；完整开放对话导流 Agent Tab | MVP-4 |
+| 30 | F-WEB-030 | Agent 对话主界面（chat 模式） | **通用** `mode=open_chat`（不绑定当前分身）→ BFF → Agent；消息流、气泡、Markdown（标题克制）；与一人一策 `revise_options` 分 mode | MVP-4 |
+| 31 | F-WEB-031 | Agent 历史会话 | 左栏会话列表；新建会话；**localStorage** 存索引与消息正文（不按 HCP 过滤）；服务端 `chat_sessions` 落通用工作区 `_agent_general` | MVP-4 |
 | 32 | F-WEB-032 | Agent 附件上传 | 输入坞旁上传；展示附件名列表；随轮次传给 Agent（服务端落盘策略按架构） | MVP-4 |
-| 33 | F-WEB-033 | Agent 面板 resize | 对话面板右上角拖动手柄调整宽高；设最小尺寸 | MVP-4 |
-| 34 | F-WEB-034 | Agent 流式回复 | 可选 SSE 流式输出；每轮持久化到 Postgres `chat_sessions` | MVP-4 |
+| 33 | F-WEB-033 | Agent 面板 resize | 对话面板拖动手柄调整宽高；设最小尺寸 | MVP-4 |
+| 34 | F-WEB-034 | Agent 流式回复 | 可选 SSE；P0 非流式 + typing 等待态；每轮持久化到 Postgres `chat_sessions` 与本机 localStorage。**LOW PRIORITY**（SSE 增强，不挡 MVP-4） | MVP-4 · LOW PRIORITY |
 | 35 | F-WEB-035 | BFF 网关（浏览器只调 BFF） | 浏览器禁止直连 MCP/Qdrant/LLM Key；统一 `/api/*` | MVP-1 |
 | 36 | F-WEB-036 | Twin 读写 API | `GET/POST/PATCH/DELETE` 分身与状态；Zod 校验；事务写入 Postgres | MVP-1 |
 | 37 | F-WEB-037 | Insights 读取与 DoingNow API | `GET /api/insights/[hcpId]`（含 Twin 切片）；`POST /api/insights/doing-now` → `synthesizeDoingNow`（无 Key 时规则合成） | MVP-2 |
@@ -65,7 +65,7 @@
 | 40 | F-WEB-040 | 错误与空状态文案 | 可修复失败提示（如未消歧补链接、未绑文献号）；空列表引导新增；无 emoji | MVP-1 |
 | 41 | F-WEB-041 | 洞察/报表导出 | 线框「导出」（PDF/打印友好：隐藏导航，保留表与时间轴） | MVP-2 |
 | 42 | F-WEB-042 | 无障碍与响应式 | 键盘焦点、对比度 AA、`prefers-reduced-motion`；小屏热力表横滑、Agent 历史改抽屉 | MVP-4 |
-| 43 | F-WEB-043 | 鉴权与租户上下文（若启用） | 登录后绑定 tenant；产品/SOP 上下文不写入 Twin 本体 | MVP-4 |
+| 43 | F-WEB-043 | 鉴权与租户上下文（若启用） | 登录后绑定 tenant；产品/SOP 上下文不写入 Twin 本体。**LOW PRIORITY** | MVP-4 · LOW PRIORITY |
 | 44 | F-WEB-044 | （废止）返回当前数字分身 | 已由多开姓名标签 + 工作台子 Tab 取代；实现中移除洞察/一人一策返回条 | — |
 | 45 | F-WEB-045 | 分身工作台子导航 | HCP资料 / HCP洞察 / 一人一策水平子 Tab；与顶栏姓名标签联动 | MVP-1 |
 | 46 | F-WEB-046 | 界面 locale 与职业轨迹本地化 | 默认 `zh-CN`；UI/职业轨迹经 i18n catalog；切换 locale 时类型与常见职衔短语随语言变化；可扩展 `en` 等 | MVP-1 |

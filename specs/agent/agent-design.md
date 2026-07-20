@@ -55,7 +55,7 @@ LOOP:
 
 | mode | UI | 约束 |
 |------|-----|------|
-| `open_chat` | Agent Tab | 必填 `hcpId`；模型自主选 tool；改 Options 须用户明确意图 |
+| `open_chat` | Agent Tab | **通用**（不强制 `hcpId`）；模型自主选 tool；分身级修订走 `revise_options` |
 | `revise_options` | 一人一策页底 | 必填 `hcpId` + `optionRunId`；优先 `revise_engagement` |
 
 同一 `sessionId` 不混用 mode。
@@ -100,13 +100,16 @@ END
 
 勿硬编码百步旅程；节点仅保强制合规与引用。
 
-### C. open_chat
+### C. open_chat（通用）
 
 ```text
-chat(mode=open_chat) → Agent loop（自主选 tool）→ 流式可选 → 写 session
+chat(mode=open_chat) → 通用人设 + 对话历史（± 附件元数据）
+  → LlmClient → 写 session（hcp_id=_agent_general）
 ```
 
-不强制重跑全图。
+- 不强制 `hcpId`；不默认注入 Twin / Insights。  
+- 浏览器 localStorage 另存索引与正文。  
+- 不强制重跑提案全图。
 
 ### D. revise_options
 
@@ -188,8 +191,8 @@ packages/hcp-engagement-agent/
 
 - 同源 `doing_now` 可展示  
 - Options 3–5 条 + 双引用 + 合规旁注  
-- `open_chat` 可围绕该 HCP 问答  
-- `revise_options` 可改当前方案  
+- `open_chat` 为通用问答（不绑分身）；可讨论领域找人/合规等
+- `revise_options` 可改该 HCP 当前方案
 - 提案路径跳过 `retrieve_compliance` → 失败/拒答  
 
 测试：Vitest mock `LlmClient`；CI 不强制 live Key。

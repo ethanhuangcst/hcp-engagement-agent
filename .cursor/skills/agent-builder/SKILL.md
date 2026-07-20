@@ -195,5 +195,6 @@ get_twin_insights
 | UI | Agent |
 |----|-------|
 | Engagement Options | `propose_engagement_options` |
-| Engagement Assistant | 同 Agent + `revise_engagement` |
-| Insights 页 | 只读 Twin；可选解释建议依据 |
+| 一人一策页底 | `chat(mode=revise_options)` → `revise_engagement`（绑方案；本机 localStorage） |
+| HCP Engagement Agent Tab | `chat(mode=open_chat)`：**通用**对话，不强制 `hcpId`、不默认注入 Twin；落库 `_agent_general` |
+| Insights 页 | 只读 Twin；解释建议勿自动绑分身（可引导通用 Agent 或一人一策） |

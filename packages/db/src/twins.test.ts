@@ -12,6 +12,7 @@ vi.mock("pg", () => {
 });
 
 import {
+  AGENT_GENERAL_HCP_ID,
   _resetPoolForTests,
   getInsights,
   getTwin,
@@ -90,6 +91,9 @@ describe("@hca/db with mocked pg", () => {
     });
     const list = await listTwins();
     expect(list[0]?.doing_now).toBe("洞察");
+    const listSql = String(query.mock.calls.at(-1)?.[0] ?? "");
+    expect(listSql).toContain("WHERE t.hcp_id <>");
+    expect(query.mock.calls.at(-1)?.[1]).toEqual([AGENT_GENERAL_HCP_ID]);
 
     query.mockResolvedValue({ rows: [], rowCount: 1 });
     await upsertInsights({
@@ -128,5 +132,11 @@ describe("@hca/db with mocked pg", () => {
 
     query.mockResolvedValueOnce({ rows: [], rowCount: 1 });
     expect(await deleteTwin("hcp_test")).toBe(true);
+
+    expect(await deleteTwin(AGENT_GENERAL_HCP_ID)).toBe(false);
+    expect(query).not.toHaveBeenCalledWith(
+      expect.stringContaining("DELETE FROM hcp_twins"),
+      [AGENT_GENERAL_HCP_ID],
+    );
   });
 });

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { AuthorIdsTable } from "@/components/AuthorIdsTable";
-import { BuildProgress } from "@/components/BuildProgress";
+import { IntelligenceBuildPanel } from "@/components/BuildProgress";
 import { CareerTimeline } from "@/components/CareerTimeline";
 import { TagBadges } from "@/components/TagBadges";
 import { useHcpContext } from "@/store/hcp-context";
@@ -114,7 +114,9 @@ export default function TwinDetailClient() {
   const onBuildTerminal = useCallback(
     (phase: "done" | "error") => {
       setBuilding(false);
-      if (phase === "done") void reload();
+      if (phase === "done") {
+        void reload().then(() => setRunId(null));
+      }
       if (phase === "error") {
         setError("情报构建失败，见进度区详情");
       }
@@ -158,17 +160,6 @@ export default function TwinDetailClient() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap justify-end gap-2">
-        <button
-          type="button"
-          className="hca-btn-primary px-3 py-1.5"
-          disabled={building}
-          onClick={() => void onBuild()}
-        >
-          {building ? "构建中…" : "构建情报"}
-        </button>
-      </div>
-
       {error ? (
         <p className="text-sm text-[var(--hca-danger)]" role="alert">
           {error}
@@ -207,28 +198,14 @@ export default function TwinDetailClient() {
         ) : null}
       </div>
 
-      {runId ? (
-        <section className="space-y-2 rounded-[var(--radius-md)] border border-[var(--hca-line)] bg-[var(--hca-surface)] px-4 py-3">
-          <h2 className="text-sm font-medium">情报构建</h2>
-          <BuildProgress
-            hcpId={hcpId}
-            runId={runId}
-            onTerminal={onBuildTerminal}
-          />
-          {!building ? (
-            <button
-              type="button"
-              className="text-sm text-[var(--hca-ink-muted)] underline"
-              onClick={() => {
-                setRunId(null);
-                setError(null);
-              }}
-            >
-              收起进度
-            </button>
-          ) : null}
-        </section>
-      ) : null}
+      <IntelligenceBuildPanel
+        hcpId={hcpId}
+        twin={twin}
+        runId={runId}
+        building={building}
+        onBuild={() => void onBuild()}
+        onTerminal={onBuildTerminal}
+      />
 
       <div className="rounded-[var(--radius-md)] border border-[var(--hca-line)] bg-[var(--hca-surface)] px-4 py-3">
         <p className="text-xs text-[var(--hca-ink-muted)]">一句话洞察</p>

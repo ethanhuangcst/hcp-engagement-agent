@@ -2,24 +2,24 @@ import { randomUUID } from "node:crypto";
 import type { ChatMessage, ChatSession, EngagementOptionsRun } from "@hca/domain";
 import {
   getChatSession,
-  getLatestEngagementOptions,
   listChatSessions,
   upsertChatSession,
 } from "@hca/db";
 import { isLlmStrict } from "./config.js";
-import { getTwinInsights, slimInsightsForPrompt } from "./insights.js";
 import { createLlmClient, type LlmClient } from "./llm.js";
 import { reviseEngagement } from "./revise.js";
 import {
+  AGENT_GENERAL_HCP_ID,
   agentError,
   ChatInputSchema,
   type AgentError,
 } from "./types.js";
 
-const OPEN_SYSTEM = `你是 HCP Engagement Agent（中国市场）。
-围绕当前 HCP 做访前问答与策略讨论。可引用已给洞察摘要。
+const OPEN_SYSTEM = `你是 HCP Engagement Agent（中国市场药企互动助手）。
+这是**通用开放对话**：不默认绑定某一位医生数字分身；可讨论疾病领域找人、渠道策略、合规边界、访前准备等。
+若用户点名某位 HCP / 医院 / 专科，按通用公开知识与合规边界作答；需要分身级事实时，提示用户先在「HCP数字分身」建立并打开该人，再到一人一策修订。
 硬边界：不编造说明书外疗效；不假设处方/统方；院内活动须提示机构同意与代表备案；不替代 MLR。
-改写 Engagement Options 仅当用户明确要求；否则只给建议。用简洁中文回复。`;
+用简洁中文回复。`;
 
 export type ChatResult = {
   sessionId: string;
@@ -50,12 +50,6 @@ export async function chat(
     attachments,
   } = parsed.data;
 
-  if (mode === "revise_options" && !optionRunId) {
-    throw agentError("VALIDATION_ERROR", "revise_options 须提供 optionRunId", {
-      repair_hint: "先生成一人一策方案",
-    });
-  }
-
   let session: ChatSession | null = null;
   if (incomingSessionId) {
     session = await getChatSession(incomingSessionId);
@@ -69,7 +63,12 @@ export async function chat(
         },
       );
     }
-    if (session && session.hcp_id !== hcpId) {
+    if (
+      mode === "revise_options" &&
+      session &&
+      hcpId &&
+      session.hcp_id !== hcpId
+    ) {
       throw agentError("VALIDATION_ERROR", "session 与 hcpId 不匹配", {
         details: { sessionId: incomingSessionId, hcpId },
       });
@@ -88,7 +87,7 @@ export async function chat(
   if (mode === "revise_options") {
     const revise = await reviseEngagement(
       {
-        hcpId,
+        hcpId: hcpId!,
         optionRunId: optionRunId!,
         feedback: message,
         optionId,
@@ -101,8 +100,10 @@ export async function chat(
       created_at: new Date().toISOString(),
     };
     const next: ChatSession = {
-      session_id: session?.session_id ?? `chs_${randomUUID().replace(/-/g, "").slice(0, 16)}`,
-      hcp_id: hcpId,
+      session_id:
+        session?.session_id ??
+        `chs_${randomUUID().replace(/-/g, "").slice(0, 16)}`,
+      hcp_id: hcpId!,
       mode,
       option_run_id: optionRunId,
       option_id: optionId,
@@ -121,9 +122,8 @@ export async function chat(
     };
   }
 
-  // open_chat
-  const bundle = await getTwinInsights(hcpId);
-  const latest = await getLatestEngagementOptions(hcpId);
+  // open_chat：通用 Agent，不绑定分身洞察
+  const workspaceId = AGENT_GENERAL_HCP_ID;
   const attachNote =
     attachments && attachments.length > 0
       ? `\n附件：${attachments.map((a) => a.name + (a.summary ? `(${a.summary})` : "")).join("、")}`
@@ -145,13 +145,9 @@ export async function chat(
       const c = createLlmClient();
       if ("error" in c) throw c.error;
     }
-    const name =
-      bundle.twin.identity?.name_zh ?? bundle.twin.profile.name_zh;
     reply = [
-      `围绕 ${name}：${bundle.insights.doing_now?.summary ?? "洞察摘要暂缺"}。`,
-      latest
-        ? `当前一人一策共 ${latest.options.length} 条（run=${latest.run_id}）；若要改写方案请明确说明，或到一人一策页底用修订模式。`
-        : "尚未生成一人一策；可在工作台「一人一策」生成方案。",
+      "这是通用开放对话，未绑定某一位医生数字分身。",
+      "可继续问疾病领域找人、渠道/合规边界或访前准备；若要基于某位 HCP 的一人一策修订，请到工作台「一人一策」页底。",
       "边界：院内活动须机构同意与代表备案；不替代正式 MLR。",
       attachNote ? `已收到附件元数据。${attachNote}` : "",
     ]
@@ -160,20 +156,21 @@ export async function chat(
   } else {
     try {
       const history = (session?.messages ?? [])
-        .slice(-8)
-        .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+        .slice(-10)
+        .map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        }));
       const result = await llm.chat([
         { role: "system", content: OPEN_SYSTEM },
-        {
-          role: "user",
-          content: `当前 HCP 洞察摘要：\n${slimInsightsForPrompt(bundle)}\n\n最新方案概要：${
-            latest
-              ? latest.options
-                  .map((o) => `${o.label}:${o.action}`)
-                  .join("；")
-              : "无"
-          }${attachNote}`,
-        },
+        ...(attachNote
+          ? ([
+              {
+                role: "user" as const,
+                content: `本轮附件元数据：${attachNote}`,
+              },
+            ] as const)
+          : []),
         ...history,
         { role: "user", content: message },
       ]);
@@ -182,7 +179,7 @@ export async function chat(
     } catch (err) {
       if (isLlmStrict()) throw err as AgentError;
       reply =
-        "模型暂不可用。请稍后重试，或先在一人一策查看已生成方案。院内活动须机构同意；不替代 MLR。";
+        "模型暂不可用。请稍后重试。院内活动须机构同意；不替代 MLR。";
     }
   }
 
@@ -191,16 +188,14 @@ export async function chat(
     content: reply,
     created_at: new Date().toISOString(),
   };
+  const titleSeed = message.trim().slice(0, 20) || "开放对话";
   const next: ChatSession = {
     session_id:
       session?.session_id ??
       `chs_${randomUUID().replace(/-/g, "").slice(0, 16)}`,
-    hcp_id: hcpId,
+    hcp_id: workspaceId,
     mode: "open_chat",
-    option_run_id: optionRunId ?? latest?.run_id,
-    title:
-      session?.title ??
-      `${bundle.twin.identity?.name_zh ?? bundle.twin.profile.name_zh} · 对话`,
+    title: session?.title ?? titleSeed,
     messages: [...(session?.messages ?? []), userMsg, assistantMsg],
     as_of: asOf,
     llm: llmMeta,
@@ -210,11 +205,9 @@ export async function chat(
     sessionId: next.session_id,
     mode: "open_chat",
     messages: next.messages,
-    options: latest?.options,
-    optionRunId: next.option_run_id,
   };
 }
 
-export async function listOpenChatSessions(hcpId: string) {
-  return listChatSessions(hcpId, "open_chat");
+export async function listOpenChatSessions(hcpId?: string) {
+  return listChatSessions(hcpId ?? AGENT_GENERAL_HCP_ID, "open_chat");
 }

@@ -74,7 +74,7 @@
 |------|------|------|
 | 一句话洞察 | 后台 / Twin 完成后 | `synthesizeDoingNow` → `doing_now.summary` + 可选 `analysis` |
 | 提案 | 一人一策「生成方案」 | 薄编排：Insights → 学术‖合规检索 → gate → Options → 合规检查 → 写入 Postgres |
-| Chat · 开放 | Agent Web UI | `open_chat`：模型自主选 tool；不强制绑 Option |
+| Chat · 开放 | Agent Web UI | `open_chat`：**通用** Agent；不强制 `hcpId`/Option；不默认 Twin |
 | Chat · 修订 | 一人一策页底 | `revise_options`：必须绑当前方案；优先 `revise_engagement` |
 
 旧称「insight / chat」两种能力：**拆成上表四条路径**；其中「完整洞察分析」的事实层来自 Twin/MCP，Agent 负责**文案合成与 Engagement 决策**，不要把 Agent 做成第二套爬虫。
@@ -108,7 +108,8 @@ LOOP:
 
 ## R5. 验收（最小）
 
-- 朱同玉：可生成同源一句话洞察；Options 3–5 条且含双引用与合规旁注；`open_chat` 可围绕该 HCP 问答；`revise_options` 可改当前方案。
+- 朱同玉：可生成同源一句话洞察；Options 3–5 条且含双引用与合规旁注；`revise_options` 可改当前方案。  
+- `open_chat`：通用对话（如领域找人）不依赖当前打开的分身；历史与正文本机可恢复。
 - `retrieve_compliance` 在提案路径不可被跳过；无合规命中时对敏感动作降级或拒答并说明原因。
 
 ---

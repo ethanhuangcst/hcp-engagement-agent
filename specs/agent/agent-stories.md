@@ -202,26 +202,28 @@ Feature: revise_options
 ## US-AGT-005 开放对话、流式与附件上下文
 
 **As a** 药企 HCP 互动负责人  
-**I want to** 在 Engagement Agent 中就当前 HCP 多轮对话，可选流式输出与附件摘要  
-**So that** 我能解释洞察、讨论渠道，而不与一人一策修订会话串线  
+**I want to** 在 Engagement Agent 中进行**通用**多轮对话，可选流式输出与附件摘要  
+**So that** 我能做领域找人、渠道与合规讨论，而不被某一分身上下文绑死，且不与一人一策修订会话串线  
 
 **覆盖**：F-AGT-019、022、023 · I-AGT-003  
 **MVP**：MVP-4  
 
 ### 规则清单
 
+- `open_chat` **不**默认注入 Twin / Insights；`hcpId` 可选（P0 客户端不传）。
 - `open_chat` 不直接改写 `doing_now`；刷新洞察走 `synthesizeDoingNow`。
+- 分身级方案修订仅 `revise_options`（一人一策页底）。
+- 服务端 `open_chat` 会话落库 `hcp_id=_agent_general`（占位 Twin，非真实医生）。
 
 ### 验收标准
 
 ```gherkin
 Feature: open_chat
 
-  Scenario: 开放对话面向当前 HCP
-    Given 用户已选定朱同玉分身
-    When 用户在 Agent 对话中提问访前相关问题
-    Then 回复基于当前 HCP 上下文
-    And 模型可按需读取洞察或检索知识
+  Scenario: 开放对话为通用 Agent
+    Given 用户未要求绑定某一分身
+    When 用户在 Agent 对话中提问（如疾病领域找人）
+    Then 回复不依赖「当前打开的数字分身」洞察
     And 默认不在未表达意图时改写一人一策方案
 
   Scenario: 流式输出可落盘

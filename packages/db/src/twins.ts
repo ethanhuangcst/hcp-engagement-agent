@@ -8,6 +8,9 @@ import {
 } from "@hca/domain";
 import { getPool } from "./client.js";
 
+/** open_chat 通用工作区占位 hcp_id（满足 FK；非真实医生，不进数字分身列表） */
+export const AGENT_GENERAL_HCP_ID = "_agent_general";
+
 export type TwinListItem = {
   hcp_id: string;
   name_zh: string;
@@ -67,6 +70,7 @@ export async function getTwin(hcpId: string): Promise<VirtualTwin | null> {
 }
 
 export async function deleteTwin(hcpId: string): Promise<boolean> {
+  if (hcpId === AGENT_GENERAL_HCP_ID) return false;
   const pool = getPool();
   const r = await pool.query(`DELETE FROM hcp_twins WHERE hcp_id = $1`, [hcpId]);
   return (r.rowCount ?? 0) > 0;
@@ -93,7 +97,9 @@ export async function listTwins(): Promise<TwinListItem[]> {
             ) AS doing_now
      FROM hcp_twins t
      LEFT JOIN hcp_insights i ON i.hcp_id = t.hcp_id
+     WHERE t.hcp_id <> $1
      ORDER BY t.updated_at DESC`,
+    [AGENT_GENERAL_HCP_ID],
   );
   return r.rows.map((row) => ({
     hcp_id: row.hcp_id,

@@ -100,7 +100,7 @@ data/
 | MVP | 本规格重心 | 验收重心 |
 |-----|------------|----------|
 | **MVP-3** | 双 collection、安全绑定、Hybrid、合规种子与检索、学术按需 ingest / `retrieve_academic` | 合规抽检命中 `clause_id`；专科可命中 |
-| **后置** | 租户 SOP、eval、Parent-Document（增强） | 跨租户拒绝；回归集；不挡 MVP-3 闭环 |
+| **后置 · LOW PRIORITY** | 租户 SOP、eval、Parent-Document（增强） | 跨租户拒绝；回归集；不挡 MVP-3 闭环 |
 
 旧 R0–R4 代号废止，统一用产品 MVP。
 
@@ -117,28 +117,28 @@ data/
 | 5 | F-RAG-002c | 默认禁止托管向量 SaaS | 配置层默认仅 `qdrant-local`；改用公有云向量须 ADR + 显式 `VECTOR_BACKEND` | MVP-3 |
 | 6 | F-RAG-002d | 运行时数据不入库 | `data/rag/corpus/**`、`data/qdrant/**`、manifest 内容 gitignore；仅保留目录 `.gitkeep` | MVP-3 |
 | 7 | F-RAG-003 | 输入 Zod 校验 | `retrieve_*` / `ingest_*` 入参 Zod；结构化错误无堆栈 | MVP-3 |
-| 8 | F-RAG-004 | Embedding（进程内默认） | MVP-3 **默认**进程内小模型（如 Xenova `bge-small-zh`）；可经 `EMBEDDING_MODEL` / `EMBEDDING_BASE_URL` 换更大模型。BGE-M3 等为**后置升级**，不挡 MVP-3 验收 | MVP-3 |
+| 8 | F-RAG-004 | Embedding（进程内默认） | MVP-3 **默认**进程内小模型（如 Xenova `bge-small-zh`）；可经 `EMBEDDING_MODEL` / `EMBEDDING_BASE_URL` 换更大模型。BGE-M3 等为**后置升级 · LOW PRIORITY**，不挡 MVP-3 验收 | MVP-3 · LOW PRIORITY（升级） |
 | 9 | F-RAG-005 | Sparse / BM25 | 药名、MeSH、条款号等关键词路；与 dense 并行 | MVP-3 |
 | 10 | F-RAG-006 | Hybrid 融合 | RRF：dense ~0.7 + sparse ~0.3（可配）；召回池再 rerank | MVP-3 |
-| 11 | F-RAG-007 | Rerank | MVP-3 **默认**进程内小 rerank（如 Xenova `bge-reranker-base`）；Top-N → top-5。`bge-reranker-v2-m3` 为**后置升级** | MVP-3 |
+| 11 | F-RAG-007 | Rerank | MVP-3 **默认**进程内小 rerank（如 Xenova `bge-reranker-base`）；Top-N → top-5。`bge-reranker-v2-m3` 为**后置升级 · LOW PRIORITY** | MVP-3 · LOW PRIORITY（升级） |
 | 12 | F-RAG-008 | 学术检索 | `retrieve_academic`：filter specialty / year / language；返回带 citation 的 chunks | MVP-3 |
 | 13 | F-RAG-009 | 合规检索 | `retrieve_compliance`：filter jurisdiction=CN、tenant_id；条款感知；供 Agent **强制**调用 | MVP-3 |
 | 14 | F-RAG-010 | Chunk 契约 / Citation | payload：`text, source, version, as_of, score` + 学术 `pmid/doi/authority` 或合规 `clause_id` | MVP-3 |
 | 15 | F-RAG-011 | 合规按条款切块 | 自本地 corpus 读入；按条款号切块；禁止整 PDF 糊成一块 | MVP-3 |
-| 16 | F-RAG-012 | 学术切块 | MVP-3：**摘要/fixture 整段切块**入本地 Qdrant 即可验收。全文按 section、指南按章节为**后置增强** | MVP-3 |
+| 16 | F-RAG-012 | 学术切块 | MVP-3：**摘要/fixture 整段切块**入本地 Qdrant 即可验收。全文按 section、指南按章节为**后置增强 · LOW PRIORITY** | MVP-3 · LOW PRIORITY（增强） |
 | 17 | F-RAG-013 | 合规种子灌库 | 从 `corpus/compliance` 灌 P0 准则；版本号 + effective_date；写 manifest | MVP-3 |
 | 18 | F-RAG-014 | 专科归一化 | 别名 → 受控 `specialty` / MeSH；禁止仅自由文本当 ingest query | MVP-3 |
 | 19 | F-RAG-015 | Coverage check | 按 specialty 判断 chunk/近窗文献是否充足 → ready \| sparse \| pending | MVP-3 |
 | 20 | F-RAG-016 | 按需学术 ingest | **先落** `corpus/academic/{specialty}/` 再 embed upsert；异步不阻塞 Twin。MVP-3 允许 **fixture / 本地语料优先**；在线 PubMed 拉取为可选增强 | MVP-3 |
 | 21 | F-RAG-017 | Ingest 状态回写 | 写 Postgres `rag_ingest_jobs` / `ingest_manifest`（`knowledge_status` · `knowledge_job_id` · 时间戳）；**不**写入 Twin JSON；UI 经 `get_ingest_status` 或联表 | MVP-3 |
 | 22 | F-RAG-018 | Ingest manifest | 更新 Postgres `ingest_manifest`（doc_id、版本、as_of、specialty、本地 path） | MVP-3 |
-| 23 | F-RAG-019 | 异步任务与互斥 | MVP-3：**进程内异步** + 同 specialty 互斥/去重即可。BullMQ/Redis 为**后置**（多实例/高并发时再上） | MVP-3 |
-| 24 | F-RAG-020 | 获取与版权底线 | MVP-3：**摘要 / OA / fixture 优先**；闭源不存全文；第三方仅作拉取源。完整 NCBI 配额限速管线见 [`ToDo.md`](../ToDo.md)，不挡本批验收 | MVP-3 |
-| 25 | F-RAG-021 | 租户 SOP 入库 | 文件进 `corpus/tenants/{id}/sop/`；写入**同一** `compliance_index`，payload 强制 `tenant_id`；跨租户检索拒绝；**不分租户 collection** | 后置 |
-| 26 | F-RAG-022 | Parent-Document（P2） | 小块召回、生成时可拉 parent 段落；**非 P0**；后置 可选增强 | 后置 |
+| 23 | F-RAG-019 | 异步任务与互斥 | MVP-3：**进程内异步** + 同 specialty 互斥/去重即可。BullMQ/Redis 为**后置 · LOW PRIORITY**（多实例/高并发时再上） | MVP-3 · LOW PRIORITY（BullMQ） |
+| 24 | F-RAG-020 | 获取与版权底线 | MVP-3：**摘要 / OA / fixture 优先**；闭源不存全文；第三方仅作拉取源。完整 NCBI 配额限速管线见 [`ToDo.md`](../ToDo.md)，**LOW PRIORITY**，不挡本批验收 | MVP-3 · LOW PRIORITY（NCBI 管线） |
+| 25 | F-RAG-021 | 租户 SOP 入库 | 文件进 `corpus/tenants/{id}/sop/`；写入**同一** `compliance_index`，payload 强制 `tenant_id`；跨租户检索拒绝；**不分租户 collection**。**LOW PRIORITY** | 后置 · LOW PRIORITY |
+| 26 | F-RAG-022 | Parent-Document（P2） | 小块召回、生成时可拉 parent 段落；**非 P0**；**LOW PRIORITY** | 后置 · LOW PRIORITY |
 | 27 | F-RAG-023 | 健康检查 | Qdrant 可达、双 collection、绑定地址安全摘要（是否 loopback/internal） | MVP-3 |
 | 28 | F-RAG-024 | 环境变量 | `DATABASE_URL`、`QDRANT_URL`（默认 localhost）、`EMBEDDING_MODEL`、`EMBEDDING_BASE_URL?`、`RERANK_MODEL?`、`RERANK_BASE_URL?`、`HCA_DATA_DIR?`、`NCBI_API_KEY?`、`VECTOR_BACKEND=qdrant-local`、`QDRANT_ALLOW_NON_LOCAL?`（默认 false） | MVP-3 |
-| 29 | F-RAG-025 | Eval 回归 | `data/rag/eval-set.json`；不含真实客户 SOP 明文 | 后置 |
+| 29 | F-RAG-025 | Eval 回归 | `data/rag/eval-set.json`；不含真实客户 SOP 明文。**LOW PRIORITY** | 后置 · LOW PRIORITY |
 | 30 | F-RAG-026 | 契约与安全测试 | Vitest：双索引不串库、tenant 隔离；断言默认 URL 非公网；gitignore 覆盖 corpus/qdrant | MVP-3 |
 | 31 | F-RAG-027 | 朱同玉/专科验收 | 本地库可命中；合规可引用；新专科 on-demand 写入本地目录 | MVP-3 |
 

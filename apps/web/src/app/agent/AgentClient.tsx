@@ -1,61 +1,30 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useHcpContext } from "@/store/hcp-context";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
+import { ChatTypingIndicator } from "@/components/ChatTypingIndicator";
+import {
+  DEFAULT_AGENT_GREETING,
+  loadAgentIndex,
+  loadAgentSession,
+  upsertAgentSessionMessages,
+  type AgentChatMsg,
+  type AgentSessionIndexItem,
+} from "@/lib/agent-chat-storage";
 
-type ChatMsg = {
-  role: "user" | "assistant";
-  content: string;
-  attachments?: { name: string }[];
-};
-
-type SessionIndex = {
-  sessionId: string;
-  title: string;
-  hcpId: string;
-};
-
-const COOKIE_KEY = "hca-agent-session-index";
 const MIN_W = 480;
 const MIN_H = 320;
 
-function readIndex(): SessionIndex[] {
-  if (typeof document === "undefined") return [];
-  const raw = document.cookie
-    .split("; ")
-    .find((r) => r.startsWith(`${COOKIE_KEY}=`))
-    ?.split("=")[1];
-  if (!raw) return [];
-  try {
-    return JSON.parse(decodeURIComponent(raw)) as SessionIndex[];
-  } catch {
-    return [];
-  }
-}
-
-function writeIndex(list: SessionIndex[]) {
-  const value = encodeURIComponent(JSON.stringify(list.slice(0, 30)));
-  document.cookie = `${COOKIE_KEY}=${value}; path=/; max-age=31536000; SameSite=Lax`;
-}
-
 export default function AgentClient() {
-  const selectedHcpId = useHcpContext((s) => s.selectedHcpId);
-  const selectedName = useHcpContext((s) => s.selectedName);
-  const openTwins = useHcpContext((s) => s.openTwins);
-  const hcpId = selectedHcpId ?? openTwins[0]?.hcpId ?? null;
-  const displayName =
-    selectedName ||
-    openTwins.find((t) => t.hcpId === hcpId)?.name ||
-    "未选定 HCP";
-
-  const [index, setIndex] = useState<SessionIndex[]>([]);
+  const [index, setIndex] = useState<AgentSessionIndexItem[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<ChatMsg[]>([
-    {
-      role: "assistant",
-      content:
-        "我是 HCP Engagement Agent。可围绕当前 HCP 做访前问答；与一人一策页底修订模式分会话。正式外发仍须 MLR。",
-    },
+  const [messages, setMessages] = useState<AgentChatMsg[]>([
+    DEFAULT_AGENT_GREETING,
   ]);
   const [draft, setDraft] = useState("");
   const [files, setFiles] = useState<string[]>([]);
@@ -68,63 +37,79 @@ export default function AgentClient() {
     w: number;
     h: number;
   } | null>(null);
+  const activeTitleRef = useRef("开放对话");
 
   useEffect(() => {
-    setIndex(readIndex());
+    setIndex(loadAgentIndex());
   }, []);
 
-  const filteredIndex = useMemo(
-    () => (hcpId ? index.filter((s) => s.hcpId === hcpId) : index),
-    [index, hcpId],
+  const persistLocal = useCallback(
+    (sessionId: string, nextMessages: AgentChatMsg[], title?: string) => {
+      const t = title ?? activeTitleRef.current;
+      activeTitleRef.current = t;
+      upsertAgentSessionMessages({
+        sessionId,
+        title: t,
+        messages: nextMessages,
+      });
+      setIndex(loadAgentIndex());
+    },
+    [],
   );
 
-  const loadSession = useCallback(async (sessionId: string) => {
-    const res = await fetch(
-      `/api/engagement/sessions/${encodeURIComponent(sessionId)}`,
-    );
-    const data = await res.json();
-    if (!res.ok || !data.session) return;
-    setActiveId(sessionId);
-    setMessages(
-      (data.session.messages as ChatMsg[]).filter(
-        (m) => m.role === "user" || m.role === "assistant",
-      ),
-    );
-  }, []);
+  const loadSession = useCallback(
+    async (sessionId: string) => {
+      const local = loadAgentSession(sessionId);
+      if (local && local.messages.length > 0) {
+        setActiveId(sessionId);
+        activeTitleRef.current = local.title;
+        setMessages(local.messages);
+        return;
+      }
+      try {
+        const res = await fetch(
+          `/api/engagement/sessions/${encodeURIComponent(sessionId)}`,
+        );
+        const data = await res.json();
+        if (!res.ok || !data.session) return;
+        const msgs = (data.session.messages as AgentChatMsg[]).filter(
+          (m) => m.role === "user" || m.role === "assistant",
+        );
+        const title =
+          data.session.title ||
+          index.find((s) => s.sessionId === sessionId)?.title ||
+          "历史会话";
+        setActiveId(sessionId);
+        activeTitleRef.current = title;
+        setMessages(msgs.length ? msgs : [DEFAULT_AGENT_GREETING]);
+        if (msgs.length) persistLocal(sessionId, msgs, title);
+      } catch {
+        /* ignore */
+      }
+    },
+    [index, persistLocal],
+  );
 
   const newSession = () => {
     setActiveId(null);
-    setMessages([
-      {
-        role: "assistant",
-        content: `新建开放对话（open_chat）。当前 HCP：${displayName}。`,
-      },
-    ]);
+    activeTitleRef.current = "开放对话";
+    setMessages([DEFAULT_AGENT_GREETING]);
     setFiles([]);
   };
 
   const send = async () => {
-    if (!draft.trim()) return;
-    if (!hcpId) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: "请先在「HCP数字分身」打开并选定一位 HCP。",
-        },
-      ]);
-      return;
-    }
+    if (!draft.trim() || busy) return;
     const text = draft.trim();
     const attachments = files.map((name) => ({
       name,
       summary: "用户上传附件元数据",
     }));
     setDraft("");
-    setMessages((prev) => [
-      ...prev,
+    const withUser: AgentChatMsg[] = [
+      ...messages,
       { role: "user", content: text, attachments },
-    ]);
+    ];
+    setMessages(withUser);
     setBusy(true);
     try {
       const res = await fetch("/api/engagement/chat", {
@@ -133,44 +118,47 @@ export default function AgentClient() {
         body: JSON.stringify({
           mode: "open_chat",
           sessionId: activeId ?? undefined,
-          hcpId,
           message: text,
           attachments: attachments.length ? attachments : undefined,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setMessages((prev) => [
-          ...prev,
+        const failed: AgentChatMsg[] = [
+          ...withUser,
           {
             role: "assistant",
             content: data.error?.message ?? "对话失败",
           },
-        ]);
+        ];
+        setMessages(failed);
+        if (activeId) persistLocal(activeId, failed);
         return;
       }
-      setActiveId(data.sessionId);
-      const nextIndex: SessionIndex[] = [
-        {
-          sessionId: data.sessionId,
-          title: `${displayName} · ${text.slice(0, 16)}`,
-          hcpId,
-        },
-        ...index.filter((s) => s.sessionId !== data.sessionId),
-      ];
-      setIndex(nextIndex);
-      writeIndex(nextIndex);
+      const sessionId = data.sessionId as string;
+      const title =
+        activeId && activeTitleRef.current !== "开放对话"
+          ? activeTitleRef.current
+          : text.slice(0, 24) || "开放对话";
+      activeTitleRef.current = title;
+      setActiveId(sessionId);
       const last = data.messages?.[data.messages.length - 1];
-      if (last?.role === "assistant") {
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: last.content },
-        ]);
-      }
+      const nextMessages: AgentChatMsg[] =
+        last?.role === "assistant"
+          ? [...withUser, { role: "assistant", content: last.content }]
+          : withUser;
+      setMessages(nextMessages);
+      persistLocal(sessionId, nextMessages, title);
       setFiles([]);
     } finally {
       setBusy(false);
     }
+  };
+
+  const onDraftKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+    e.preventDefault();
+    void send();
   };
 
   useEffect(() => {
@@ -195,16 +183,9 @@ export default function AgentClient() {
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <p className="text-xs text-[var(--hca-ink-muted)]">
-          HCP Engagement Agent
-        </p>
         <h1 className="font-[family-name:var(--font-display)] text-[28px] font-medium leading-tight">
-          开放对话
+          HCP Engagement 智能助理
         </h1>
-        <p className="text-sm text-[var(--hca-ink-muted)]">
-          当前 HCP：{displayName}
-          {hcpId ? `（hcp:${hcpId}）` : ""} · mode=open_chat
-        </p>
       </div>
 
       <div className="flex flex-wrap gap-4">
@@ -216,9 +197,11 @@ export default function AgentClient() {
           >
             新建会话
           </button>
-          <p className="text-xs text-[var(--hca-ink-muted)]">历史（浏览器索引）</p>
+          <p className="text-xs text-[var(--hca-ink-muted)]">
+            历史（本机浏览器）
+          </p>
           <ul className="space-y-1">
-            {filteredIndex.map((s) => (
+            {index.map((s) => (
               <li key={s.sessionId}>
                 <button
                   type="button"
@@ -233,7 +216,7 @@ export default function AgentClient() {
                 </button>
               </li>
             ))}
-            {filteredIndex.length === 0 ? (
+            {index.length === 0 ? (
               <li className="text-xs text-[var(--hca-ink-muted)]">暂无历史</li>
             ) : null}
           </ul>
@@ -261,6 +244,7 @@ export default function AgentClient() {
                 ) : null}
               </div>
             ))}
+            {busy ? <ChatTypingIndicator /> : null}
           </div>
 
           <div className="border-t border-[var(--hca-line)] p-3">
@@ -289,8 +273,11 @@ export default function AgentClient() {
                 className="min-h-[3.5rem] flex-1 rounded-[var(--radius-md)] border border-[var(--hca-line)] px-3 py-2 text-sm"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={onDraftKeyDown}
                 placeholder="输入问题…"
                 rows={2}
+                disabled={busy}
+                aria-describedby="agent-chat-hint"
               />
               <button
                 type="button"
@@ -298,9 +285,15 @@ export default function AgentClient() {
                 disabled={busy || !draft.trim()}
                 onClick={() => void send()}
               >
-                发送
+                {busy ? "发送中…" : "发送"}
               </button>
             </div>
+            <p
+              id="agent-chat-hint"
+              className="mt-2 text-[11px] text-[var(--hca-ink-muted)]"
+            >
+              Enter 发送 · Shift+Enter 换行 · 记录保存在本机
+            </p>
           </div>
 
           <button
@@ -320,7 +313,7 @@ export default function AgentClient() {
         </div>
       </div>
       <p className="text-xs text-[var(--hca-ink-muted)]">
-        面板最小 {MIN_W}×{MIN_H}；历史索引写入浏览器 cookie，消息正文在 Postgres。
+        面板最小 {MIN_W}×{MIN_H}；通用会话索引与消息写入本机 localStorage。服务端落在通用工作区以便续聊。
       </p>
     </div>
   );

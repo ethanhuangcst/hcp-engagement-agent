@@ -56,14 +56,11 @@ export default function TwinsListPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1.5">
-          <p className="text-xs text-[var(--hca-ink-muted)]">数字分身</p>
           <h1 className="font-[family-name:var(--font-display)] text-[28px] font-medium leading-tight">
-            HCP 数字分身列表
+            HCP列表
           </h1>
           <p className="text-sm text-[var(--hca-ink-muted)]">
-            {loading
-              ? "加载中…"
-              : `共 ${items.length} 位医生分身 · 每一行是一位独立 HCP`}
+            {loading ? "加载中…" : `共 ${items.length} 位HCP`}
           </p>
         </div>
         <Link href="/twins/new" className="hca-btn-primary">

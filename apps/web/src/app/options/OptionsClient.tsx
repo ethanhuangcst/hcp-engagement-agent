@@ -1,7 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { ChatTypingIndicator } from "@/components/ChatTypingIndicator";
+import {
+  DEFAULT_REVISE_GREETING,
+  loadReviseChatThread,
+  saveReviseChatThread,
+  type ReviseChatMsg,
+} from "@/lib/revise-chat-storage";
 import { useHcpContext } from "@/store/hcp-context";
 
 type Ref = { id: string; label: string };
@@ -25,8 +32,6 @@ type GateResult = {
   disclaimer?: string;
 };
 
-type ChatMsg = { role: "user" | "assistant"; content: string };
-
 export default function OptionsClient({ hcpId }: { hcpId: string }) {
   const openTwins = useHcpContext((s) => s.openTwins);
   const selectedName = useHcpContext((s) => s.selectedName);
@@ -39,14 +44,14 @@ export default function OptionsClient({ hcpId }: { hcpId: string }) {
   const [gate, setGate] = useState<GateResult | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [replyPending, setReplyPending] = useState(false);
   const [miniDraft, setMiniDraft] = useState("");
-  const [miniLog, setMiniLog] = useState<ChatMsg[]>([
-    {
-      role: "assistant",
-      content: "可针对当前方案提问，例如调整渠道或合规旁注。",
-    },
+  const [miniLog, setMiniLog] = useState<ReviseChatMsg[]>([
+    DEFAULT_REVISE_GREETING,
   ]);
   const [reviseSessionId, setReviseSessionId] = useState<string | null>(null);
+  /** 切换线程时跳过一次写回，避免把旧消息写入新 optionId */
+  const skipChatSave = useRef(false);
 
   const load = useCallback(async () => {
     const res = await fetch(
@@ -66,6 +71,44 @@ export default function OptionsClient({ hcpId }: { hcpId: string }) {
   }, [load]);
 
   const opt = options.find((o) => o.id === tab) ?? options[0];
+
+  /** 切换 HCP / run / 方案选项卡时，从 localStorage 恢复该线程 */
+  useEffect(() => {
+    skipChatSave.current = true;
+    if (!runId || !opt?.id) {
+      setMiniLog([DEFAULT_REVISE_GREETING]);
+      setReviseSessionId(null);
+      queueMicrotask(() => {
+        skipChatSave.current = false;
+      });
+      return;
+    }
+    const saved = loadReviseChatThread(hcpId, runId, opt.id);
+    if (saved) {
+      setMiniLog(saved.messages);
+      setReviseSessionId(saved.sessionId);
+    } else {
+      setMiniLog([DEFAULT_REVISE_GREETING]);
+      setReviseSessionId(null);
+    }
+    queueMicrotask(() => {
+      skipChatSave.current = false;
+    });
+  }, [hcpId, runId, opt?.id]);
+
+  /** 消息变更后写回本地（按 hcp + run + option 隔离） */
+  useEffect(() => {
+    if (skipChatSave.current || !runId || !opt?.id) return;
+    if (miniLog.length === 0) return;
+    saveReviseChatThread({
+      hcpId,
+      runId,
+      optionId: opt.id,
+      sessionId: reviseSessionId,
+      messages: miniLog,
+      updatedAt: new Date().toISOString(),
+    });
+  }, [hcpId, runId, opt?.id, miniLog, reviseSessionId]);
 
   const generate = async () => {
     setBusy(true);
@@ -122,11 +165,11 @@ export default function OptionsClient({ hcpId }: { hcpId: string }) {
   };
 
   const sendRevise = async () => {
-    if (!miniDraft.trim() || !runId || !opt) return;
+    if (!miniDraft.trim() || !runId || !opt || replyPending) return;
     const q = miniDraft.trim();
     setMiniDraft("");
     setMiniLog((prev) => [...prev, { role: "user", content: q }]);
-    setBusy(true);
+    setReplyPending(true);
     try {
       const res = await fetch("/api/engagement/chat", {
         method: "POST",
@@ -161,8 +204,14 @@ export default function OptionsClient({ hcpId }: { hcpId: string }) {
         ]);
       }
     } finally {
-      setBusy(false);
+      setReplyPending(false);
     }
+  };
+
+  const onReviseKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+    e.preventDefault();
+    void sendRevise();
   };
 
   const gateLabel =
@@ -312,7 +361,7 @@ export default function OptionsClient({ hcpId }: { hcpId: string }) {
               <Link href="/agent" className="underline">
                 HCP Engagement Agent
               </Link>
-              （open_chat）。
+              （open_chat）。聊天记录保存在本机浏览器（按方案选项卡分别保存）。
             </p>
             <div className="space-y-2">
               {miniLog.map((m, i) => (
@@ -327,23 +376,33 @@ export default function OptionsClient({ hcpId }: { hcpId: string }) {
                   {m.content}
                 </div>
               ))}
+              {replyPending ? <ChatTypingIndicator /> : null}
               <div className="flex items-end gap-2">
                 <textarea
                   className="min-h-[4rem] flex-1 rounded-[var(--radius-md)] border border-[var(--hca-line)] bg-[var(--hca-surface)] px-3 py-2 text-sm"
                   value={miniDraft}
                   onChange={(e) => setMiniDraft(e.target.value)}
+                  onKeyDown={onReviseKeyDown}
                   placeholder="输入修订意见…"
                   rows={2}
+                  disabled={replyPending}
+                  aria-describedby="option-chat-hint"
                 />
                 <button
                   type="button"
                   className="hca-btn-primary"
-                  disabled={busy || !runId || !miniDraft.trim()}
+                  disabled={replyPending || !runId || !miniDraft.trim()}
                   onClick={() => void sendRevise()}
                 >
-                  发送
+                  {replyPending ? "发送中…" : "发送"}
                 </button>
               </div>
+              <p
+                id="option-chat-hint"
+                className="text-[11px] text-[var(--hca-ink-muted)]"
+              >
+                Enter 发送 · Shift+Enter 换行 · 记录保存在本机
+              </p>
             </div>
           </div>
         </>

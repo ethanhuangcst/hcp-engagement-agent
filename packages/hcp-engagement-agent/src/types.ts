@@ -75,17 +75,38 @@ export const ChatAttachmentSchema = z.object({
   summary: z.string().optional(),
 });
 
-export const ChatInputSchema = z.object({
-  mode: z.enum(["open_chat", "revise_options"]),
-  sessionId: z.string().min(1).optional(),
-  hcpId: z.string().min(1),
-  message: z.string().min(1),
-  optionRunId: z.string().min(1).optional(),
-  optionId: z.string().min(1).optional(),
-  attachments: z.array(ChatAttachmentSchema).optional(),
-});
+/** open_chat：hcpId 可选（通用 Agent）；revise_options：hcpId 必填 */
+export const ChatInputSchema = z
+  .object({
+    mode: z.enum(["open_chat", "revise_options"]),
+    sessionId: z.string().min(1).optional(),
+    hcpId: z.string().min(1).optional(),
+    message: z.string().min(1),
+    optionRunId: z.string().min(1).optional(),
+    optionId: z.string().min(1).optional(),
+    attachments: z.array(ChatAttachmentSchema).optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.mode === "revise_options" && !v.hcpId) {
+      ctx.addIssue({
+        code: "custom",
+        message: "revise_options 须提供 hcpId",
+        path: ["hcpId"],
+      });
+    }
+    if (v.mode === "revise_options" && !v.optionRunId) {
+      ctx.addIssue({
+        code: "custom",
+        message: "revise_options 须提供 optionRunId",
+        path: ["optionRunId"],
+      });
+    }
+  });
 
 export type ChatInput = z.infer<typeof ChatInputSchema>;
+
+/** @deprecated 请用 `@hca/db` 的同名常量；此处再导出以保持包 API 稳定 */
+export { AGENT_GENERAL_HCP_ID } from "@hca/db";
 
 export const RunComplianceGateInputSchema = z.object({
   hcpId: z.string().min(1),

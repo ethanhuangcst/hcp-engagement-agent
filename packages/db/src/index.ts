@@ -6,6 +6,7 @@ export {
 } from "./client.js";
 
 export {
+  AGENT_GENERAL_HCP_ID,
   upsertTwin,
   getTwin,
   deleteTwin,

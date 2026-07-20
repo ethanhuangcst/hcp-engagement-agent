@@ -10,6 +10,7 @@ const MIGRATIONS = [
   "001_mvp1_twins.sql",
   "002_mvp4_rag.sql",
   "003_mvp4_engagement.sql",
+  "004_agent_general_workspace.sql",
 ];
 
 async function main(): Promise<void> {

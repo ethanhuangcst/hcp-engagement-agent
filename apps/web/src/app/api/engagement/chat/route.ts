@@ -4,23 +4,40 @@ import { loadRootEnv } from "@/lib/env";
 import { jsonOk, jsonError } from "@/lib/api";
 import { agentHttpError } from "@/lib/agent-error";
 
-const BodySchema = z.object({
-  mode: z.enum(["open_chat", "revise_options"]),
-  sessionId: z.string().optional(),
-  hcpId: z.string().min(1),
-  message: z.string().min(1),
-  optionRunId: z.string().optional(),
-  optionId: z.string().optional(),
-  attachments: z
-    .array(
-      z.object({
-        name: z.string().min(1),
-        mime: z.string().optional(),
-        summary: z.string().optional(),
-      }),
-    )
-    .optional(),
-});
+const BodySchema = z
+  .object({
+    mode: z.enum(["open_chat", "revise_options"]),
+    sessionId: z.string().optional(),
+    hcpId: z.string().min(1).optional(),
+    message: z.string().min(1),
+    optionRunId: z.string().optional(),
+    optionId: z.string().optional(),
+    attachments: z
+      .array(
+        z.object({
+          name: z.string().min(1),
+          mime: z.string().optional(),
+          summary: z.string().optional(),
+        }),
+      )
+      .optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.mode === "revise_options" && !v.hcpId) {
+      ctx.addIssue({
+        code: "custom",
+        message: "revise_options 须提供 hcpId",
+        path: ["hcpId"],
+      });
+    }
+    if (v.mode === "revise_options" && !v.optionRunId) {
+      ctx.addIssue({
+        code: "custom",
+        message: "revise_options 须提供 optionRunId",
+        path: ["optionRunId"],
+      });
+    }
+  });
 
 /** POST — I-AGT-003 / F-WEB-029 · F-WEB-030 */
 export async function POST(req: Request) {

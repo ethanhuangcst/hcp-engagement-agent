@@ -40,18 +40,18 @@
 | 生成 Engagement 方案 | F-WEB-027 | `POST /api/engagement/options` | `proposeOptions`（内含读 Insights、双检索、gate、落盘） |
 | 送合规闸门检查 | F-WEB-028 | `POST /api/engagement/compliance-check`（或 options 内嵌） | `runComplianceGate` |
 | 一人一策页底短对话 | F-WEB-029 | `POST /api/engagement/chat` | **`mode=revise_options`**：绑当前方案 + `revise_engagement` |
-| Agent Web UI 对话（chat 模式） | F-WEB-030 | `POST /api/engagement/chat` | **`mode=open_chat`**：面向当前 HCP 的开放对话；模型自主选 tool |
+| Agent Web UI 对话（chat 模式） | F-WEB-030 | `POST /api/engagement/chat` | **`mode=open_chat`**：**通用**开放对话（不默认绑定分身）；模型自主选 tool |
 | Agent 流式回复 | F-WEB-034 | 同上 + SSE | 流式 token；每轮落盘 session |
 | Options / Chat API | F-WEB-038 | 上列路由 | BFF 对 Agent 包的薄封装 |
 
-附件（F-WEB-032）仅进入 **chat / revise** 请求上下文；历史索引（F-WEB-031）由 BFF/浏览器维护，Agent 按 `sessionId` 读写。
+附件（F-WEB-032）仅进入 **chat / revise** 请求上下文。历史（F-WEB-031）：浏览器 **localStorage** 存索引与正文；Agent/BFF 按 `sessionId` 读写 Postgres（`open_chat` → `_agent_general`）。
 
 ### 1.2 间接 / 可选
 
 | 场景 | 是否调 Agent | 说明 |
 |------|--------------|------|
 | HCP 洞察其余块（科研/热力/证据表） | 否 | 读 Twin/Insights JSON；不经 Agent |
-| 洞察页「解释为何这样建议」 | 是 | `mode=open_chat`，带上当前 Options/Insights |
+| 洞察页「解释为何这样建议」 | 是（可选） | 可开 `open_chat` 由用户粘贴洞察摘要；**不**自动绑当前分身。分身级修订用 `revise_options` |
 | Twin 构建完成后补洞察文案 | 是 | BFF 在 `build_twin` 完成后调 `synthesizeDoingNow` |
 | Twin 确认后专科 ingest | 否（P0） | `medical-kb`；非 Agent Capability |
 | 数字分身 CRUD / MCP 采集事实 | 否 | `hcp-twin-mcp`（Agent 不爬虫） |
@@ -89,7 +89,7 @@
 | 8 | F-AGT-004 | Context 保护 | 截断冗长 RAG；Insights 经 tool 注入，不整包 twin.json | MVP-4 |
 | 9 | F-AGT-005 | Zod 入参校验 | 对外入口与各 Capability 入参 Zod；结构化错误无堆栈 | MVP-2 |
 | 10 | F-AGT-006 | Options 入库 | 写 Postgres `engagement_options`；事务写 | MVP-4 |
-| 11 | F-AGT-007 | Session 入库 | 写 Postgres `chat_sessions`；区分 `mode`（open_chat / revise_options）；每轮持久化 | MVP-4 |
+| 11 | F-AGT-007 | Session 入库 | 写 Postgres `chat_sessions`；区分 `mode`；`open_chat` 用 `hcp_id=_agent_general`；`revise_options` 用真实 `hcpId`；浏览器另存 localStorage | MVP-4 |
 | 12 | F-AGT-008 | 一句话洞察合成 | `synthesizeDoingNow`：生成 `doing_now.summary`（1–3 句）+ 可选 `analysis`；summary 空/缺失时写入，`refresh=true` 强制覆盖；**拥有展示权威**（Stage E 不写最终 summary） | MVP-2 |
 | 13 | F-AGT-009 | 数字分身一句话洞察消费 | 支撑 F-WEB-005/007：列表截断 + 详情摘要条；与 HCP 洞察同源字段 | MVP-2 |
 | 14 | F-AGT-010 | HCP 洞察一句话洞察消费 | 支撑 F-WEB-018：摘要条 + 可选分析段；禁止与数字分身两套文案 | MVP-2 |
@@ -101,12 +101,12 @@
 | 20 | F-AGT-016 | 合规 gate（检索后） | 敏感互动无合规 chunk → 拒答或标注「需人工合规确认」 | MVP-4 |
 | 21 | F-AGT-017 | 合规 Fail-fast（生成后） | cn-hcp-compliance；通过 / 附条件 / 拒绝 | MVP-4 |
 | 22 | F-AGT-018 | Permissions 硬边界 | 不编造说明书外疗效；院内旁注机构同意+代表备案；不替代 MLR；不用处方/统方 | MVP-4 |
-| 23 | F-AGT-019 | Agent Web UI · chat 模式 | `mode=open_chat`：标准多轮对话；经 `LlmClient` 流式/非流式；模型自主选 tool | MVP-4 |
+| 23 | F-AGT-019 | Agent Web UI · chat 模式 | `mode=open_chat`：**通用**多轮对话（不强制 `hcpId`、不默认注入 Twin）；经 `LlmClient`；会话落 `_agent_general` | MVP-4 |
 | 24 | F-AGT-020 | 一人一策 · 修订模式 | `mode=revise_options`：页底短对话；必须绑当前方案；默认走 `revise_engagement` | MVP-4 |
 | 25 | F-AGT-021 | 对话路径编排 | chat/修订均不强制重跑全图；模型决定是否再检索 | MVP-4 |
-| 26 | F-AGT-022 | 流式输出 | `LlmClient.chatStream` → BFF SSE；对齐 F-WEB-034 | MVP-4 |
+| 26 | F-AGT-022 | 流式输出 | `LlmClient.chatStream` → BFF SSE；对齐 F-WEB-034。**LOW PRIORITY**（P0 非流式已交付） | MVP-4 · LOW PRIORITY |
 | 27 | F-AGT-023 | 附件上下文 | 仅 chat 类请求；摘要进 context，不默认可执行任意文件 | MVP-4 |
-| 28 | F-AGT-024 | 租户产品上下文 | 适应症/SOP 来自 tenants 或 compliance 检索；**不写入** Twin | MVP-4 |
+| 28 | F-AGT-024 | 租户产品上下文 | 适应症/SOP 来自 tenants 或 compliance 检索；**不写入** Twin。**LOW PRIORITY** | MVP-4 · LOW PRIORITY |
 | 29 | F-AGT-025 | 标签与渠道缺省 | 消费 `profile.tags`：T1→偏 MSL；行政/政策→慎促销 | MVP-4 |
 | 30 | F-AGT-026 | 机会 → Option 映射 | 以 `insights.opportunities` 为主输入 | MVP-4 |
 | 31 | F-AGT-027 | 结构化错误 | 无 Twin、LLM 不可达、RAG/gate 失败 → `AGENT_ERROR` / `LLM_*` | MVP-4 |
@@ -126,7 +126,7 @@ BFF（及测试）调用本包 API；浏览器只调 BFF。下列 **Capability**
 |------|----------|------|----------|----------|----------|--------|------|----------|
 | 1 | I-AGT-001 | API | `synthesizeDoingNow` | `{ hcpId, refresh?: boolean }` | `{ doing_now: { summary, analysis?, evidence_refs?, as_of } }` | 写 `insights.doing_now`（数字分身与 HCP 洞察共用） | 是（同 Twin 版本重复调用结果应稳定） | MVP-2 |
 | 2 | I-AGT-002 | API | `proposeOptions` | `{ hcpId, tenantId?, productContext? }` | `{ runId, options[3..5], gate_result? }` | 写 options JSON；内部跑提案主路径 | 否 | MVP-4 |
-| 3 | I-AGT-003 | API | `chat` | `{ mode: "open_chat" \| "revise_options", sessionId?, hcpId, message, optionRunId?, attachments? }` | `{ sessionId, mode, messages[], options? }`（可流式） | 写/更新 session；`revise_options` 可改 options | 否 | MVP-4 |
+| 3 | I-AGT-003 | API | `chat` | `{ mode: "open_chat" \| "revise_options", sessionId?, hcpId?, message, optionRunId?, attachments? }` | `{ sessionId, mode, messages[], options? }`（可流式） | 写/更新 session；`revise_options` 可改 options；`open_chat` 的 `hcpId` 可选 | 否 | MVP-4 |
 | 4 | I-AGT-004 | API | `runComplianceGate` | `{ hcpId, optionRunId }` | `{ status: pass\|conditional\|reject, findings[] }` | 可回写 options 旁注 | 是 | MVP-4 |
 | 5 | I-AGT-005 | API | `health`（可选） | `{}` | `{ ok, llm: { provider, model, reachable }, database_ok, medical_kb? }` | 无 | 是 | MVP-2 |
 
@@ -134,7 +134,7 @@ BFF（及测试）调用本包 API；浏览器只调 BFF。下列 **Capability**
 
 | `mode` | UI | 必填 | 行为 |
 |--------|-----|------|------|
-| `open_chat` | **HCP Engagement Agent** Tab（F-WEB-030） | `hcpId`；`optionRunId` 可选 | 开放对话：解释洞察、讨论渠道、一般访前问答；默认可读 Insights；改 Options 须用户意图明确 |
+| `open_chat` | **HCP Engagement Agent** Tab（F-WEB-030） | 无强制 `hcpId`（通用 Agent） | 开放对话：疾病领域找人、渠道/合规/访前等；**不**默认注入某位 Twin 洞察；改 Options 须到一人一策修订模式 |
 | `revise_options` | 一人一策页底（F-WEB-029） | `hcpId` + `optionRunId` | 短对话修订当前方案；优先 `revise_engagement` |
 
 同一 `sessionId` 不应混用两种 mode；切换 mode 时新建会话。
@@ -253,8 +253,8 @@ Twin 构建完成（或用户刷新洞察）
   → I-AGT-003 chat(mode=revise_options, optionRunId=…)  （LlmClient）
 
 Agent Web UI（HCP Engagement Agent Tab）
-  → I-AGT-003 chat(mode=open_chat)  （LlmClient ± stream）
-       └─ 模型可调 get_twin_insights / retrieve_* / revise_engagement
+  → I-AGT-003 chat(mode=open_chat)  （LlmClient ± stream；无强制 hcpId）
+       └─ 通用人设；不默认 get_twin_insights；分身修订引导至 revise_options
 ```
 ---
 
@@ -291,10 +291,11 @@ A0 壳 / Zod / LlmClient（默认 qwen）/ Postgres 持久化
 |---|------|------|------|
 | 1 | `EngagementOption` / `ChatSession` Zod 正式冻结 | **在 MVP-4 开工前冻结于 `@hca/domain`**；`ChatSession` 必含 `mode` + `llm`；Option 字段以本规格 §Option 契约为基线，另文可扩但不改名破坏兼容 | domain 专文 / schema 模块 |
 | 2 | 合规闸门：生成后一步 vs 用户按钮 | **共用 `I-AGT-004` `runComplianceGate`**。提案主路径末可自动调用；一人一策「送合规闸门」按钮调同一 API | F-WEB-028 · F-AGT-017 |
-| 3 | Insights「解释建议」是否另开 API | **否**。复用 `chat(mode=open_chat)` | 已决 |
+| 3 | Insights「解释建议」是否另开 API | **否**。可用通用 `open_chat`（用户自带摘要）或一人一策修订；不自动绑分身 | 已决 |
 | 4 | Stage E 草稿 vs `synthesizeDoingNow` 覆盖策略 | **Agent 拥有展示用 `doing_now.summary`（+ `analysis`）**。MCP Stage E 只写结构化草稿（兴趣/机会等），**不写最终 summary**。`synthesizeDoingNow`：summary 为空或缺失时写入；`refresh=true` 强制覆盖；同 Twin 版本重复调用结果应稳定 | F-AGT-008 · F-MCP-023 |
-| 5 | `open_chat` 是否直接改写 `doing_now` | **P0 否**。须经 BFF/`I-AGT-001`；chat 内最多建议用户刷新洞察 | F-AGT-019 |
+| 5 | `open_chat` 是否直接改写 `doing_now` | **P0 否**。须经 BFF/`I-AGT-001` | F-AGT-019 |
 | 6 | P0 是否预置第二家命名厂商 adapter | **否**。P0 仅 `qwen`（默认）+ `openai_compatible` 通用适配；新厂商只加 adapter，不改 Capabilities | F-AGT-001c |
+| 7 | `open_chat` 是否绑定「当前 HCP」 | **否**。通用 Agent；落库 `_agent_general`；本机 localStorage 不按 HCP 过滤 | F-WEB-030 · F-AGT-019 |
 
 ---
 

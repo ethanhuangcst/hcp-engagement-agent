@@ -30,6 +30,7 @@ export {
   ProposeOptionsInputSchema,
   ChatInputSchema,
   RunComplianceGateInputSchema,
+  AGENT_GENERAL_HCP_ID,
   type AgentError,
   type AgentErrorCode,
   type SynthesizeDoingNowInput,

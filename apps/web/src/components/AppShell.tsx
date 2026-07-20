@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { ShellTab } from "@/components/ShellTab";
 import { t } from "@/i18n";
 import {
@@ -13,15 +12,19 @@ import {
   useHcpContext,
 } from "@/store/hcp-context";
 
+function useHydrated() {
+  return useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+}
+
 function useHcpContextHydrated() {
   const openTwins = useHcpContext((s) => s.openTwins);
   const locale = useHcpContext((s) => s.locale);
   const closeTwin = useHcpContext((s) => s.closeTwin);
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    setHydrated(true);
-  }, []);
+  const hydrated = useHydrated();
 
   if (!hydrated) {
     return {
@@ -91,7 +94,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex flex-wrap items-center gap-3 border-b border-[var(--hca-line)] bg-[var(--hca-surface)] px-6 py-3">
           <p className="text-[13px] font-medium tracking-[0.02em] text-[var(--hca-ink)]">
-            hcp engagement
+            HCP Engagement 智能助理
           </p>
           <span className="text-xs text-[var(--hca-ink-muted)]">·</span>
           <nav className="flex flex-wrap items-center gap-1" aria-label="主导航">

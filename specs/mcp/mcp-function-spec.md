@@ -30,8 +30,8 @@ Research Collector **仅**使用同时满足下列条件的源：公开 HTTP API
 | P0 | PubMed | https://pubmed.ncbi.nlm.nih.gov/ | 生物医学主库；PMID / 作者簇 |
 | P0 | ORCID | https://orcid.org/ | 作者唯一号；拉作品 |
 | P0 | OpenAlex | https://openalex.org/ | 作者 / 作品图谱 API |
-| P1 | Europe PMC | https://europepmc.org/ | PubMed 互补 |
-| P1 | Crossref | https://www.crossref.org/ | DOI 元数据归并 |
+| P1 · **LOW PRIORITY** | Europe PMC | https://europepmc.org/ | PubMed 互补（未接；不挡 MVP-1） |
+| P1 · **LOW PRIORITY** | Crossref | https://www.crossref.org/ | DOI 元数据归并（未接；不挡 MVP-1） |
 | P2 | ClinicalTrials.gov | https://clinicaltrials.gov/ | 试验旁证 |
 
 消歧顺序：`orcid` → PubMed 作者簇 → `openalex` → Europe PMC / Crossref。  
@@ -75,14 +75,14 @@ Research Collector **仅**使用同时满足下列条件的源：公开 HTTP API
 | 18 | F-MCP-018 | Twin 构建编排 | `build_twin(mode=full\|incremental)` → 立即返回 `runId`；后台跑 Stage A→E；**同一 `hcpId` 同时仅一个 active run**（冲突返回明确错误） | MVP-1 |
 | 19 | F-MCP-019 | Stage A 身份锚点 | 锁定主页 URL + AuthorIds + 基础 profile + tagging | MVP-1 |
 | 20 | F-MCP-020 | Stage B Career Collector | 医院/大学页 → education / positions / society_roles → `career-timeline.json`（或并入 twin） | MVP-1 |
-| 21 | F-MCP-021 | Stage C Research Collector | 按 author_ids 拉文 → recent_pubs、themes、trend_shift、lab；专利/基金 P1。`themes`：作者 `x_concepts` 为主、works 概念为辅；医学画像下过滤 Computer science 等噪声 level-0，专科 level≥1 优先于宽泛 Medicine | MVP-1 |
+| 21 | F-MCP-021 | Stage C Research Collector | 按 author_ids 拉文 → recent_pubs、themes、trend_shift、lab；专利/基金 P1。`themes`：作者 `x_concepts` 为主、works 概念为辅；医学画像下过滤 Computer science 等噪声 level-0，专科 level≥1 优先于宽泛 Medicine。Europe PMC / Crossref 互补源：**LOW PRIORITY** | MVP-1（P1 源 · LOW PRIORITY） |
 | 22 | F-MCP-022 | Stage D Heatmap Collector | 会务/新闻 → events；窗：更早 \| d90 \| d60 \| d30；分桶 academic \| policy_media；空窗或失败 → `no_public_evidence`（**不阻断** Stage E） | MVP-1 |
 | 23 | F-MCP-023 | Stage E Insights 衍生 | 基于身份+职业+科研（及可用热力）写结构化草稿；D 失败时仍可出 Insights | MVP-1 |
 | 24 | F-MCP-024 | 构建进度查询 | `get_twin_status(runId)` → phase / progress / error；phase 对齐：身份→职业→科研→热力(可跳)→洞察 | MVP-1 |
 | 25 | F-MCP-025 | Twin / Insights 读取 | `get_twin` / `get_insights`；不存在时结构化 `NOT_FOUND`，不抛未捕获异常 | MVP-1 |
 | 26 | F-MCP-026 | MCP Resources（只读） | 注册 URI 模板 `twin://{hcpId}/career\|research\|heatmap`；`mimeType=application/json`；缺文件 → 可读错误；产品 UI 仍走 BFF | MVP-1 |
-| 27 | F-MCP-027 | 异步任务与队列 | 长任务进程内队列起步；可选 Redis；失败可重试；增量幂等边界写进 Tool description | MVP-1 |
-| 28 | F-MCP-028 | 热力监控节奏 | 每日/会前扫描；写 `last_polled_at`；非一次性爬取 | MVP-1 |
+| 27 | F-MCP-027 | 异步任务与队列 | 长任务进程内队列起步；可选 Redis；失败可重试；增量幂等边界写进 Tool description。Redis/多实例：**LOW PRIORITY** | MVP-1 · LOW PRIORITY（Redis） |
+| 28 | F-MCP-028 | 热力监控节奏 | 每日/会前扫描；写 `last_polled_at`；非一次性爬取。定时扫描未做：**LOW PRIORITY**（`poll_heatmap` 已有） | MVP-1 · LOW PRIORITY |
 | 29 | F-MCP-029 | 职业刷新后重打标 | career 季度/增量刷新成功后可调用 `tag_hcp`（尊重 user_override 规则） | MVP-1 |
 | 30 | F-MCP-030 | 错误码目录 | 统一 `MCP_ERROR` 形状（见 §错误契约）；覆盖未消歧、缺文献号、源站失败、并发构建、校验失败 | MVP-1 |
 | 31 | F-MCP-031 | mock Fixture 路径 | CI 用朱同玉等 fixture 冒烟；零外网 | MVP-1 |
@@ -116,7 +116,7 @@ BFF / Cursor / 外部 MCP Client 经 MCP 协议调用。浏览器**禁止**直�
 |----------|------------|---------------------|
 | `resolve_hcp_identity` | BFF | F-WEB-011 查询 HCP |
 | `build_twin` | BFF | F-WEB-013 确认并保存 |
-| `get_twin_status` | BFF | F-WEB-014 构建进度 |
+| `get_twin_status` | BFF | F-WEB-014 智能体情报构建（常驻进度） |
 | `get_twin` / Resources | BFF / Cursor | F-WEB-007 / 015 / 016 等 |
 | `get_insights` | BFF | F-WEB-017…024 |
 | `tag_hcp`（及 resolve/Stage A 内嵌） | BFF / MCP | F-WEB-006 级别标签 |
