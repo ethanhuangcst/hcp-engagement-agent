@@ -66,28 +66,40 @@ export async function POST(req: Request) {
     });
     if (!result.ok) return jsonError(result.error, 400);
 
-    // 不阻塞保存：知识库 ingest 后台跑（原先 await 会叠远程 MySQL + Qdrant 往返）
-    const specialtyKeys = resolveSpecialtiesForIngest({
-      department: parsed.data.department,
-      specialties: parsed.data.specialties,
-      themes: parsed.data.themes,
-      tags_draft: parsed.data.tags_draft,
-    });
-    const knowledge_jobs = specialtyKeys.map((specialty) => ({
-      specialty,
-      jobId: "",
-      knowledge_status: "pending" as const,
-    }));
-    if (specialtyKeys.length > 0) {
-      void triggerKnowledgeIngest({
-        hcpId: parsed.data.hcpId,
+    // Knowledge ingest must never fail Twin save (Docker web image has no onnxruntime).
+    let knowledge_jobs: Array<{
+      specialty: string;
+      jobId: string;
+      knowledge_status: "ready" | "sparse" | "pending" | "failed";
+    }> = [];
+    try {
+      const specialtyKeys = resolveSpecialtiesForIngest({
         department: parsed.data.department,
         specialties: parsed.data.specialties,
         themes: parsed.data.themes,
         tags_draft: parsed.data.tags_draft,
-      }).catch(() => {
-        /* fire-and-forget */
       });
+      knowledge_jobs = specialtyKeys.map((specialty) => ({
+        specialty,
+        jobId: "",
+        knowledge_status: "pending" as const,
+      }));
+      if (specialtyKeys.length > 0) {
+        void triggerKnowledgeIngest({
+          hcpId: parsed.data.hcpId,
+          department: parsed.data.department,
+          specialties: parsed.data.specialties,
+          themes: parsed.data.themes,
+          tags_draft: parsed.data.tags_draft,
+        }).catch(() => {
+          /* fire-and-forget */
+        });
+      }
+    } catch (err) {
+      console.warn(
+        "[confirm] knowledge ingest skipped:",
+        err instanceof Error ? err.message : err,
+      );
     }
 
     return jsonOk({

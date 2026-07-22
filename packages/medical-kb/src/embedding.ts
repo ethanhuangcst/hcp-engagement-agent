@@ -1,4 +1,3 @@
-import { pipeline, env } from "@xenova/transformers";
 import {
   getEmbeddingModelId,
   getRerankModelId,
@@ -11,11 +10,6 @@ const remoteHost =
   process.env.HF_ENDPOINT ??
   "https://hf-mirror.com";
 
-env.allowLocalModels = true;
-env.useBrowserCache = false;
-env.remoteHost = `${remoteHost.replace(/\/$/, "")}/`;
-env.remotePathTemplate = "{model}/resolve/{revision}/";
-
 type FeatureExtractor = (
   text: string,
   opts?: { pooling?: string; normalize?: boolean },
@@ -25,20 +19,45 @@ type Ranker = (
   pairs: [string, string][],
 ) => Promise<{ data: Float32Array } | Float32Array>;
 
+type TransformersMod = {
+  pipeline: (
+    task: string,
+    model: string,
+  ) => Promise<FeatureExtractor | Ranker>;
+  env: {
+    allowLocalModels: boolean;
+    useBrowserCache: boolean;
+    remoteHost: string;
+    remotePathTemplate: string;
+  };
+};
+
+let transformersPromise: Promise<TransformersMod> | null = null;
 let embedder: FeatureExtractor | null = null;
 let reranker: Ranker | null = null;
+
+async function loadTransformers(): Promise<TransformersMod> {
+  if (!transformersPromise) {
+    transformersPromise = import("@xenova/transformers").then((mod) => {
+      const m = mod as unknown as TransformersMod;
+      m.env.allowLocalModels = true;
+      m.env.useBrowserCache = false;
+      m.env.remoteHost = `${remoteHost.replace(/\/$/, "")}/`;
+      m.env.remotePathTemplate = "{model}/resolve/{revision}/";
+      return m;
+    });
+  }
+  return transformersPromise;
+}
 
 async function openAiCompatibleEmbed(texts: string[]): Promise<number[][]> {
   const base = process.env.EMBEDDING_BASE_URL?.replace(/\/$/, "");
   if (!base) {
     throw new Error("EMBEDDING_BASE_URL not set");
   }
-  const model =
-    process.env.EMBEDDING_MODEL ?? "text-embedding-v3";
+  const model = process.env.EMBEDDING_MODEL ?? "text-embedding-v3";
   const key =
-    process.env.EMBEDDING_API_KEY ??
-    process.env.DASHSCOPE_API_KEY ??
-    "";
+    process.env.EMBEDDING_API_KEY ?? process.env.DASHSCOPE_API_KEY ?? "";
   const res = await fetch(`${base}/embeddings`, {
     method: "POST",
     headers: {
@@ -64,6 +83,7 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
     if (process.env.EMBEDDING_BASE_URL) {
       return await openAiCompatibleEmbed(texts);
     }
+    const { pipeline } = await loadTransformers();
     if (!embedder) {
       embedder = (await pipeline(
         "feature-extraction",
@@ -115,6 +135,7 @@ export async function rerank(
   }
 
   try {
+    const { pipeline } = await loadTransformers();
     if (!reranker) {
       reranker = (await pipeline(
         "text-classification",
@@ -129,7 +150,7 @@ export async function rerank(
     const scores: number[] = [];
     for (const p of passages) {
       const pairs: [string, string][] = [[query, p]];
-      const raw = await reranker(pairs);
+      const raw = await reranker!(pairs);
       const data =
         (raw as { data?: Float32Array }).data ?? (raw as Float32Array);
       const score =

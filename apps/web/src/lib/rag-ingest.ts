@@ -1,8 +1,4 @@
-import {
-  ingestOnDemand,
-  normalizeSpecialty,
-  tryNormalizeSpecialty,
-} from "@hca/medical-kb";
+import { tryNormalizeSpecialty } from "@hca/medical-kb/specialty";
 
 export type KnowledgeJobRef = {
   specialty: string;
@@ -39,6 +35,10 @@ export function resolveSpecialtiesForIngest(input: {
   return [...out];
 }
 
+/**
+ * Fire academic ingest. Dynamically imports @hca/medical-kb so Twin confirm
+ * does not load @xenova/transformers / onnxruntime in the web image.
+ */
 export async function triggerKnowledgeIngest(input: {
   specialties?: string[];
   themes?: string[];
@@ -47,6 +47,30 @@ export async function triggerKnowledgeIngest(input: {
   tags_draft?: { specialties?: string[]; role_tags?: string[] };
 }): Promise<KnowledgeJobRef[]> {
   const keys = resolveSpecialtiesForIngest(input);
+  if (keys.length === 0) return [];
+
+  let normalizeSpecialty: (raw: string) => { specialty: string };
+  let ingestOnDemand: (raw: unknown) => Promise<{
+    jobId: string;
+    knowledge_status: "ready" | "sparse" | "pending";
+  }>;
+  try {
+    const kb = await import("@hca/medical-kb");
+    normalizeSpecialty = kb.normalizeSpecialty;
+    ingestOnDemand = kb.ingestOnDemand;
+  } catch (err) {
+    // Docker slim web image may lack onnxruntime — Twin save must still succeed.
+    console.warn(
+      "[rag-ingest] medical-kb unavailable; skip knowledge ingest:",
+      err instanceof Error ? err.message : err,
+    );
+    return keys.map((specialty) => ({
+      specialty,
+      jobId: "",
+      knowledge_status: "failed" as const,
+    }));
+  }
+
   const jobs: KnowledgeJobRef[] = [];
   for (const specialty of keys) {
     try {
@@ -78,6 +102,13 @@ export async function triggerKnowledgeIngest(input: {
               ? (err as { details: { jobId: string } }).details.jobId
               : "",
           knowledge_status: "pending",
+        });
+      } else {
+        console.warn("[rag-ingest] ingest failed for", specialty, err);
+        jobs.push({
+          specialty,
+          jobId: "",
+          knowledge_status: "failed",
         });
       }
     }

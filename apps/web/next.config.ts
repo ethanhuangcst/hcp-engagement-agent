@@ -20,9 +20,16 @@ const nextConfig: NextConfig = {
     "@hca/domain",
     "@hca/db",
     "@hca/mcp-client",
+    "@hca/medical-kb",
     "@hca/hcp-engagement-agent",
   ],
-  serverExternalPackages: ["mysql2", "openai", "@modelcontextprotocol/sdk"],
+  serverExternalPackages: [
+    "mysql2",
+    "openai",
+    "@modelcontextprotocol/sdk",
+    "@xenova/transformers",
+    "onnxruntime-node",
+  ],
 };
 
 export default nextConfig;
