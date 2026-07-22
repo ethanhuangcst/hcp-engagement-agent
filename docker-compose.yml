@@ -1,0 +1,87 @@
+# HCP Engagement Assistant — local / edge stack
+# Postgres stays on Hong Kong managed instance (DATABASE_URL in .env).
+#
+#   cp .env.example .env   # fill DATABASE_URL (+ LLM keys if needed)
+#   docker compose up -d --build
+#
+# Ports (host):
+#   Web     http://127.0.0.1:3001
+#   MCP     http://127.0.0.1:3200/mcp  (health: /health)
+#   Qdrant  http://127.0.0.1:6333     (loopback only)
+
+name: hcp-engagement
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.14.1
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6333:6333"
+    volumes:
+      - ./data/qdrant:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__HTTP_PORT: "6333"
+
+  hcp-twin-mcp:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.mcp
+      args:
+        NPM_REGISTRY: ${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      MCP_TRANSPORT: http
+      MCP_PORT: "3200"
+      TWIN_MODE: live
+      HCA_DATA_DIR: /data
+      QDRANT_URL: http://qdrant:6333
+      VECTOR_BACKEND: qdrant-local
+    volumes:
+      - ./data:/data
+    ports:
+      - "3200:3200"
+    depends_on:
+      qdrant:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3200/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+      args:
+        NPM_REGISTRY: ${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      HOSTNAME: "0.0.0.0"
+      HCA_DATA_DIR: /data
+      # Override host-local URLs from .env for compose network
+      MCP_URL: http://hcp-twin-mcp:3200
+      QDRANT_URL: http://qdrant:6333
+      VECTOR_BACKEND: qdrant-local
+    volumes:
+      - ./data:/data
+    ports:
+      - "3001:3001"
+    depends_on:
+      hcp-twin-mcp:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+
+volumes: {}

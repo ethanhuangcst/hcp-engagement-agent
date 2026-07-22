@@ -1,0 +1,31 @@
+.DS_Store
+node_modules/
+.env
+.env.*
+!.env.example
+samectx-notes/
+specs/0.prompts.md
+
+# Build / test artifacts
+dist/
+coverage/
+*.tsbuildinfo
+**/.next/
+
+# Runtime / local agent state
+.run/
+.qdrant-initialized
+snapshots/
+
+# data/ runtime volumes (Twin primary store is Hong Kong Postgres)
+data/twins/
+data/engagements/
+data/tenants/
+data/qdrant/
+data/rag/corpus/tenants/**
+!data/rag/corpus/tenants/.gitkeep
+!data/**/.gitkeep
+
+# Local tool binaries (download via scripts)
+tools/qdrant/
+tools/actionlint/

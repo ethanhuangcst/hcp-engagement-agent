@@ -1,0 +1,36 @@
+{
+  "name": "@hca/hcp-engagement-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "synthesize:zhu": "tsx src/cli/synthesize-zhu.ts",
+    "translate:en": "tsx src/cli/translate-to-en.ts"
+  },
+  "dependencies": {
+    "@hca/db": "*",
+    "@hca/domain": "*",
+    "@hca/medical-kb": "*",
+    "openai": "^6.39.0",
+    "pinyin-pro": "^3.28.1",
+    "zod": "^4.4.0"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.1.0"
+  }
+}

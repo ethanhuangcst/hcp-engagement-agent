@@ -1,0 +1,113 @@
+# Build (and optionally publish) Docker images for web + hcp-twin-mcp.
+#
+# PR / push: build only (validates Dockerfiles).
+# Push to main or version tags: also push to GHCR.
+#
+# Images:
+#   ghcr.io/<owner>/<repo>/web
+#   ghcr.io/<owner>/<repo>/hcp-twin-mcp
+
+name: Docker Build
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+    paths:
+      - "apps/**"
+      - "packages/**"
+      - "docker/**"
+      - "docker-compose.yml"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.base.json"
+      - ".dockerignore"
+      - ".github/workflows/docker-build.yml"
+  pull_request:
+    paths:
+      - "apps/**"
+      - "packages/**"
+      - "docker/**"
+      - "docker-compose.yml"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.base.json"
+      - ".dockerignore"
+      - ".github/workflows/docker-build.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: docker-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NPM_REGISTRY: https://registry.npmmirror.com
+  REGISTRY: ghcr.io
+
+jobs:
+  build:
+    name: Build ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: web
+            dockerfile: docker/Dockerfile.web
+            context: .
+          - image: hcp-twin-mcp
+            dockerfile: docker/Dockerfile.mcp
+            context: .
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Image name
+        id: meta_name
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          repo="${GITHUB_REPOSITORY##*/}"
+          repo="${repo,,}"
+          echo "image=${{ env.REGISTRY }}/${owner}/${repo}/${{ matrix.image }}" >> "$GITHUB_OUTPUT"
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.meta_name.outputs.image }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: ${{ github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')) }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            NPM_REGISTRY=${{ env.NPM_REGISTRY }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          provenance: false

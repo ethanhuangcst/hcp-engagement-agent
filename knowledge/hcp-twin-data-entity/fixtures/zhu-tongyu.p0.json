@@ -1,0 +1,325 @@
+{
+  "meta": {
+    "schema_version": "0.1.5-p0",
+    "hcp_id": "example-zhu-tongyu",
+    "as_of": "2026-07-16",
+    "twin_version": 1,
+    "disclaimer": "P0 验收用 fixture；事实字段须 live 构建时重新溯源"
+  },
+  "profile": {
+    "name_zh": "朱同玉",
+    "name_en": "Tongyu Zhu",
+    "name_variants": ["Zhu TY", "Tongyu Zhu"],
+    "hospital": "复旦大学附属中山医院",
+    "department": "肾脏移植科 / 泌尿外科",
+    "title_clinical": "主任医师",
+    "title_academic": "教授",
+    "admin_roles": [
+      {
+        "role": "复旦上海医学院副院长",
+        "org": "复旦大学上海医学院",
+        "is_current": true,
+        "source_url": "https://imi.fudan.edu.cn/info/1216/1053.htm",
+        "confidence": "high",
+        "as_of": "2026-07-16"
+      },
+      {
+        "role": "肾移植学科带头人",
+        "org": "复旦大学附属中山医院",
+        "is_current": true,
+        "source_url": "https://www.transplantation.com.cn/zh_CN/专家介绍/",
+        "confidence": "high",
+        "as_of": "2026-07-16"
+      }
+    ],
+    "specialties": ["kidney_transplant", "urology", "phage_therapy"],
+    "clinical_focus": ["肾移植", "噬菌体抗耐药感染", "BK 病毒", "移植免疫"],
+    "disease_areas": ["器官移植", "多重耐药菌感染", "移植后病毒感染"],
+    "practice_settings": ["tertiary", "research_lab"],
+    "hospital_tier": "三甲",
+    "city": "上海",
+    "province": "上海",
+    "role_labels": ["kol", "kme", "administrator", "policy_voice"],
+    "influence_scope": "national",
+    "tags": {
+      "hcp_tier": "T1",
+      "role_tags": ["kol", "kme", "administrator", "policy_voice"],
+      "tag_confidence": "medium",
+      "tag_as_of": "2026-07-16",
+      "tag_method": "rule",
+      "evidence_refs": ["profile.admin_roles", "profile.influence_scope", "profile.role_labels"]
+    },
+    "external_ids": {
+      "orcid": null,
+      "pubmed_author": null,
+      "google_scholar": "Yby_S-sAAAAJ",
+      "openalex": null,
+      "scopus_author_id": null,
+      "wos_researcher_id": null,
+      "semantic_scholar": null,
+      "dimensions": null,
+      "cnki_scholar": null,
+      "wanfang_author": null,
+      "hospital_expert_page_id": null,
+      "notes": "P0 已绑定 Scholar；ORCID/PubMed Author/OpenAlex 待 MCP live 消歧补全"
+    },
+    "primary_urls": [
+      {
+        "url": "https://www.transplantation.com.cn/zh_CN/专家介绍/",
+        "type": "hospital_site",
+        "confidence": "high"
+      },
+      {
+        "url": "https://imi.fudan.edu.cn/info/1216/1053.htm",
+        "type": "university",
+        "confidence": "high"
+      }
+    ],
+    "disambiguation_status": "resolved"
+  },
+  "career": {
+    "education": [
+      {
+        "degree": "外科学博士",
+        "institution": "上海医科大学",
+        "year": 1994,
+        "field": "外科学",
+        "source_url": "https://imi.fudan.edu.cn/info/1216/1053.htm",
+        "confidence": "high",
+        "as_of": "2026-07-16"
+      }
+    ],
+    "positions_current": [
+      {
+        "role": "上海市器官移植重点实验室主任",
+        "org": "上海市器官移植重点实验室",
+        "is_current": true,
+        "source_url": "https://www.transplantation.com.cn/zh_CN/专家介绍/",
+        "confidence": "high",
+        "as_of": "2026-07-16"
+      }
+    ],
+    "positions_past": [
+      {
+        "role": "执行院长",
+        "org": "复旦大学附属中山医院厦门医院",
+        "is_current": false,
+        "source_url": "https://imi.fudan.edu.cn/info/1216/1053.htm",
+        "confidence": "medium",
+        "as_of": "2026-07-16",
+        "conflict_note": "多源一致，曾任职务须与现任消歧"
+      }
+    ],
+    "society_roles": [
+      {
+        "role": "器官移植分会相关职务",
+        "org": "上海医学会 / 中国医师协会器官移植分会",
+        "is_current": null,
+        "source_url": "https://www.transplantation.com.cn/zh_CN/专家介绍/",
+        "confidence": "medium",
+        "as_of": "2026-07-16",
+        "conflict_note": "各页现任/前主任委员表述需消歧"
+      }
+    ]
+  },
+  "research": {
+    "author_ids": {
+      "orcid": null,
+      "pubmed_author": null,
+      "google_scholar": "Yby_S-sAAAAJ",
+      "openalex": null,
+      "scopus_author_id": null,
+      "wos_researcher_id": null,
+      "semantic_scholar": null,
+      "dimensions": null,
+      "cnki_scholar": null,
+      "wanfang_author": null
+    },
+    "publication_stats": {
+      "sci_count_claimed": "280+",
+      "source_url": "https://www.transplantation.com.cn/zh_CN/专家介绍/",
+      "confidence": "medium",
+      "as_of": "2026-07-16"
+    },
+    "recent_pubs": [],
+    "themes": [
+      {
+        "theme_id": "kidney_transplant_immunity",
+        "label_zh": "肾移植免疫与排斥",
+        "window": "36m",
+        "weight": 0.9,
+        "evidence_pub_ids": [],
+        "as_of": "2026-07-16"
+      },
+      {
+        "theme_id": "phage_therapy",
+        "label_zh": "噬菌体抗耐药感染",
+        "window": "24m",
+        "weight": 0.85,
+        "evidence_pub_ids": [],
+        "as_of": "2026-07-16"
+      },
+      {
+        "theme_id": "bk_virus",
+        "label_zh": "BK 病毒与移植后感染",
+        "window": "36m",
+        "weight": 0.7,
+        "evidence_pub_ids": [],
+        "as_of": "2026-07-16"
+      },
+      {
+        "theme_id": "ai_transplant",
+        "label_zh": "AI 与移植/科室管理",
+        "window": "12m",
+        "weight": 0.75,
+        "evidence_pub_ids": [],
+        "as_of": "2026-07-16"
+      }
+    ],
+    "trend_shift": "公开叙事近年从移植临床+感染控制，向 AI/智能体在移植与科室管理延伸",
+    "lab_affiliations": [
+      "上海市器官移植重点实验室",
+      "噬菌体相关研究所"
+    ],
+    "active_projects": [],
+    "funding": [],
+    "trials": [],
+    "patents": []
+  },
+  "activity": {
+    "events": [
+      {
+        "event_id": "evt-2025-06-ai-forum",
+        "title": "肾移植 AI 前沿论坛",
+        "start_date": "2025-06-01",
+        "city_or_venue": "上海",
+        "organizer": "复旦大学附属中山医院",
+        "role": "chair",
+        "topic": "肾移植与 AI",
+        "bucket": "academic",
+        "source_url": "https://www.transplantation.com.cn/",
+        "confidence": "high",
+        "as_of": "2026-07-16"
+      }
+    ],
+    "windows": {
+      "d30": { "event_count": 0, "no_public_evidence": true },
+      "d60": { "event_count": 0, "no_public_evidence": true },
+      "d90": { "event_count": 0, "no_public_evidence": true, "note": "可见媒体深度稿，非带日期地点的会务通稿" }
+    },
+    "last_polled_at": "2026-07-16T00:00:00Z"
+  },
+  "network": {
+    "guideline_authorship": [],
+    "key_collaborating_orgs": [
+      "上海市肾移植质控中心",
+      "上海市器官移植重点实验室"
+    ]
+  },
+  "content_signals": {
+    "narrative_axes": [
+      "AI 医疗与可信数据空间",
+      "耐药感染与噬菌体治疗",
+      "移植质控与路径规范"
+    ],
+    "preferred_formats_hypothesis": ["deep_science", "policy", "digital_tool"],
+    "language_pref": "bilingual"
+  },
+  "hco_context": {
+    "primary_hco": {
+      "name": "复旦大学附属中山医院",
+      "type": "tertiary_hospital",
+      "city": "上海"
+    },
+    "public_gatekeeper_roles": [
+      "复旦上海医学院副院长",
+      "肾移植学科带头人"
+    ],
+    "department_public_channels": [
+      "https://www.transplantation.com.cn/"
+    ]
+  },
+  "engagement_flags": {
+    "suitable_for_promo_dialogue": false,
+    "suitable_for_promo_dialogue_reason": "行政/政策向角色占比高，促销语境风险大",
+    "msl_priority_topics": [
+      "噬菌体治疗证据与路径",
+      "BK 病毒与移植后感染",
+      "AI 在移植场景的医学边界"
+    ],
+    "meeting_followup_hooks": []
+  },
+  "insights": {
+    "doing_now": {
+      "summary": "肾移植临床与质控管理并行；公开叙事强调噬菌体、BK 病毒及 AI+移植",
+      "analysis": "公开身份同时覆盖临床 KOL、实验室主任与医学院行政，Engagement 须按议题分轨——学术未满足需求走 MSL，路径/质控走医学教育，行政与政策发声勿叠促销话术。",
+      "active_themes": ["phage_therapy", "bk_virus", "ai_transplant"],
+      "active_roles": ["kol", "administrator", "policy_voice"],
+      "evidence_refs": ["research.themes", "content_signals.narrative_axes"]
+    },
+    "interest_directions": {
+      "axes": [
+        {
+          "title": "耐药感染与噬菌体治疗",
+          "analysis": "公开叙事与实验室挂靠一致；关心证据缺口与适应路径，宜深聊少推。",
+          "evidence_refs": ["research.themes.phage_therapy"]
+        },
+        {
+          "title": "移植质控与路径规范",
+          "analysis": "质控/学科带头人角色提示对标准化随访与感染防控路径更敏感。",
+          "evidence_refs": ["profile.admin_roles"]
+        },
+        {
+          "title": "AI 医疗与可信数据",
+          "analysis": "论坛与采访并存；兴趣可能在工具边界，须与 policy_media 分桶。",
+          "evidence_refs": ["activity.events.evt-2025-06-ai-forum"]
+        }
+      ],
+      "themes_ranked": ["phage_therapy", "ai_transplant", "kidney_transplant_immunity", "bk_virus"],
+      "narrative_axes": ["AI 医疗", "耐药感染", "移植质控"],
+      "academic_vs_policy_balance": "policy_media 权重不可忽视，勿将全部发声当作学术兴趣",
+      "evidence_refs": ["research.trend_shift", "activity.windows"]
+    },
+    "opportunities": {
+      "items": [
+        {
+          "id": "opp-phage-msl",
+          "title": "科学深聊：噬菌体/BK 证据缺口",
+          "analysis": "MSL briefing；成功信号=问题清单，不延伸处方偏好",
+          "suggested_owner": "MSL",
+          "suggested_channel": "msl_visit",
+          "priority": "P0"
+        },
+        {
+          "id": "opp-dept-bk",
+          "title": "科室路径教育：移植后感染（须机构同意）",
+          "analysis": "病例讨论；程序前置备案代表",
+          "suggested_owner": "医学事务",
+          "suggested_channel": "dept_meeting",
+          "priority": "P0"
+        },
+        {
+          "id": "opp-ai-followup",
+          "title": "会后边界对话：AI 医学边界",
+          "analysis": "不承诺产品能力；只确认兴趣与红线",
+          "suggested_owner": "MSL",
+          "suggested_channel": "post_conference_followup",
+          "priority": "P1"
+        }
+      ],
+      "confidence": "medium",
+      "do_not_assume": ["处方偏好", "进院意愿", "与特定产品的合作意向"]
+    },
+    "engagement_hints": {
+      "role_stratification": "KOL/KME + 行政/政策发声；MSL 优先于代表促销话术",
+      "disease_journey_stage_hypothesis": "深度合作 / 观念维护（推断）",
+      "channel_preference_hypothesis": ["msl_visit", "dept_meeting", "post_conference_followup"],
+      "stakeholder_notes": ["院内活动须机构同意", "本人兼具行政角色，注意 Gatekeeper 语境"],
+      "compliance_cautions": [
+        "政策/媒体议题勿用促销话术",
+        "院内学术活动须机构同意 + 代表备案",
+        "输出不替代 MLR"
+      ]
+    }
+  }
+}
