@@ -95,4 +95,5 @@ volumes: {}
 
 networks:
   default:
+    external: true
     name: portainer_network
