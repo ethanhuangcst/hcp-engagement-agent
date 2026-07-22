@@ -3,12 +3,35 @@ import { resolve } from "node:path";
 
 let loaded = false;
 
-/** Load monorepo root .env into process.env (BFF only). */
-export function loadRootEnv(): void {
-  if (loaded || process.env.HCA_ENV_LOADED === "1") return;
-  loaded = true;
-  process.env.HCA_ENV_LOADED = "1";
+/**
+ * Keys that must come from repo `.env` / `.env.local`, even if the shell
+ * already exported a stale value (common: leftover postgresql:// from a sibling project).
+ */
+const FILE_WINS = new Set(["DATABASE_URL"]);
 
+function applyEnvFile(path: string): void {
+  if (!existsSync(path)) return;
+  for (const line of readFileSync(path, "utf8").split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq <= 0) continue;
+    const key = trimmed.slice(0, eq).trim();
+    let value = trimmed.slice(eq + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (FILE_WINS.has(key) || process.env[key] === undefined) {
+      process.env[key] = value;
+    }
+  }
+}
+
+/** Load monorepo root `.env` into process.env (BFF only). `.env.local` wins. */
+export function loadRootEnv(): void {
   const rootEnv = resolve(
     /* turbopackIgnore: true */ process.cwd(),
     "../../.env",
@@ -17,23 +40,38 @@ export function loadRootEnv(): void {
     /* turbopackIgnore: true */ process.cwd(),
     ".env.local",
   );
-  for (const path of [localEnv, rootEnv]) {
-    if (!existsSync(path)) continue;
-    for (const line of readFileSync(path, "utf8").split("\n")) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) continue;
-      const eq = trimmed.indexOf("=");
-      if (eq <= 0) continue;
-      const key = trimmed.slice(0, eq).trim();
-      let value = trimmed.slice(eq + 1).trim();
-      if (
-        (value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))
-      ) {
-        value = value.slice(1, -1);
-      }
-      if (process.env[key] === undefined) process.env[key] = value;
+
+  if (!loaded && process.env.HCA_ENV_LOADED !== "1") {
+    loaded = true;
+    process.env.HCA_ENV_LOADED = "1";
+    applyEnvFile(rootEnv);
+    applyEnvFile(localEnv);
+    return;
+  }
+
+  // Already loaded: still refresh FILE_WINS (DATABASE_URL) so stale shell postgres
+  // cannot stick after hot reload / long-lived workers.
+  applyEnvFileForce(rootEnv);
+  applyEnvFileForce(localEnv);
+}
+
+function applyEnvFileForce(path: string): void {
+  if (!existsSync(path)) return;
+  for (const line of readFileSync(path, "utf8").split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq <= 0) continue;
+    const key = trimmed.slice(0, eq).trim();
+    if (!FILE_WINS.has(key)) continue;
+    let value = trimmed.slice(eq + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
     }
+    process.env[key] = value;
   }
 }
 

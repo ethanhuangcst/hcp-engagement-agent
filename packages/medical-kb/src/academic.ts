@@ -109,20 +109,11 @@ export function ensureAcademicCorpusFromFixtures(specialty: string): string {
 async function countQdrantSpecialtyChunks(specialty: string): Promise<number> {
   try {
     const q = getQdrantClient();
-    let count = 0;
-    let offset: string | number | null | undefined = undefined;
-    do {
-      const page = await q.scroll(ACADEMIC_COLLECTION, {
-        limit: 100,
-        offset,
-        with_payload: false,
-        with_vector: false,
-        filter: { must: [{ key: "specialty", match: { value: specialty } }] },
-      });
-      count += page.points.length;
-      offset = page.next_page_offset as string | number | null | undefined;
-    } while (offset != null);
-    return count;
+    const res = await q.count(ACADEMIC_COLLECTION, {
+      exact: true,
+      filter: { must: [{ key: "specialty", match: { value: specialty } }] },
+    });
+    return res.count;
   } catch {
     return 0;
   }
@@ -176,15 +167,16 @@ async function upsertAcademicManifest(row: {
   const pool = getPool();
   await pool.query(
     `INSERT INTO ingest_manifest (doc_id, index_name, specialty, version, as_of, corpus_path, chunk_count, authority, updated_at)
-     VALUES ($1,$2,$3,$4,$5::date,$6,$7,$8,NOW())
-     ON CONFLICT (doc_id) DO UPDATE SET
-       specialty = EXCLUDED.specialty,
-       version = EXCLUDED.version,
-       as_of = EXCLUDED.as_of,
-       corpus_path = EXCLUDED.corpus_path,
-       chunk_count = EXCLUDED.chunk_count,
-       authority = EXCLUDED.authority,
-       updated_at = NOW()`,
+     VALUES (?,?,?,?,?,?,?,?,NOW(3))
+     AS new
+     ON DUPLICATE KEY UPDATE
+       specialty = new.specialty,
+       version = new.version,
+       as_of = new.as_of,
+       corpus_path = new.corpus_path,
+       chunk_count = new.chunk_count,
+       authority = new.authority,
+       updated_at = NOW(3)`,
     [
       row.doc_id,
       ACADEMIC_COLLECTION,

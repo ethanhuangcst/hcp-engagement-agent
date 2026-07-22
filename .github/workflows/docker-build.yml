@@ -1,4 +1,5 @@
 # Build (and optionally publish) Docker images for web + hcp-twin-mcp.
+# Consumers: docker-compose.yml pulls these images (no local app build).
 #
 # PR / push: build only (validates Dockerfiles).
 # Push to main or version tags: also push to GHCR.
@@ -6,6 +7,7 @@
 # Images:
 #   ghcr.io/<owner>/<repo>/web
 #   ghcr.io/<owner>/<repo>/hcp-twin-mcp
+# Tags used by compose: latest (default branch), sha-*, semver (v* tags)
 
 name: Docker Build
 

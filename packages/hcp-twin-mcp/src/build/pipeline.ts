@@ -52,6 +52,16 @@ function hospitalUrlFromTwin(twin: VirtualTwin): string | null {
   return null;
 }
 
+function openAlexIdMatches(
+  author: { id?: string } | null,
+  openalexId: string,
+): boolean {
+  if (!author?.id) return false;
+  const a = author.id.match(/A\d+/i)?.[0]?.toUpperCase();
+  const b = openalexId.match(/A\d+/i)?.[0]?.toUpperCase() ?? openalexId.toUpperCase();
+  return Boolean(a && b && a === b);
+}
+
 export async function runBuildStages(
   deps: PipelineDeps,
   status: BuildStatus,
@@ -109,29 +119,33 @@ export async function runBuildStages(
     }
   };
 
+  /** Reuse author payloads across Stage A / C — avoid repeat OpenAlex GETs. */
+  let primaryAuthor: Awaited<ReturnType<typeof fetchOpenAlexAuthor>> = null;
+
   if (!authorIds.openalex) {
     await resolveOpenAlex();
   } else {
-    const author = await fetchOpenAlexAuthor(http, authorIds.openalex);
+    primaryAuthor = await fetchOpenAlexAuthor(http, authorIds.openalex);
     if (
-      !author ||
-      !openAlexDisplayMatchesHcp(author.display_name, nameZh, nameEn)
+      !primaryAuthor ||
+      !openAlexDisplayMatchesHcp(primaryAuthor.display_name, nameZh, nameEn)
     ) {
       // 误绑（如 fixture A5040172093=Austin S. Ankney）→ 重消歧
       authorIds = { ...authorIds, openalex: null };
+      primaryAuthor = null;
       await resolveOpenAlex();
     } else {
-      authorIds = { ...authorIds, ...authorIdsFromOpenAlex(author) };
-      adoptMatchedDisplayName(author.display_name);
+      authorIds = { ...authorIds, ...authorIdsFromOpenAlex(primaryAuthor) };
+      adoptMatchedDisplayName(primaryAuthor.display_name);
     }
   }
 
-  if (authorIds.openalex) {
-    const author = await fetchOpenAlexAuthor(http, authorIds.openalex);
-    if (author) {
-      authorIds = { ...authorIds, ...authorIdsFromOpenAlex(author) };
-      if (openAlexDisplayMatchesHcp(author.display_name, nameZh, nameEn)) {
-        adoptMatchedDisplayName(author.display_name);
+  if (authorIds.openalex && !primaryAuthor) {
+    primaryAuthor = await fetchOpenAlexAuthor(http, authorIds.openalex);
+    if (primaryAuthor) {
+      authorIds = { ...authorIds, ...authorIdsFromOpenAlex(primaryAuthor) };
+      if (openAlexDisplayMatchesHcp(primaryAuthor.display_name, nameZh, nameEn)) {
+        adoptMatchedDisplayName(primaryAuthor.display_name);
       }
     }
   }
@@ -159,8 +173,10 @@ export async function runBuildStages(
         // Prefer Latin as primary; keep prior cluster in openalex_aliases (ADR-004).
         let currentIsLatin = false;
         if (authorIds.openalex) {
-          const cur = await fetchOpenAlexAuthor(http, String(authorIds.openalex));
-          currentIsLatin = Boolean(effectiveNameEn(cur?.display_name));
+          if (!primaryAuthor || !openAlexIdMatches(primaryAuthor, String(authorIds.openalex))) {
+            primaryAuthor = await fetchOpenAlexAuthor(http, String(authorIds.openalex));
+          }
+          currentIsLatin = Boolean(effectiveNameEn(primaryAuthor?.display_name));
         }
         if (!currentIsLatin) {
           authorIds = bindOpenAlexId(authorIds, best.id, { promote: true });
@@ -179,18 +195,19 @@ export async function runBuildStages(
     }
   }
 
-  if (authorIds.orcid) {
-    await fetchOrcidWorksCount(http, authorIds.orcid);
-  }
-
-  if (!authorIds.pubmed_author && nameEn) {
-    try {
-      const pm = await searchPubmedAuthorCluster(http, nameEn);
-      if (pm.pubmed_author) authorIds.pubmed_author = pm.pubmed_author;
-    } catch {
-      /* PubMed 可选 */
-    }
-  }
+  // ORCID / PubMed 互不依赖，并行以缩短 Stage A（远程源 + 限速）
+  await Promise.all([
+    authorIds.orcid
+      ? fetchOrcidWorksCount(http, authorIds.orcid).catch(() => undefined)
+      : Promise.resolve(),
+    !authorIds.pubmed_author && nameEn
+      ? searchPubmedAuthorCluster(http, nameEn)
+          .then((pm) => {
+            if (pm.pubmed_author) authorIds.pubmed_author = pm.pubmed_author;
+          })
+          .catch(() => undefined)
+      : Promise.resolve(),
+  ]);
 
   const tags = ruleTagFromProfile({
     title: twin.profile.title,
@@ -295,25 +312,41 @@ export async function runBuildStages(
     await deps.store.upsertTwin(twin);
   } else {
     const openalexIds = allOpenAlexIds(authorIds);
-    const collected: OpenAlexWork[] = [];
-    let author: Awaited<ReturnType<typeof fetchOpenAlexAuthor>> = null;
-    for (const openalexId of openalexIds) {
-      if (!author) author = await fetchOpenAlexAuthor(http, openalexId);
-      const works = await fetchOpenAlexWorks(http, openalexId, 25);
-      collected.push(...works);
-    }
+    // 合并多 OpenAlex 簇时并行拉 works（串行会随 ID 数线性变慢）
+    const perId = await Promise.all(
+      openalexIds.map(async (openalexId) => {
+        const [author, works] = await Promise.all([
+          primaryAuthor && openAlexIdMatches(primaryAuthor, openalexId)
+            ? Promise.resolve(primaryAuthor)
+            : fetchOpenAlexAuthor(http, openalexId),
+          fetchOpenAlexWorks(http, openalexId, 25),
+        ]);
+        return { author, works };
+      }),
+    );
+    const author =
+      (openalexIds[0]
+        ? perId.find(
+            (r) => r.author && openAlexIdMatches(r.author, openalexIds[0]!),
+          )?.author
+        : undefined) ??
+      perId.find((r) => r.author)?.author ??
+      primaryAuthor ??
+      null;
+    const collected: OpenAlexWork[] = perId.flatMap((r) => r.works);
     const works = dedupeOpenAlexWorks(collected);
     const pubs = pubsFromOpenAlexWorks(works);
-    // DOI → PMID 补齐（限前 5 篇，控配额）
-    for (const p of pubs.slice(0, 5)) {
-      if (p.doi && !p.pmid) {
+    // DOI → PMID 补齐（限前 5 篇，并行）
+    await Promise.all(
+      pubs.slice(0, 5).map(async (p) => {
+        if (!p.doi || p.pmid) return;
         try {
           p.pmid = await enrichPmidByDoi(http, p.doi);
         } catch {
           /* ignore */
         }
-      }
-    }
+      }),
+    );
     const themes = author ? themesFromOpenAlex(author, works) : [];
     twin = {
       ...twin,

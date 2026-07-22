@@ -9,6 +9,7 @@ import { TagBadges } from "@/components/TagBadges";
 import { useT } from "@/i18n";
 import type { MessageKey } from "@/i18n/types";
 import { mergeCandidatesForConfirm } from "@/lib/merge-candidates";
+import { readResponseJson } from "@/lib/http-json";
 import { useHcpContext } from "@/store/hcp-context";
 import type { HcpTags } from "@hca/domain";
 
@@ -135,7 +136,9 @@ export default function NewTwinPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, hospital, dept, city }),
       });
-      const data = await res.json();
+      const data = await readResponseJson<ResolveData & { error?: { message?: string } }>(
+        res,
+      );
       if (!res.ok) {
         setError(data?.error?.message ?? tr("twins.new.queryFailed"));
         return;
@@ -212,7 +215,11 @@ export default function NewTwinPage() {
             : undefined,
         }),
       });
-      const data = await res.json();
+      const data = await readResponseJson<{
+        hcpId?: string;
+        knowledge_jobs?: KnowledgeJob[];
+        error?: { message?: string };
+      }>(res);
       if (!res.ok) {
         setError(data?.error?.message ?? tr("common.saveFailed"));
         return;

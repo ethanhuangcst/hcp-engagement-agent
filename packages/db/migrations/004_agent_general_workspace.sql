@@ -2,8 +2,8 @@
 INSERT INTO hcp_twins (hcp_id, identity, twin, tags, as_of, twin_version, schema_version, updated_at)
 VALUES (
   '_agent_general',
-  '{"name_zh":"通用工作区","hospital":"—","department":"—"}'::jsonb,
-  '{
+  CAST('{"name_zh":"通用工作区","hospital":"—","department":"—"}' AS JSON),
+  CAST('{
     "meta": {
       "schema_version": "0.1.5-p0",
       "hcp_id": "_agent_general",
@@ -22,11 +22,11 @@ VALUES (
       "disambiguation_status": "unresolved",
       "specialties": []
     }
-  }'::jsonb,
+  }' AS JSON),
   NULL,
-  '2026-07-18'::date,
+  '2026-07-18',
   0,
   '0.1.5-p0',
-  NOW()
+  NOW(3)
 )
-ON CONFLICT (hcp_id) DO NOTHING;
+ON DUPLICATE KEY UPDATE hcp_id = hcp_id;

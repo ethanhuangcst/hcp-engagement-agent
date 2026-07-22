@@ -29,19 +29,20 @@ export async function createJob(input: {
   const jobId = randomUUID();
   const pool = getPool();
   const status = input.status ?? "pending";
-  const { rows } = await pool.query<IngestJobRow>(
+  await pool.query(
     `INSERT INTO rag_ingest_jobs (job_id, specialty, hcp_id, status, progress, updated_at)
-     VALUES ($1, $2, $3, $4, $5, NOW())
-     RETURNING *`,
+     VALUES (?, ?, ?, ?, ?, NOW(3))`,
     [jobId, input.specialty, input.hcpId ?? null, status, status === "ready" ? 1 : 0],
   );
-  return rows[0]!;
+  const row = await getJobById(jobId);
+  if (!row) throw new Error(`createJob: row not found after insert (${jobId})`);
+  return row;
 }
 
 export async function getJobById(jobId: string): Promise<IngestJobRow | null> {
   const pool = getPool();
   const { rows } = await pool.query<IngestJobRow>(
-    `SELECT * FROM rag_ingest_jobs WHERE job_id = $1`,
+    `SELECT * FROM rag_ingest_jobs WHERE job_id = ?`,
     [jobId],
   );
   return rows[0] ?? null;
@@ -53,7 +54,7 @@ export async function getLatestJobBySpecialty(
   const pool = getPool();
   const { rows } = await pool.query<IngestJobRow>(
     `SELECT * FROM rag_ingest_jobs
-     WHERE specialty = $1
+     WHERE specialty = ?
      ORDER BY updated_at DESC
      LIMIT 1`,
     [specialty],
@@ -65,12 +66,13 @@ export async function findInProgressJob(
   specialty: string,
 ): Promise<IngestJobRow | null> {
   const pool = getPool();
+  const placeholders = IN_PROGRESS.map(() => "?").join(", ");
   const { rows } = await pool.query<IngestJobRow>(
     `SELECT * FROM rag_ingest_jobs
-     WHERE specialty = $1 AND status = ANY($2::text[])
+     WHERE specialty = ? AND status IN (${placeholders})
      ORDER BY updated_at DESC
      LIMIT 1`,
-    [specialty, IN_PROGRESS],
+    [specialty, ...IN_PROGRESS],
   );
   return rows[0] ?? null;
 }
@@ -84,24 +86,24 @@ export async function updateJob(
   },
 ): Promise<IngestJobRow | null> {
   const pool = getPool();
-  const sets: string[] = ["updated_at = NOW()"];
-  const vals: unknown[] = [jobId];
-  let idx = 2;
+  const sets: string[] = ["updated_at = NOW(3)"];
+  const vals: unknown[] = [];
   if (patch.status !== undefined) {
-    sets.push(`status = $${idx++}`);
+    sets.push("status = ?");
     vals.push(patch.status);
   }
   if (patch.progress !== undefined) {
-    sets.push(`progress = $${idx++}`);
+    sets.push("progress = ?");
     vals.push(patch.progress);
   }
   if (patch.error !== undefined) {
-    sets.push(`error = $${idx++}::jsonb`);
+    sets.push("error = CAST(? AS JSON)");
     vals.push(patch.error ? JSON.stringify(patch.error) : null);
   }
-  const { rows } = await pool.query<IngestJobRow>(
-    `UPDATE rag_ingest_jobs SET ${sets.join(", ")} WHERE job_id = $1 RETURNING *`,
+  vals.push(jobId);
+  await pool.query(
+    `UPDATE rag_ingest_jobs SET ${sets.join(", ")} WHERE job_id = ?`,
     vals,
   );
-  return rows[0] ?? null;
+  return getJobById(jobId);
 }

@@ -2,7 +2,7 @@
 
 > as_of：2026-07-17  
 > 规格：[`rag-function-spec.md`](./rag-function-spec.md) · 架构 §5.3 · 安装 §6  
-> 包：`@hca/medical-kb` · 向量：Qdrant · 元数据：香港 Postgres  
+> 包：`@hca/medical-kb` · 向量：Qdrant · 元数据：远程 MySQL  
 > 原则：**rag-implementation**（Hybrid + citation；禁止全科预灌、禁止混库）
 
 ## 1. 结论

@@ -157,6 +157,79 @@ describe("MVP-2 build_twin live pipeline (injected HTTP, not twin fixture stages
     expect(JSON.stringify(twin?.research)).not.toContain("mock_fixture");
   });
 
+  it("Stage C merges multiple OpenAlex ids with parallel works fetch", async () => {
+    const primary = "A5096108853";
+    const alias = "A5036793431";
+    await confirmAndSaveTwin(store, {
+      hcpId: "hcp_merge_perf",
+      name_zh: "王长希",
+      name_en: "Changxi Wang",
+      hospital: "中山医院",
+      department: "器官移植科",
+      openalex_ids: [primary, alias],
+    });
+
+    const worksCalls: string[] = [];
+    const http = createHttpClient({
+      minIntervalMs: 0,
+      fetchFn: async (input) => {
+        const url = String(input);
+        if (url.includes("api.openalex.org/works")) {
+          worksCalls.push(url);
+          const id = url.includes(alias) ? alias : primary;
+          return new Response(
+            JSON.stringify({
+              results: [
+                {
+                  id: `https://openalex.org/works/W-${id}`,
+                  title: `Paper ${id}`,
+                  publication_year: 2023,
+                  doi: `10.1000/${id}`,
+                },
+              ],
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.includes(`authors/${primary}`) || url.includes(`authors/${alias}`)) {
+          const id = url.includes(alias) ? alias : primary;
+          return new Response(
+            JSON.stringify({
+              id: `https://openalex.org/authors/${id}`,
+              display_name: "Changxi Wang",
+              x_concepts: [{ display_name: "Medicine", score: 0.9, level: 0 }],
+              last_known_institutions: [{ display_name: "Zhongshan Hospital" }],
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.includes("clinicaltrials.gov")) {
+          return new Response(JSON.stringify({ studies: [] }), { status: 200 });
+        }
+        return new Response(JSON.stringify({ results: [] }), { status: 200 });
+      },
+    });
+
+    const status: BuildStatus = {
+      runId: "run_merge",
+      hcpId: "hcp_merge_perf",
+      mode: "full",
+      phase: "queued",
+      progress: 0,
+      message: "",
+      updated_at: new Date().toISOString(),
+      started_at: new Date().toISOString(),
+    };
+    await runBuildStages({ store, http }, status, () => undefined);
+
+    expect(worksCalls.length).toBeGreaterThanOrEqual(2);
+    const twin = await store.getTwin("hcp_merge_perf");
+    const pubs = twin?.research?.recent_pubs as Array<{ title?: string }> | undefined;
+    expect(pubs?.length).toBeGreaterThanOrEqual(2);
+    const used = (twin?.activity as { openalex_ids_used?: string[] })?.openalex_ids_used;
+    expect(used).toEqual(expect.arrayContaining([primary, alias]));
+  });
+
   it("get_twin_status NOT_FOUND for unknown run", async () => {
     const r = await getTwinStatusTool(store, { runId: "run_missing" });
     expect(r.ok).toBe(false);

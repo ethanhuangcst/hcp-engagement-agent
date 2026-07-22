@@ -1,6 +1,9 @@
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 
+/** Always take these from `.env` even if shell already set them (stale postgres URL). */
+const FILE_WINS = new Set(["DATABASE_URL"]);
+
 /** Load root `.env` into process.env if present (no secret logging). */
 export function loadRootEnv(fromDir = process.cwd()): void {
   const candidates = [
@@ -24,7 +27,9 @@ export function loadRootEnv(fromDir = process.cwd()): void {
       ) {
         value = value.slice(1, -1);
       }
-      if (process.env[key] === undefined) process.env[key] = value;
+      if (FILE_WINS.has(key) || process.env[key] === undefined) {
+        process.env[key] = value;
+      }
     }
     return;
   }

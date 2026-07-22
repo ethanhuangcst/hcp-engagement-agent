@@ -10,7 +10,7 @@
 hcp_id × work(doi|pmid) × source_site → hit_status
 ```
 
-投影到 Twin：`author_ids`、`recent_pubs`、`themes`。存香港 Postgres。
+投影到 Twin：`author_ids`、`recent_pubs`、`themes`。存远程 MySQL。
 
 ## 流水线
 

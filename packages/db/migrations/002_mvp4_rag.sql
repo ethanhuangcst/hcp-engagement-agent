@@ -1,28 +1,27 @@
--- MVP-4: RAG ingest manifest + jobs (Hong Kong Postgres)
+-- MVP-4: RAG ingest manifest + jobs (MySQL)
 CREATE TABLE IF NOT EXISTS ingest_manifest (
-  doc_id        TEXT PRIMARY KEY,
-  index_name    TEXT NOT NULL,
-  specialty     TEXT,
-  version       TEXT NOT NULL,
-  as_of         DATE,
-  corpus_path   TEXT,
-  chunk_count   INTEGER NOT NULL DEFAULT 0,
-  authority     TEXT,
-  metadata      JSONB NOT NULL DEFAULT '{}'::jsonb,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+  doc_id      VARCHAR(191) PRIMARY KEY,
+  index_name  VARCHAR(128) NOT NULL,
+  specialty   VARCHAR(191) NULL,
+  version     VARCHAR(128) NOT NULL,
+  as_of       DATE NULL,
+  corpus_path TEXT NULL,
+  chunk_count INT NOT NULL DEFAULT 0,
+  authority   VARCHAR(191) NULL,
+  metadata    JSON NOT NULL DEFAULT (JSON_OBJECT()),
+  created_at  DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at  DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  INDEX idx_ingest_manifest_index (index_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS rag_ingest_jobs (
-  job_id        TEXT PRIMARY KEY,
-  specialty     TEXT,
-  hcp_id        TEXT,
-  status        TEXT NOT NULL,
-  progress      REAL,
-  error         JSONB,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_ingest_manifest_index ON ingest_manifest (index_name);
-CREATE INDEX IF NOT EXISTS idx_rag_jobs_specialty ON rag_ingest_jobs (specialty);
+  job_id     VARCHAR(191) PRIMARY KEY,
+  specialty  VARCHAR(191) NULL,
+  hcp_id     VARCHAR(191) NULL,
+  status     VARCHAR(64) NOT NULL,
+  progress   DOUBLE NULL,
+  error      JSON NULL,
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  INDEX idx_rag_jobs_specialty (specialty)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -1,8 +1,16 @@
 # HCP Engagement Assistant — local / edge stack
-# Postgres stays on Hong Kong managed instance (DATABASE_URL in .env).
+# MySQL stays on remote managed instance (DATABASE_URL in .env).
+# App images come from GHCR (built by .github/workflows/docker-build.yml).
 #
 #   cp .env.example .env   # fill DATABASE_URL (+ LLM keys if needed)
-#   docker compose up -d --build
+#   # If GHCR packages are private:
+#   echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
+#   docker compose pull
+#   docker compose up -d
+#
+# Image tag (default: latest from main):
+#   IMAGE_TAG=sha-abc1234 docker compose up -d
+#   IMAGE_TAG=1.2.3 docker compose up -d
 #
 # Ports (host):
 #   Web     http://127.0.0.1:3001
@@ -10,6 +18,10 @@
 #   Qdrant  http://127.0.0.1:6333     (loopback only)
 
 name: hcp-engagement
+
+x-ghcr: &ghcr
+  # ethanhuangcst/hcp-engagement-agent — matches GITHUB_REPOSITORY
+  pull_policy: always
 
 services:
   qdrant:
@@ -23,11 +35,8 @@ services:
       QDRANT__SERVICE__HTTP_PORT: "6333"
 
   hcp-twin-mcp:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.mcp
-      args:
-        NPM_REGISTRY: ${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}
+    <<: *ghcr
+    image: ghcr.io/ethanhuangcst/hcp-engagement-agent/hcp-twin-mcp:${IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file:
       - .env
@@ -57,11 +66,8 @@ services:
       start_period: 20s
 
   web:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.web
-      args:
-        NPM_REGISTRY: ${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}
+    <<: *ghcr
+    image: ghcr.io/ethanhuangcst/hcp-engagement-agent/web:${IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file:
       - .env

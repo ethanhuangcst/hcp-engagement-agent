@@ -1,6 +1,6 @@
 # HCP Engagement Assistant
 
-Monorepo：Next.js Web（BFF）+ `hcp-twin-mcp` + Postgres（香港）+ RAG/Agent。
+Monorepo：Next.js Web（BFF）+ `hcp-twin-mcp` + MySQL（主库）+ RAG/Agent。
 
 ## 一键初始化（推荐）
 
@@ -24,7 +24,7 @@ cd ~/code/hcp-engagement-agent && npm run init -- --skip-git
 | 包 | 说明 |
 |----|------|
 | `@hca/domain` | Twin / Insights / AuthorIds / tags / MCP_ERROR Zod |
-| `@hca/db` | Postgres 客户端与 `hcp_twins` / `hcp_insights` 迁移 |
+| `@hca/db` | MySQL 客户端与 `hcp_twins` / `hcp_insights` 迁移（见 `specs/9.deploy.md`） |
 | `@hca/hcp-twin-mcp` | Tools：resolve / confirm / `build_twin` / `get_twin_status` / heatmap… |
 | `@hca/mcp-client` | BFF → MCP Streamable HTTP |
 | `@hca/web` | Twin 工作台（身份 CRUD + 情报构建进度） |
@@ -58,18 +58,18 @@ npm run typecheck
 
 ## Docker Compose（Web + MCP + Qdrant）
 
-Postgres 仍用香港托管（`.env` 的 `DATABASE_URL`），不在 compose 内起库。
+MySQL 主库为远程实例（`.env` 的 `DATABASE_URL`），不在 compose 内起库。`web` / `hcp-twin-mcp` **拉取 GHCR 制品**（不本地 `--build`）。
 
 ```bash
 cp .env.example .env   # 填 DATABASE_URL
-docker compose up -d --build
+# 私有 GHCR：echo $GITHUB_TOKEN | docker login ghcr.io -u USER --password-stdin
+docker compose pull && docker compose up -d
 # Web http://127.0.0.1:3001 · MCP :3200/health · Qdrant 仅 127.0.0.1:6333
+# 可选：IMAGE_TAG=sha-… 或 semver
 docker compose logs -f web hcp-twin-mcp
 docker compose down
 ```
 
-镜像定义见 `docker/Dockerfile.web`、`docker/Dockerfile.mcp`。
-
-CI：推送 / PR 走 [`.github/workflows/docker-build.yml`](.github/workflows/docker-build.yml)；`main` / `v*` 标签额外推送到 GHCR（`ghcr.io/<owner>/<repo>/web` · `…/hcp-twin-mcp`）。
+CI 构建推送：[`.github/workflows/docker-build.yml`](.github/workflows/docker-build.yml) → `ghcr.io/ethanhuangcst/hcp-engagement-agent/{web,hcp-twin-mcp}`。部署细节见 [`specs/9.deploy.md`](specs/9.deploy.md)。
 
 规格：`specs/mcp/mcp-function-spec.md` · `specs/app/app-function-spec.md` · DoD：`specs/7.test-strategy.md`。

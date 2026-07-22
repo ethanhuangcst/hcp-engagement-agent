@@ -190,7 +190,7 @@ Feature: Twin / Insights 读取
 
 ### 规则清单
 
-- Twin / Insights 以香港 Postgres 为权威主库（JSONB upsert）。
+- Twin / Insights 以远程 MySQL 为权威主库（JSONB upsert）。
 - 破坏性 schema 变更须升 `schema_version`。
 
 ---

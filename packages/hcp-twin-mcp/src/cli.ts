@@ -20,7 +20,10 @@ function loadRootEnv(): void {
     ) {
       value = value.slice(1, -1);
     }
-    if (process.env[key] === undefined) process.env[key] = value;
+    // DATABASE_URL: always prefer repo .env (shell often has stale postgresql://)
+    if (key === "DATABASE_URL" || process.env[key] === undefined) {
+      process.env[key] = value;
+    }
   }
 }
 

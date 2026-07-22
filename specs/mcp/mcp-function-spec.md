@@ -13,7 +13,7 @@
 | 传输解耦 | Tools/Resources 注册与业务逻辑不依赖传输；入口只切换 `stdio` / Streamable HTTP |
 | 浏览器隔离 | 浏览器只调 BFF；BFF 用 `mcp-client`；禁止浏览器直连 `:3200` |
 | Playwright 隔离 | Chromium **仅**本进程；`apps/web` 禁止依赖 playwright |
-| 共享主库 | 写香港 **Postgres**；与 BFF、Agent 共用 `DATABASE_URL` |
+| 共享主库 | 写远程 **MySQL**；与 BFF、Agent 共用 `DATABASE_URL` |
 | 合规 | 仅公开信息；禁止处方/统方/非公开 CRM；热力禁止拜访笔记冒充 |
 | 批次 | 功能与对外接口「实现批次」填 **MVP-1…MVP-4**（见 [`1.product-definition.md`](../1.product-definition.md)） |
 
@@ -59,9 +59,9 @@ Research Collector **仅**使用同时满足下列条件的源：公开 HTTP API
 | 2 | F-MCP-002 | Tool/Resource 注册 | 用 SDK 当前 API（`tool`/`resource` 或 `registerTool`/`registerResource`）注册；实现前对照官方 MCP 文档或 Context7，避免过时签名 | MVP-1 |
 | 3 | F-MCP-003 | 输入 Zod 校验 | 每个 Tool 入参 Zod；失败返回**结构化**错误（`code` + 可读 `message`），不向 Client 抛原始堆栈 | MVP-1 |
 | 4 | F-MCP-004 | Tool 描述可机读 | 每个 Tool 的 `description` 写清：副作用、是否幂等、限速/成本、何时调用；供 Cursor/Agent 选 Tool | MVP-1 |
-| 5 | F-MCP-005 | 健康检查 | `health_check`：进程存活、Postgres 可达、可选 Playwright/Chromium 就绪；供 BFF `GET /api/health` | MVP-1 |
+| 5 | F-MCP-005 | 健康检查 | `health_check`：进程存活、MySQL 可达、可选 Playwright/Chromium 就绪；供 BFF `GET /api/health` | MVP-1 |
 | 6 | F-MCP-006 | Twin 模式切换 | `TWIN_MODE=live`（默认）\| `mock`；mock **零外网**，读 fixture；产品验收必须 live | MVP-1 |
-| 7 | F-MCP-007 | 事务写入 Postgres | upsert `hcp_twins` / `hcp_insights`（JSONB）；破坏性变更升 `schema_version` | MVP-1 |
+| 7 | F-MCP-007 | 事务写入 MySQL | upsert `hcp_twins` / `hcp_insights`（JSONB）；破坏性变更升 `schema_version` | MVP-1 |
 | 8 | F-MCP-008 | 证据元数据强制 | 事实字段：`source_url` / `source_type` / `as_of` / `confidence`；冲突写 `conflict_note` | MVP-1 |
 | 9 | F-MCP-009 | 合规采集边界 | 仅公开源；禁止处方/统方/非公开 CRM/私人手机微信号营销画像；活动不得用拜访笔记冒充 `events` | MVP-1 |
 | 10 | F-MCP-010 | Playwright 进程隔离 | Chromium 仅本 MCP；并发浏览器上下文有上限；`CRAWLER_HEADLESS` 可配 | MVP-1 |

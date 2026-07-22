@@ -22,7 +22,7 @@ const nextConfig: NextConfig = {
     "@hca/mcp-client",
     "@hca/hcp-engagement-agent",
   ],
-  serverExternalPackages: ["pg", "openai", "@modelcontextprotocol/sdk"],
+  serverExternalPackages: ["mysql2", "openai", "@modelcontextprotocol/sdk"],
 };
 
 export default nextConfig;

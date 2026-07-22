@@ -35,7 +35,7 @@
 | 10 | F-WEB-010 | 新增分身入口 | 「新增数字分身」进入**空白**录入页（姓名/医院/科室/城市均不预填样例 HCP）；主按钮文案为「查询 HCP」（非「构建分身」）；朱同玉等仅作验收手工填写或 fixture，不作表单默认值 | MVP-1 |
 | 11 | F-WEB-011 | 查询 HCP（MCP 消歧） | 提交姓名+医院+科室 → BFF → `resolve_hcp_identity`；展示**以人为主体**的候选（姓名 Display、医院/科室/职称、区分同名说明）；文献号与网页源为次级「命中依据」，禁止把网页名当主标题 | MVP-1 |
 | 12 | F-WEB-012 | 选择候选医生 | 单选：主按钮「就是这位」→ 预览确认。多选：每卡 checkbox；勾选 ≥2 时底部「合并 N 人为一个分身」→ 预览确认（主候选决定 `hcpId` 与主 `openalex`，其余 OpenAlex 进 `openalex_aliases`）。匹配度中文：匹配较稳 / 需核对 / 证据不足。不自动全选 | MVP-1 |
-| 13 | F-WEB-013 | 确认并保存分身 | 「确认并保存」写入香港 Postgres（身份 / 标签 / AuthorIds：主 `openalex` + 可选 `openalex_aliases`）；确认页列出将绑定的全部 OpenAlex；异院候选高亮警告；**不自动**触发 `build_twin`；进入已保存详情 | MVP-1 |
+| 13 | F-WEB-013 | 确认并保存分身 | 「确认并保存」写入 MySQL（身份 / 标签 / AuthorIds：主 `openalex` + 可选 `openalex_aliases`）；确认页列出将绑定的全部 OpenAlex；异院候选高亮警告；**不自动**触发 `build_twin`；进入已保存详情 | MVP-1 |
 | 14 | F-WEB-014 | 智能体情报构建（常驻） | HCP资料常驻「智能体情报构建」区（无「收起进度」）。未构建：「尚无情报」+ 按钮「构建情报」；已入库：展示 A–E 完成态 +「重新构建情报」；构建中轮询 `get_twin_status`，文案「情报构建状态· …」。与 MCP Stage A–E **同批** | MVP-1 |
 | 15 | F-WEB-015 | 文献检索号码展示 | 详情/候选/洞察侧展示 AuthorIds 表（orcid、pubmed_author、google_scholar、openalex、**openalex_aliases**、scopus、cnki）；空值「待绑定」；aliases 以列表展示 | MVP-1 |
 | 16 | F-WEB-016 | 职业轨迹时间轴 | HCP资料：垂直脊线 + 节点；**展示文案随界面 locale**（默认 zh-CN 中文类型/职衔）；无节点诚实空态 | MVP-1 |

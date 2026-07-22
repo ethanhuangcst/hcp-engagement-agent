@@ -41,7 +41,7 @@
 4. **P0 Tools（仅 5 个）**  
    `get_twin_insights` · `retrieve_academic` · `retrieve_compliance`（提案路径**强制**）· `propose_engagement_options` · `revise_engagement`
 5. **LLM**：后台 `LlmClient` 适配层；**默认 Qwen（DashScope）**；配置可切换 OpenAI 兼容提供方；Key 不进浏览器。
-6. **持久化**：Options / sessions 写入香港 **Postgres**；与 Twin 共用 `DATABASE_URL`（见架构 / 安装规格）。
+6. **持久化**：Options / sessions 写入远程 **MySQL**；与 Twin 共用 `DATABASE_URL`（见架构 / 安装规格）。
 
 非目标（明确不要做）：爬虫/Playwright、自建向量库、多 Agent 路由、自动办会、CRM 回写、替代 MLR、无处方/统方数据。
 

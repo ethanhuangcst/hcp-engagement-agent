@@ -2,7 +2,10 @@ import { z } from "zod";
 import { getMcp } from "@/lib/mcp";
 import { loadRootEnv } from "@/lib/env";
 import { jsonOk, jsonError } from "@/lib/api";
-import { triggerKnowledgeIngest } from "@/lib/rag-ingest";
+import {
+  resolveSpecialtiesForIngest,
+  triggerKnowledgeIngest,
+} from "@/lib/rag-ingest";
 
 const Schema = z.object({
   hcpId: z.string().min(1),
@@ -62,18 +65,31 @@ export async function POST(req: Request) {
         : undefined,
     });
     if (!result.ok) return jsonError(result.error, 400);
-    let knowledge_jobs: Awaited<ReturnType<typeof triggerKnowledgeIngest>> = [];
-    try {
-      knowledge_jobs = await triggerKnowledgeIngest({
+
+    // 不阻塞保存：知识库 ingest 后台跑（原先 await 会叠远程 MySQL + Qdrant 往返）
+    const specialtyKeys = resolveSpecialtiesForIngest({
+      department: parsed.data.department,
+      specialties: parsed.data.specialties,
+      themes: parsed.data.themes,
+      tags_draft: parsed.data.tags_draft,
+    });
+    const knowledge_jobs = specialtyKeys.map((specialty) => ({
+      specialty,
+      jobId: "",
+      knowledge_status: "pending" as const,
+    }));
+    if (specialtyKeys.length > 0) {
+      void triggerKnowledgeIngest({
         hcpId: parsed.data.hcpId,
         department: parsed.data.department,
         specialties: parsed.data.specialties,
         themes: parsed.data.themes,
         tags_draft: parsed.data.tags_draft,
+      }).catch(() => {
+        /* fire-and-forget */
       });
-    } catch {
-      /* fire-and-forget: confirm must not fail on ingest errors */
     }
+
     return jsonOk({
       ...(result.data as object),
       knowledge_jobs,

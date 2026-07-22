@@ -36,7 +36,7 @@ LOOP:
   短 system + 会话 + tool_results
   → 模型：act（tool）或 respond
   → act：执行 → 写入 context → 继续
-  → respond：返回用户 / 写 Postgres
+  → respond：返回用户 / 写 MySQL
 ```
 
 ---
@@ -66,7 +66,7 @@ LOOP:
 
 | Tool | 作用 | 硬规则 |
 |------|------|--------|
-| `get_twin_insights` | 读 Postgres Insights | 不返回整包 twin |
+| `get_twin_insights` | 读 MySQL Insights | 不返回整包 twin |
 | `retrieve_academic` | medical-kb 学术 | specialty/themes 过滤 + citation |
 | `retrieve_compliance` | medical-kb 合规 | **提案路径不可跳过** |
 | `propose_engagement_options` | 生成 3–5 条 | 须含 `academic_refs` + `compliance_refs` |
@@ -82,7 +82,7 @@ LOOP:
 BFF → synthesizeDoingNow(hcpId)
   → 读 Insights 事实（可内部调 get 或仓储）
   → LlmClient → doing_now.summary (+ analysis?)
-  → 写 Postgres insights；metadata.llm
+  → 写 MySQL insights；metadata.llm
 ```
 
 ### B. 提案（薄 LangGraph）
@@ -94,7 +94,7 @@ START
   → compliance_gate（无命中 → 降级/拒敏）
   → propose_engagement_options（LlmClient）
   → cn-hcp-compliance Fail-fast
-  → persist options（Postgres）
+  → persist options（MySQL）
 END
 ```
 
@@ -152,7 +152,7 @@ chat(mode=revise_options, optionRunId) → 默认 revise_engagement → 可再 r
 
 ---
 
-## 9. 持久化（香港 Postgres）
+## 9. 持久化（远程 MySQL）
 
 | 实体 | 表（示意） |
 |------|------------|

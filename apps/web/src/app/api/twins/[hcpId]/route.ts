@@ -19,15 +19,26 @@ export async function GET(_req: Request, ctx: Ctx) {
   loadRootEnv();
   const { hcpId: rawId } = await ctx.params;
   const hcpId = decodeURIComponent(rawId);
-  const twin = await getTwin(hcpId);
-  if (!twin) {
+  try {
+    const twin = await getTwin(hcpId);
+    if (!twin) {
+      return jsonError(
+        { code: "NOT_FOUND", message: `未找到 Twin: ${hcpId}` },
+        404,
+      );
+    }
+    const runId = getRememberedRunId(hcpId);
+    return jsonOk({ twin, build: runId ? { runId } : null });
+  } catch (err) {
     return jsonError(
-      { code: "NOT_FOUND", message: `未找到 Twin: ${hcpId}` },
-      404,
+      {
+        code: "INTERNAL_ERROR",
+        message: err instanceof Error ? err.message : String(err),
+        repair_hint: "确认 DATABASE_URL 为 mysql://… 且实例可达（见 specs/9.deploy.md）",
+      },
+      502,
     );
   }
-  const runId = getRememberedRunId(hcpId);
-  return jsonOk({ twin, build: runId ? { runId } : null });
 }
 
 export async function PATCH(req: Request, ctx: Ctx) {

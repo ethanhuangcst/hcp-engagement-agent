@@ -3,7 +3,7 @@
 > as_of：2026-07-16 · 包名建议 `@hca/hcp-engagement-agent`  
 > 依据：[`1.product-definition.md`](../1.product-definition.md)、[`3.architecture.md`](../3.architecture.md) §5.4、[`4.install-dependencies.md`](../4.install-dependencies.md) §8、[`../app/app-function-spec.md`](../app/app-function-spec.md)、[`../../knowledge/agent-hcp-engagement/design-direction.md`](../../knowledge/agent-hcp-engagement/design-direction.md)、**agent-builder**、cn-hcp-pro / cn-hcp-compliance  
 > 设计：[`agent-design.md`](./agent-design.md)  
-> 范围：`packages/hcp-engagement-agent` — 决策与对话层（**LlmClient 默认 Qwen** + 一句话洞察 + 5 Capabilities + 薄 LangGraph + **open_chat / revise_options**）。**不是**爬虫、不是向量库；学术/合规检索经 `medical-kb`，Twin 事实经香港 Postgres。
+> 范围：`packages/hcp-engagement-agent` — 决策与对话层（**LlmClient 默认 Qwen** + 一句话洞察 + 5 Capabilities + 薄 LangGraph + **open_chat / revise_options**）。**不是**爬虫、不是向量库；学术/合规检索经 `medical-kb`，Twin 事实经远程 MySQL。
 
 ## 0. 结论（先读）
 
@@ -161,7 +161,7 @@ Agent 业务（loop / LangGraph / synthesize）
 | `LLM_API_KEY` | — | 通用键；`qwen` 时可用 `DASHSCOPE_API_KEY` 作为别名 |
 | `DASHSCOPE_API_KEY` | — | **Qwen 默认路径**推荐填写 |
 | `DASHSCOPE_BASE_URL` | DashScope 官方兼容 endpoint | 可选 |
-| `DATABASE_URL` | （必填） | 香港 Postgres；与 web / MCP 共用 |
+| `DATABASE_URL` | （必填） | 远程 MySQL；与 web / MCP 共用 |
 | `HCA_DATA_DIR` | `./data` | 可选；仅 RAG 语料根 |
 | `LLM_TIMEOUT_MS` | 实现自定 | 超时 → `LLM_TIMEOUT` |
 | `LLM_MAX_RETRIES` | 实现自定 | 可重试错误 |

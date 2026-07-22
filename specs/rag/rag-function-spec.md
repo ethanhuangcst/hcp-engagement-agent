@@ -13,7 +13,7 @@
 | 学术 ingest | Twin `specialty/themes` **按需**灌注；不做全科 / 全 PubMed 预灌 |
 | 合规 ingest | P0 种子库（RDPAC 等）策展；客户 SOP 上传 + `tenant_id`；**不按病种自动爬** |
 | Citation | 每条 chunk 含 source / version / as_of；Agent 生成须带 `academic_refs` + `compliance_refs` |
-| **数据驻留与安全** | 业务元数据（manifest）在**香港 Postgres**；语料源文件可暂存 `HCA_DATA_DIR/rag/corpus`；向量在内网 Qdrant；默认**不**用公有云向量 SaaS；Qdrant **不对公网暴露**；浏览器禁止直连 |
+| **数据驻留与安全** | 业务元数据（manifest）在**远程 MySQL**；语料源文件可暂存 `HCA_DATA_DIR/rag/corpus`；向量在内网 Qdrant；默认**不**用公有云向量 SaaS；Qdrant **不对公网暴露**；浏览器禁止直连 |
 | 批次 | 功能与对外接口「实现批次」填 **MVP-1…MVP-4**（见 [`../1.product-definition.md`](../1.product-definition.md)） |
 
 ```text
@@ -38,7 +38,7 @@ Twin specialty/themes ──► ingest_on_demand ──► academic_index (本�
 
 ### 目录与库表分工
 
-- **Postgres（香港）**：`ingest_manifest` 等元数据；与 Twin 共用 `DATABASE_URL`
+- **MySQL**：`ingest_manifest` 等元数据；与 Twin 共用 `DATABASE_URL`
 - **本地/卷 `HCA_DATA_DIR`（默认 `./data`）**：语料源文件暂存 + Qdrant 卷
 
 ```text
@@ -54,7 +54,7 @@ data/
 
 | 资产 | 位置 | Git | 公网 |
 |------|------|-----|------|
-| ingest 元数据 | 香港 Postgres | 不进 Git | 仅服务端经 `DATABASE_URL` |
+| ingest 元数据 | 远程 MySQL | 不进 Git | 仅服务端经 `DATABASE_URL` |
 | 主题语料（PDF/文本） | `data/rag/corpus/**` | **忽略**（仅 `.gitkeep`） | 不托管、不公开下载 |
 | 向量索引 | `data/qdrant/` 或 Docker volume | **忽略** | Qdrant **不**映射公网 |
 | 研究型说明（非语料） | `knowledge/rag-medical-knowledge-base/*.md` | 可入库 | 无运行时密钥/客户 SOP |
@@ -245,7 +245,7 @@ Query
 - 一次性全科 / 全 PubMed 预灌
 - 学术与合规混为单一索引
 - 无授权批量爬取知网/万方
-- pgvector 作主向量库（本项目向量仅 Qdrant；**业务主库已是香港 Postgres**）
+- pgvector 作主向量库（本项目向量仅 Qdrant；**业务主库已是远程 MySQL**）
 
 ---
 

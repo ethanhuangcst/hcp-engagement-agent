@@ -10,6 +10,7 @@ import { HcpNameHeading } from "@/components/HcpNameHeading";
 import { TagBadges } from "@/components/TagBadges";
 import { useLocale, useT } from "@/i18n";
 import type { MessageKey } from "@/i18n/types";
+import { readResponseJson } from "@/lib/http-json";
 import { useHcpContext } from "@/store/hcp-context";
 import {
   pickInsightsNarrative,
@@ -91,20 +92,33 @@ export default function TwinDetailClient() {
       fetch(`/api/twins/${encodeURIComponent(hcpId)}`),
       fetch(`/api/insights/${encodeURIComponent(hcpId)}`),
     ]);
-    const tData = await tRes.json();
+    let tData: {
+      twin?: VirtualTwin;
+      error?: { message?: string };
+    };
+    try {
+      tData = await readResponseJson(tRes);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      return;
+    }
     if (!tRes.ok) {
       setError(tData?.error?.message ?? tr("common.loadFailed"));
       return;
     }
-    setTwin(tData.twin);
+    setTwin(tData.twin ?? null);
     openTwin(
       hcpId,
       tData.twin?.profile?.name_zh ?? hcpId,
       tData.twin?.profile?.name_en ?? tData.twin?.identity?.name_en,
     );
     if (iRes.ok) {
-      const iData = await iRes.json();
-      setInsights(iData.insights);
+      try {
+        const iData = await readResponseJson<{ insights?: HcpInsights }>(iRes);
+        setInsights(iData.insights ?? null);
+      } catch {
+        /* insights optional */
+      }
     }
   }, [hcpId, openTwin, tr]);
 

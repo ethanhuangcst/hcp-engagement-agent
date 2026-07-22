@@ -129,14 +129,15 @@ async function upsertManifest(row: {
   const pool = getPool();
   await pool.query(
     `INSERT INTO ingest_manifest (doc_id, index_name, version, as_of, corpus_path, chunk_count, authority, updated_at)
-     VALUES ($1,$2,$3,$4::date,$5,$6,$7,NOW())
-     ON CONFLICT (doc_id) DO UPDATE SET
-       version = EXCLUDED.version,
-       as_of = EXCLUDED.as_of,
-       corpus_path = EXCLUDED.corpus_path,
-       chunk_count = EXCLUDED.chunk_count,
-       authority = EXCLUDED.authority,
-       updated_at = NOW()`,
+     VALUES (?,?,?,?,?,?,?,NOW(3))
+     AS new
+     ON DUPLICATE KEY UPDATE
+       version = new.version,
+       as_of = new.as_of,
+       corpus_path = new.corpus_path,
+       chunk_count = new.chunk_count,
+       authority = new.authority,
+       updated_at = NOW(3)`,
     [
       row.doc_id,
       row.index_name,
