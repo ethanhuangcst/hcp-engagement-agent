@@ -91,3 +91,8 @@ services:
         condition: service_started
 
 volumes: {}
+
+
+networks:
+  default:
+    name: portainer_network
