@@ -1,0 +1,65 @@
+{
+  "artifacts_root": "specs",
+  "locale": "HanS",
+  "adr": "specs/adr",
+  "knowledge": "specs/knowledge",
+  "files": [
+    "specs/product-backlog.md",
+    "specs/sprint-backlog.md",
+    "specs/status.md",
+    "specs/changes-log.md",
+    "specs/issues-log.md",
+    "specs/release.md",
+    "specs/spec1.0/1.product-definition.md",
+    "specs/spec1.0/2.business-context.md",
+    "specs/spec1.0/3.architecture.md",
+    "specs/spec1.0/4.install-dependencies.md",
+    "specs/spec1.0/5.hcp-twin-data-dictionary.md",
+    "specs/spec1.0/6.ui-guideline.md",
+    "specs/spec1.0/7.test-strategy.md",
+    "specs/spec1.0/8.hcp-kol-samples.md",
+    "specs/spec1.0/ToDo.md"
+  ],
+  "modules": [
+    {
+      "folder": "app",
+      "files": [
+        "specs/app/app-design.md",
+        "specs/app/app-stories.md",
+        "specs/app/app-function-spec.md"
+      ]
+    },
+    {
+      "folder": "agent",
+      "files": [
+        "specs/agent/agent-design.md",
+        "specs/agent/agent-stories.md",
+        "specs/agent/agent-function-spec.md"
+      ]
+    },
+    {
+      "folder": "mcp",
+      "files": [
+        "specs/mcp/mcp-design.md",
+        "specs/mcp/mcp-stories.md",
+        "specs/mcp/mcp-function-spec.md"
+      ]
+    },
+    {
+      "folder": "mcp2.0",
+      "files": [
+        "specs/mcp2.0/mcp2-design.md",
+        "specs/mcp2.0/mcp2-stories.md",
+        "specs/mcp2.0/mcp2-test.md"
+      ]
+    },
+    {
+      "folder": "rag",
+      "files": [
+        "specs/rag/rag-design.md",
+        "specs/rag/rag-stories.md",
+        "specs/rag/rag-function-spec.md"
+      ]
+    }
+  ]
+}

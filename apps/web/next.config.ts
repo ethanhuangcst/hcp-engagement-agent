@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
     "@hca/domain",
     "@hca/db",
     "@hca/mcp-client",
+    "@hca/medical-kb",
     "@hca/hcp-engagement-agent",
   ],
   serverExternalPackages: ["pg", "openai", "@modelcontextprotocol/sdk"],
