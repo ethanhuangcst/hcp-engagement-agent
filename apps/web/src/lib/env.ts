@@ -9,15 +9,14 @@ export function loadRootEnv(): void {
   loaded = true;
   process.env.HCA_ENV_LOADED = "1";
 
-  const rootEnv = resolve(
-    /* turbopackIgnore: true */ process.cwd(),
-    "../../.env",
-  );
-  const localEnv = resolve(
-    /* turbopackIgnore: true */ process.cwd(),
-    ".env.local",
-  );
-  for (const path of [localEnv, rootEnv]) {
+  const rootDir = resolve(/* turbopackIgnore: true */ process.cwd(), "../..");
+  const appLocalEnv = resolve(/* turbopackIgnore: true */ process.cwd(), ".env.local");
+  const layers: { path: string; override: boolean }[] = [
+    { path: resolve(rootDir, ".env"), override: false },
+    { path: resolve(rootDir, ".env.local"), override: true },
+    { path: appLocalEnv, override: true },
+  ];
+  for (const { path, override } of layers) {
     if (!existsSync(path)) continue;
     for (const line of readFileSync(path, "utf8").split("\n")) {
       const trimmed = line.trim();
@@ -32,7 +31,9 @@ export function loadRootEnv(): void {
       ) {
         value = value.slice(1, -1);
       }
-      if (process.env[key] === undefined) process.env[key] = value;
+      if (override || process.env[key] === undefined) {
+        process.env[key] = value;
+      }
     }
   }
 }

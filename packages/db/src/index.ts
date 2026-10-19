@@ -11,11 +11,17 @@ export {
   getTwin,
   deleteTwin,
   listTwins,
+  queryTwins,
+  nameMatches,
+  nameMatchTier,
+  filtersMatch,
   upsertInsights,
   getInsights,
   updateTwinTags,
   updateTwinIdentity,
   type TwinListItem,
+  type QueryTwinsInput,
+  type QueryTwinsResult,
 } from "./twins.js";
 
 export {

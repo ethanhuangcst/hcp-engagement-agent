@@ -41,6 +41,7 @@
 
 | # | Severity | Title | Description | Impact | Solution | Related | Closed Sprint |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 中 | 生产密钥缺单一真相源 | 发布手册落成时，生产密钥（SSH、`DATABASE_URL`、LLM Key）只散落在临时文件 `specs/.tmp`，且 `.gitignore` 未覆盖；公开仓库有误提交风险，运维排障无安全入口 | 部署与排障需人工翻临时文件；有误连他库与密钥泄露风险 | 已建 gitignored `specs/.secrets` 并经 SSH 实机核对写入生产配置（2026-10-19）；`.gitignore` 已补 `specs/.secrets` / `specs/.tmp`；教训入 `specs/knowledge/ops/secrets-file-gitignore-first.md` | [release.md](./release.md) · OGT-1 | - |
 
 ---
 
@@ -70,24 +71,29 @@ Additional Done Criteria, on top of the Definition of Done:
 
 | # | Code | SBI | Parent PBI | Module/Type | Related specs | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | feature-01 | query_hcp 对外工具 | [MCP2-01 query_hcp · 查询 HCP](./product-backlog.md#L60) | mcp2.0/Feature | - [product-backlog MCP 需求](./product-backlog.md#external-service)<br>- [Web Twin API](app/app-function-spec.md) | **ToDo** |
+| 1 | feature-01 | query_hcp 对外工具 | [MCP2-01 query_hcp · 查询 HCP](./product-backlog.md#L60) | mcp2.0/Feature | - [product-backlog MCP 需求](./product-backlog.md#external-service)<br>- [Web Twin API](app/app-function-spec.md) | **Done** |
 | 2 | feature-02 | list_hcp 对外工具 | [MCP2-06 list_hcp · 列出 HCP](./product-backlog.md#L69) | mcp2.0/Feature | - [product-backlog MCP 需求](./product-backlog.md#external-service)<br>- [Web 分身列表](app/app-function-spec.md) | **ToDo** |
 | 3 | feature-03 | add_hcp 对外工具 | [MCP2-02 add_hcp · 新增 HCP](./product-backlog.md#L75) | mcp2.0/Feature | - [product-backlog MCP 需求](./product-backlog.md#external-service)<br>- [Web 确认保存](app/app-function-spec.md) | **ToDo** |
-| 4 | task-01 | 对外 MCP 2.0 进程与工具注册骨架 | [MCP2-01 query_hcp · 查询 HCP](./product-backlog.md#L60) | mcp2.0/Task | - [mcp2-design.md](mcp2.0/mcp2-design.md)<br>- [mcp2-test.md](mcp2.0/mcp2-test.md) | **ToDo** |
+| 4 | task-01 | 对外 MCP 2.0 进程与工具注册骨架 | [MCP2-01 query_hcp · 查询 HCP](./product-backlog.md#L60) | mcp2.0/Task | - [mcp2-design.md](mcp2.0/mcp2-design.md)<br>- [mcp2-test.md](mcp2.0/mcp2-test.md) | **Done** |
 
 ### Retrospective
 
 **Learnings**
 
-尚无记录。
+1. task-01：本地 Cursor 与生产共用 Streamable HTTP（ADR-008），避免 stdio 与 `dist/` 产物不同步；见 [ADR-008](../docs/adr/ADR-008-mcp2-http-only-transport.md)。
+2. task-01：陈旧 `@esbuild/darwin-arm64/bin/esbuild` 无 `+x` 会导致 `npm install` EACCES；见 [npm-esbuild-stale-binary-perms.md](./knowledge/ops/npm-esbuild-stale-binary-perms.md)。
+3. feature-01：Vitest mock `pg` 会掩盖 MySQL 方言失败；DEF-001 与 query_hcp 宜同一 PR 验收。
+4. feature-01：无空格拉丁串（如 `changxiwang`）不会词序互换；规格未要求，调用方应传空格或中文名。
 
 **Opportunities**
 
-尚无记录。
+1. task-01：根 `Makefile` 的 `up`/`down` 可封装 `dev:hcp-engagement-mcp`，减少 HTTP 模式「进程未起 Cursor 连不上」。
+2. feature-01：`loadRootEnv` 与 Web 500 错误体净化仍分散，可另开小任务。
 
 **Future actions**
 
-尚无记录。
+1. task-01：下一条同类本地 MCP 故事开工前，在 README 或 release §6.1 补一句「改 mcp.json 后 Reload Window + 确认 :3300 在跑」。
+2. feature-01 / DEF-001：合并 mysql2 与姓名规则时，先跑 `@hca/db` 纯函数再启 MCP；重启后 Cursor 需 Reload MCP 会话。
 
 ---
 

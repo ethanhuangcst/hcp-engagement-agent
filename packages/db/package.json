@@ -20,10 +20,10 @@
   },
   "dependencies": {
     "@hca/domain": "*",
-    "pg": "^8.22.0"
+    "mysql2": "^3.24.6",
+    "pinyin-pro": "^3.27.0"
   },
   "devDependencies": {
-    "@types/pg": "^8.15.0",
     "@vitest/coverage-v8": "^4.1.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",

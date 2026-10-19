@@ -4,7 +4,8 @@ import {
   type ChatSession,
   type EngagementOptionsRun,
 } from "@hca/domain";
-import { getPool } from "./client.js";
+import type { RowDataPacket } from "mysql2/promise";
+import { asJson, getPool } from "./client.js";
 
 export async function upsertEngagementOptions(
   run: EngagementOptionsRun,
@@ -13,18 +14,13 @@ export async function upsertEngagementOptions(
   const pool = getPool();
   await pool.query(
     `INSERT INTO engagement_options (run_id, hcp_id, payload, as_of, updated_at)
-     VALUES ($1, $2, $3::jsonb, $4::date, NOW())
-     ON CONFLICT (run_id) DO UPDATE SET
-       hcp_id = EXCLUDED.hcp_id,
-       payload = EXCLUDED.payload,
-       as_of = EXCLUDED.as_of,
+     VALUES (?, ?, ?, ?, NOW()) AS new
+     ON DUPLICATE KEY UPDATE
+       hcp_id = new.hcp_id,
+       payload = new.payload,
+       as_of = new.as_of,
        updated_at = NOW()`,
-    [
-      parsed.run_id,
-      parsed.hcp_id,
-      JSON.stringify(parsed),
-      parsed.as_of,
-    ],
+    [parsed.run_id, parsed.hcp_id, JSON.stringify(parsed), parsed.as_of],
   );
   return parsed;
 }
@@ -33,29 +29,29 @@ export async function getEngagementOptionsRun(
   runId: string,
 ): Promise<EngagementOptionsRun | null> {
   const pool = getPool();
-  const r = await pool.query<{ payload: unknown }>(
-    `SELECT payload FROM engagement_options WHERE run_id = $1`,
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT payload FROM engagement_options WHERE run_id = ?`,
     [runId],
   );
-  const row = r.rows[0];
+  const row = rows[0];
   if (!row) return null;
-  return EngagementOptionsRunSchema.parse(row.payload);
+  return EngagementOptionsRunSchema.parse(asJson<unknown>(row.payload));
 }
 
 export async function getLatestEngagementOptions(
   hcpId: string,
 ): Promise<EngagementOptionsRun | null> {
   const pool = getPool();
-  const r = await pool.query<{ payload: unknown }>(
+  const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT payload FROM engagement_options
-     WHERE hcp_id = $1
+     WHERE hcp_id = ?
      ORDER BY updated_at DESC
      LIMIT 1`,
     [hcpId],
   );
-  const row = r.rows[0];
+  const row = rows[0];
   if (!row) return null;
-  return EngagementOptionsRunSchema.parse(row.payload);
+  return EngagementOptionsRunSchema.parse(asJson<unknown>(row.payload));
 }
 
 export async function upsertChatSession(
@@ -65,13 +61,13 @@ export async function upsertChatSession(
   const pool = getPool();
   await pool.query(
     `INSERT INTO chat_sessions (session_id, hcp_id, mode, option_run_id, payload, as_of, updated_at)
-     VALUES ($1, $2, $3, $4, $5::jsonb, $6::date, NOW())
-     ON CONFLICT (session_id) DO UPDATE SET
-       hcp_id = EXCLUDED.hcp_id,
-       mode = EXCLUDED.mode,
-       option_run_id = EXCLUDED.option_run_id,
-       payload = EXCLUDED.payload,
-       as_of = EXCLUDED.as_of,
+     VALUES (?, ?, ?, ?, ?, ?, NOW()) AS new
+     ON DUPLICATE KEY UPDATE
+       hcp_id = new.hcp_id,
+       mode = new.mode,
+       option_run_id = new.option_run_id,
+       payload = new.payload,
+       as_of = new.as_of,
        updated_at = NOW()`,
     [
       parsed.session_id,
@@ -89,13 +85,13 @@ export async function getChatSession(
   sessionId: string,
 ): Promise<ChatSession | null> {
   const pool = getPool();
-  const r = await pool.query<{ payload: unknown }>(
-    `SELECT payload FROM chat_sessions WHERE session_id = $1`,
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT payload FROM chat_sessions WHERE session_id = ?`,
     [sessionId],
   );
-  const row = r.rows[0];
+  const row = rows[0];
   if (!row) return null;
-  return ChatSessionSchema.parse(row.payload);
+  return ChatSessionSchema.parse(asJson<unknown>(row.payload));
 }
 
 export async function listChatSessions(
@@ -103,20 +99,20 @@ export async function listChatSessions(
   mode?: "open_chat" | "revise_options",
 ): Promise<ChatSession[]> {
   const pool = getPool();
-  const r = mode
-    ? await pool.query<{ payload: unknown }>(
+  const [rows] = mode
+    ? await pool.query<RowDataPacket[]>(
         `SELECT payload FROM chat_sessions
-         WHERE hcp_id = $1 AND mode = $2
+         WHERE hcp_id = ? AND mode = ?
          ORDER BY updated_at DESC
          LIMIT 50`,
         [hcpId, mode],
       )
-    : await pool.query<{ payload: unknown }>(
+    : await pool.query<RowDataPacket[]>(
         `SELECT payload FROM chat_sessions
-         WHERE hcp_id = $1
+         WHERE hcp_id = ?
          ORDER BY updated_at DESC
          LIMIT 50`,
         [hcpId],
       );
-  return r.rows.map((row) => ChatSessionSchema.parse(row.payload));
+  return rows.map((row) => ChatSessionSchema.parse(asJson<unknown>(row.payload)));
 }

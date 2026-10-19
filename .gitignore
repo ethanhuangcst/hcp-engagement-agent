@@ -3,6 +3,8 @@ node_modules/
 .env
 .env.*
 !.env.example
+.env.local
+.env.production.example
 knowledge/
 specs/0.prompts.md
 samectx-notes/
@@ -22,6 +24,10 @@ data/rag/corpus/tenants/**
 !data/rag/corpus/tenants/.gitkeep
 # 公开合规 / 学术种子语料纳入版本库：data/rag/corpus/{compliance,academic}/
 !data/**/.gitkeep
+
+# 运维密钥文件（公开发布仓库禁止入库）
+specs/.secrets
+specs/.tmp
 
 # Qdrant 本地下载的二进制（用 scripts/start-qdrant.sh 获取）
 tools/qdrant/

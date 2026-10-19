@@ -15,19 +15,19 @@
 
 | Sprint | Status | Note |
 | --- | --- | --- |
-| Sprint 1 | ToDo | 对外 MCP 骨架与 list / query / add |
+| Sprint 1 | ToDo | task-01、feature-01 Done；feature-02/03 待做 |
 | Sprint 2 | ToDo | 洞察、一人一策、Agent ROCKS |
 | Sprint 3 | ToDo | 合规预审、定时刷新分身 |
 
 ## 当前进展
 
-- 当前在做的 sprint：Sprint 1（ToDo）。排期已写入；实现未开始。
-- 当前在做的 SBI：建议先做 `task-01` 对外 MCP 2.0 进程骨架，再做三条 Feature SBI。
+- 当前在做的 sprint：Sprint 1（ToDo）。`task-01`、`feature-01` 已 **Done**（2026-10-19，用户确认可用）。DEF-001 已关闭。
+- 当前在做的 SBI：建议 `feature-02` list_hcp 对外工具。
 
 ## 下一步可选
 
-- task-01 对外 MCP 2.0 进程与工具注册骨架
-- feature-01 query_hcp 对外工具
+- feature-02 list_hcp 对外工具
+- feature-03 add_hcp 对外工具
 
 ## 当前 OGT（进行中任务）
 
@@ -38,5 +38,6 @@
 
 | # | 任务名称 | 影响的 SBI | Created | Closed |
 | --- | --- | --- | --- | --- |
+| 1 | 解决 RID-1：建立 `specs/.secrets` 并实机核对生产配置（SSH 野草云3） | - | 2026-10-19 | 2026-10-19 |
 
 最后更新：2026-10-19 Composer HCP Engagement

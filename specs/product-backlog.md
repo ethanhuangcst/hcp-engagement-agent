@@ -129,7 +129,7 @@
 
 | # | Component | PBI Code | Description | Size | Related | Sprint | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 对外服务 | [MCP2-01](#pb-1) | query_hcp · 查询 HCP | Implementable | - [Web 分身查询与详情](app/app-function-spec.md)<br>- [对内 get_twin](mcp/mcp-function-spec.md) | Sprint 1 | ToDo |
+| 1 | 对外服务 | [MCP2-01](#pb-1) | query_hcp · 查询 HCP | Implementable | - [Web 分身查询与详情](app/app-function-spec.md)<br>- [对内 get_twin](mcp/mcp-function-spec.md) | Sprint 1 | Done |
 | 2 | 对外服务 | [MCP2-06](#pb-7) | list_hcp · 列出 HCP | Implementable | - [Web 分身列表](app/app-function-spec.md)<br>- [对内 listTwins](mcp/mcp-function-spec.md) | Sprint 1 | ToDo |
 | 3 | 对外服务 | [MCP2-02](#pb-2) | add_hcp · 新增 HCP | Implementable | - [Web 确认保存](app/app-function-spec.md)<br>- [对内 confirm_and_save_twin](mcp/mcp-function-spec.md) | Sprint 1 | ToDo |
 | 4 | 对外服务 | [MCP2-03](#pb-3) | get_hcp_insights · HCP 洞察 | Implementable | - [Agent 洞察与 doing_now](agent/agent-function-spec.md)<br>- [Web 洞察页](app/app-function-spec.md) | Sprint 2 | ToDo |

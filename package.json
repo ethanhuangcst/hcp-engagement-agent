@@ -7,13 +7,14 @@
     "apps/*"
   ],
   "scripts": {
-    "build": "npm run build -w @hca/domain -w @hca/db -w @hca/hcp-twin-mcp -w @hca/mcp-client -w @hca/medical-kb -w @hca/hcp-engagement-agent -w @hca/web",
+    "build": "npm run build -w @hca/domain -w @hca/db -w @hca/hcp-twin-mcp -w @hca/hcp-engagement-mcp -w @hca/mcp-client -w @hca/medical-kb -w @hca/hcp-engagement-agent -w @hca/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "test:coverage": "npm run test:coverage --workspaces --if-present",
     "db:migrate": "npm run migrate -w @hca/db",
     "dev:hcp-twin-mcp": "npm run dev -w @hca/hcp-twin-mcp",
     "start:hcp-twin-mcp": "npm run start -w @hca/hcp-twin-mcp",
+    "dev:hcp-engagement-mcp": "npm run dev -w @hca/hcp-engagement-mcp",
     "dev:web": "npm run dev -w @hca/web",
     "rag:seed-compliance": "npm run seed:compliance -w @hca/medical-kb",
     "start:qdrant": "bash scripts/start-qdrant.sh",

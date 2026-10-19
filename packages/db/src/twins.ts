@@ -6,7 +6,9 @@ import {
   type TwinIdentity,
   type VirtualTwin,
 } from "@hca/domain";
-import { getPool } from "./client.js";
+import { pinyin } from "pinyin-pro";
+import type { RowDataPacket, ResultSetHeader } from "mysql2/promise";
+import { asJson, getPool } from "./client.js";
 
 /** open_chat 通用工作区占位 hcp_id（满足 FK；非真实医生，不进数字分身列表） */
 export const AGENT_GENERAL_HCP_ID = "_agent_general";
@@ -23,33 +25,39 @@ export type TwinListItem = {
   doing_now?: string;
 };
 
+function twinIdentity(twin: VirtualTwin): TwinIdentity {
+  return (
+    twin.identity ?? {
+      name_zh: twin.profile.name_zh,
+      name_en: twin.profile.name_en,
+      hospital: twin.profile.hospital,
+      department: twin.profile.department,
+      city: twin.profile.city,
+      title: twin.profile.title,
+    }
+  );
+}
+
 export async function upsertTwin(twin: VirtualTwin): Promise<VirtualTwin> {
   const parsed = VirtualTwinSchema.parse(twin);
-  const identity: TwinIdentity = parsed.identity ?? {
-    name_zh: parsed.profile.name_zh,
-    name_en: parsed.profile.name_en,
-    hospital: parsed.profile.hospital,
-    department: parsed.profile.department,
-    city: parsed.profile.city,
-    title: parsed.profile.title,
-  };
+  const identity = twinIdentity(parsed);
   const pool = getPool();
   await pool.query(
     `INSERT INTO hcp_twins (hcp_id, identity, twin, tags, as_of, twin_version, schema_version, updated_at)
-     VALUES ($1, $2::jsonb, $3::jsonb, $4::jsonb, $5::date, $6, $7, NOW())
-     ON CONFLICT (hcp_id) DO UPDATE SET
-       identity = EXCLUDED.identity,
-       twin = EXCLUDED.twin,
-       tags = EXCLUDED.tags,
-       as_of = EXCLUDED.as_of,
-       twin_version = EXCLUDED.twin_version,
-       schema_version = EXCLUDED.schema_version,
+     VALUES (?, ?, ?, ?, ?, ?, ?, NOW()) AS new
+     ON DUPLICATE KEY UPDATE
+       identity = new.identity,
+       twin = new.twin,
+       tags = new.tags,
+       as_of = new.as_of,
+       twin_version = new.twin_version,
+       schema_version = new.schema_version,
        updated_at = NOW()`,
     [
       parsed.meta.hcp_id,
       JSON.stringify(identity),
       JSON.stringify(parsed),
-      JSON.stringify(parsed.profile.tags ?? null),
+      parsed.profile.tags ? JSON.stringify(parsed.profile.tags) : null,
       parsed.meta.as_of,
       parsed.meta.twin_version,
       parsed.meta.schema_version,
@@ -60,57 +68,56 @@ export async function upsertTwin(twin: VirtualTwin): Promise<VirtualTwin> {
 
 export async function getTwin(hcpId: string): Promise<VirtualTwin | null> {
   const pool = getPool();
-  const r = await pool.query<{ twin: unknown }>(
-    `SELECT twin FROM hcp_twins WHERE hcp_id = $1`,
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT twin FROM hcp_twins WHERE hcp_id = ?`,
     [hcpId],
   );
-  const row = r.rows[0];
+  const row = rows[0];
   if (!row) return null;
-  return VirtualTwinSchema.parse(row.twin);
+  return VirtualTwinSchema.parse(asJson<unknown>(row.twin));
 }
 
 export async function deleteTwin(hcpId: string): Promise<boolean> {
   if (hcpId === AGENT_GENERAL_HCP_ID) return false;
   const pool = getPool();
-  const r = await pool.query(`DELETE FROM hcp_twins WHERE hcp_id = $1`, [hcpId]);
-  return (r.rowCount ?? 0) > 0;
+  const [result] = await pool.query<ResultSetHeader>(
+    `DELETE FROM hcp_twins WHERE hcp_id = ?`,
+    [hcpId],
+  );
+  return (result.affectedRows ?? 0) > 0;
 }
 
 export async function listTwins(): Promise<TwinListItem[]> {
   const pool = getPool();
-  const r = await pool.query<{
-    hcp_id: string;
-    identity: TwinIdentity;
-    tags: HcpTags | null;
-    as_of: string | null;
-    twin_version: number;
-    doing_now: string | null;
-  }>(
-    `SELECT t.hcp_id, t.identity, t.tags, t.as_of::text, t.twin_version,
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT t.hcp_id, t.identity, t.tags, t.as_of, t.twin_version,
             COALESCE(
-              i.payload->'doing_now'->>'summary',
+              JSON_UNQUOTE(JSON_EXTRACT(i.payload, '$.doing_now.summary')),
               CASE
-                WHEN jsonb_typeof(i.payload->'doing_now') = 'string'
-                THEN i.payload->>'doing_now'
+                WHEN JSON_TYPE(JSON_EXTRACT(i.payload, '$.doing_now')) = 'STRING'
+                THEN JSON_UNQUOTE(JSON_EXTRACT(i.payload, '$.doing_now'))
                 ELSE NULL
               END
             ) AS doing_now
      FROM hcp_twins t
      LEFT JOIN hcp_insights i ON i.hcp_id = t.hcp_id
-     WHERE t.hcp_id <> $1
+     WHERE t.hcp_id <> ?
      ORDER BY t.updated_at DESC`,
     [AGENT_GENERAL_HCP_ID],
   );
-  return r.rows.map((row) => ({
-    hcp_id: row.hcp_id,
-    name_zh: row.identity.name_zh,
-    hospital: row.identity.hospital,
-    department: row.identity.department,
-    as_of: row.as_of,
-    twin_version: row.twin_version,
-    tags: row.tags,
-    doing_now: row.doing_now ?? undefined,
-  }));
+  return rows.map((row) => {
+    const identity = asJson<TwinIdentity>(row.identity);
+    return {
+      hcp_id: String(row.hcp_id),
+      name_zh: identity.name_zh,
+      hospital: identity.hospital,
+      department: identity.department,
+      as_of: row.as_of ?? null,
+      twin_version: Number(row.twin_version),
+      tags: asJson<HcpTags | null>(row.tags),
+      doing_now: row.doing_now ?? undefined,
+    };
+  });
 }
 
 export async function upsertInsights(insights: HcpInsights): Promise<HcpInsights> {
@@ -118,10 +125,10 @@ export async function upsertInsights(insights: HcpInsights): Promise<HcpInsights
   const pool = getPool();
   await pool.query(
     `INSERT INTO hcp_insights (hcp_id, payload, as_of, updated_at)
-     VALUES ($1, $2::jsonb, $3::date, NOW())
-     ON CONFLICT (hcp_id) DO UPDATE SET
-       payload = EXCLUDED.payload,
-       as_of = EXCLUDED.as_of,
+     VALUES (?, ?, ?, NOW()) AS new
+     ON DUPLICATE KEY UPDATE
+       payload = new.payload,
+       as_of = new.as_of,
        updated_at = NOW()`,
     [parsed.hcp_id, JSON.stringify(parsed), parsed.as_of],
   );
@@ -130,13 +137,13 @@ export async function upsertInsights(insights: HcpInsights): Promise<HcpInsights
 
 export async function getInsights(hcpId: string): Promise<HcpInsights | null> {
   const pool = getPool();
-  const r = await pool.query<{ payload: unknown }>(
-    `SELECT payload FROM hcp_insights WHERE hcp_id = $1`,
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT payload FROM hcp_insights WHERE hcp_id = ?`,
     [hcpId],
   );
-  const row = r.rows[0];
+  const row = rows[0];
   if (!row) return null;
-  return HcpInsightsSchema.parse(row.payload);
+  return HcpInsightsSchema.parse(asJson<unknown>(row.payload));
 }
 
 export async function updateTwinIdentity(
@@ -185,4 +192,197 @@ export async function updateTwinTags(
     profile: { ...twin.profile, tags },
   };
   return upsertTwin(next);
+}
+
+function normalizeCompare(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, "");
+}
+
+function stripLatinPunctuation(value: string): string {
+  return value.replace(/[-'\u2019]/g, "");
+}
+
+function normalizeLatinTarget(value: string): string {
+  return normalizeCompare(stripLatinPunctuation(value));
+}
+
+const LEADING_TITLE = /^\s*(?:dr|prof|md)\.?\s+/i;
+
+function stripLeadingTitles(value: string): string {
+  let s = value.trim();
+  for (;;) {
+    const next = s.replace(LEADING_TITLE, "");
+    if (next === s) return s;
+    s = next.trim();
+  }
+}
+
+/** 拉丁查询：行首称谓、逗号、连字符与撇号（见 mcp2-design §6） */
+function normalizeLatinQuery(value: string): string {
+  let s = stripLeadingTitles(value);
+  s = s.replace(/[,，]/g, " ");
+  s = stripLatinPunctuation(s);
+  return s.trim();
+}
+
+function identityPinyinCompact(nameZh: string): string {
+  return normalizeCompare(
+    pinyin(nameZh, { toneType: "none", type: "array" }).join(""),
+  );
+}
+
+function isLatinQuery(value: string): boolean {
+  return /^[\p{Script=Latin}\s',\-'\u2019，]+$/u.test(value.trim());
+}
+
+/** 名在前：至少两段时倒序拼接后再与英文 / 拼音比 */
+function reversedLatinCompact(preparedLatin: string): string | null {
+  const parts = preparedLatin.split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return null;
+  return normalizeCompare([...parts].reverse().join(" "));
+}
+
+function editDistance(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  const dp: number[] = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    let prev = dp[0]!;
+    dp[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const tmp = dp[j]!;
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[j] = Math.min(dp[j]! + 1, dp[j - 1]! + 1, prev + cost);
+      prev = tmp;
+    }
+  }
+  return dp[n]!;
+}
+
+/** 0 精确，1 词序互换精确，2 编辑距离 ≤1；不命中为 null */
+export function nameMatchTier(
+  name: string,
+  identity: TwinIdentity,
+): 0 | 1 | 2 | null {
+  const needle = name.trim();
+  if (!needle) return null;
+  if (identity.name_zh === needle) return 0;
+
+  const prepared = normalizeLatinQuery(needle);
+  const normNeedle = normalizeCompare(prepared);
+  const latinTargets: string[] = [];
+  if (identity.name_en) latinTargets.push(normalizeLatinTarget(identity.name_en));
+  const py = identityPinyinCompact(identity.name_zh);
+  if (py) latinTargets.push(py);
+
+  for (const target of latinTargets) {
+    if (normNeedle === target) return 0;
+  }
+
+  const reversed = reversedLatinCompact(prepared);
+  if (reversed) {
+    for (const target of latinTargets) {
+      if (reversed === target) return 1;
+    }
+  }
+
+  if (isLatinQuery(needle)) {
+    const candidates = [normNeedle];
+    if (reversed) candidates.push(reversed);
+    for (const compact of candidates) {
+      if (compact.length < 6) continue;
+      for (const target of latinTargets) {
+        if (target.length >= 6 && editDistance(compact, target) <= 1) {
+          return 2;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+/** 姓名匹配：中文精确；拉丁名见 nameMatchTier */
+export function nameMatches(name: string, identity: TwinIdentity): boolean {
+  return nameMatchTier(name, identity) !== null;
+}
+
+/** 可选 hospital / department / city 过滤（有值才比） */
+export function filtersMatch(
+  identity: TwinIdentity,
+  filters: { hospital?: string; department?: string; city?: string },
+): boolean {
+  if (filters.hospital !== undefined && filters.hospital !== "") {
+    if (normalizeCompare(identity.hospital) !== normalizeCompare(filters.hospital)) {
+      return false;
+    }
+  }
+  if (filters.department !== undefined && filters.department !== "") {
+    if (
+      normalizeCompare(identity.department) !== normalizeCompare(filters.department)
+    ) {
+      return false;
+    }
+  }
+  if (filters.city !== undefined && filters.city !== "") {
+    const city = identity.city ?? "";
+    if (normalizeCompare(city) !== normalizeCompare(filters.city)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export type QueryTwinsInput = {
+  hcp_id?: string;
+  name?: string;
+  hospital?: string;
+  department?: string;
+  city?: string;
+};
+
+export type QueryTwinsResult =
+  | { found: false }
+  | { found: true; items: VirtualTwin[] };
+
+/** 对外 MCP query_hcp 读库（排除 _agent_general） */
+export async function queryTwins(input: QueryTwinsInput): Promise<QueryTwinsResult> {
+  const filters = {
+    hospital: input.hospital,
+    department: input.department,
+    city: input.city,
+  };
+
+  if (input.hcp_id) {
+    if (input.hcp_id === AGENT_GENERAL_HCP_ID) return { found: false };
+    const twin = await getTwin(input.hcp_id);
+    if (!twin) return { found: false };
+    const identity = twinIdentity(twin);
+    if (!filtersMatch(identity, filters)) return { found: true, items: [] };
+    return { found: true, items: [twin] };
+  }
+
+  const name = input.name?.trim();
+  if (!name) return { found: true, items: [] };
+
+  const pool = getPool();
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT twin, identity FROM hcp_twins WHERE hcp_id <> ?`,
+    [AGENT_GENERAL_HCP_ID],
+  );
+  const hits: { tier: 0 | 1 | 2; twin: VirtualTwin; order: number }[] = [];
+  let order = 0;
+  for (const row of rows) {
+    const identity = asJson<TwinIdentity>(row.identity);
+    const tier = nameMatchTier(name, identity);
+    if (tier === null) continue;
+    if (!filtersMatch(identity, filters)) continue;
+    hits.push({
+      tier,
+      twin: VirtualTwinSchema.parse(asJson<unknown>(row.twin)),
+      order: order++,
+    });
+  }
+  hits.sort((a, b) => a.tier - b.tier || a.order - b.order);
+  return { found: true, items: hits.map((h) => h.twin) };
 }
