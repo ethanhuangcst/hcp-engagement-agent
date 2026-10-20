@@ -3,7 +3,7 @@
 # Sprint Backlog — HCP Engagement Assistant
 
 > 类型：Framework (process) artifact，产品：HCP Engagement Assistant
-> as_of: 2026-10-19
+> as_of: 2026-10-20
 > [Definition](../.cursor/templates/framework.sdd.works/sdd-scrum-practices.md#sprint-backlogmd)
 
 ## 当前项目进度
@@ -61,9 +61,9 @@
 
 Sprint Goal: 集成方通过对外 MCP 列出、查询并新增已保存 HCP，以便在不打开 Web 的情况下维护医生主数据。
 
-**Status: ToDo**
+**Status: Done**
 
-### **ToDo**
+### **Done**
 
 Additional Done Criteria, on top of the Definition of Done:
 
@@ -72,8 +72,8 @@ Additional Done Criteria, on top of the Definition of Done:
 | # | Code | SBI | Parent PBI | Module/Type | Related specs | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | feature-01 | query_hcp 对外工具 | [MCP2-01 query_hcp · 查询 HCP](./product-backlog.md#L60) | mcp2.0/Feature | - [product-backlog MCP 需求](./product-backlog.md#external-service)<br>- [Web Twin API](app/app-function-spec.md) | **Done** |
-| 2 | feature-02 | list_hcp 对外工具 | [MCP2-06 list_hcp · 列出 HCP](./product-backlog.md#L69) | mcp2.0/Feature | - [product-backlog MCP 需求](./product-backlog.md#external-service)<br>- [Web 分身列表](app/app-function-spec.md) | **ToDo** |
-| 3 | feature-03 | add_hcp 对外工具 | [MCP2-02 add_hcp · 新增 HCP](./product-backlog.md#L75) | mcp2.0/Feature | - [product-backlog MCP 需求](./product-backlog.md#external-service)<br>- [Web 确认保存](app/app-function-spec.md) | **ToDo** |
+| 2 | feature-02 | list_hcp 对外工具 | [MCP2-06 list_hcp · 列出 HCP](./product-backlog.md#L69) | mcp2.0/Feature | - [product-backlog MCP 需求](./product-backlog.md#external-service)<br>- [Web 分身列表](app/app-function-spec.md) | **Done** |
+| 3 | feature-03 | add_hcp 对外工具 | [MCP2-02 add_hcp · 新增 HCP](./product-backlog.md#L75) | mcp2.0/Feature | - [product-backlog MCP 需求](./product-backlog.md#external-service)<br>- [Web 确认保存](app/app-function-spec.md) | **Done** |
 | 4 | task-01 | 对外 MCP 2.0 进程与工具注册骨架 | [MCP2-01 query_hcp · 查询 HCP](./product-backlog.md#L60) | mcp2.0/Task | - [mcp2-design.md](mcp2.0/mcp2-design.md)<br>- [mcp2-test.md](mcp2.0/mcp2-test.md) | **Done** |
 
 ### Retrospective
@@ -84,16 +84,33 @@ Additional Done Criteria, on top of the Definition of Done:
 2. task-01：陈旧 `@esbuild/darwin-arm64/bin/esbuild` 无 `+x` 会导致 `npm install` EACCES；见 [npm-esbuild-stale-binary-perms.md](./knowledge/ops/npm-esbuild-stale-binary-perms.md)。
 3. feature-01：Vitest mock `pg` 会掩盖 MySQL 方言失败；DEF-001 与 query_hcp 宜同一 PR 验收。
 4. feature-01：无空格拉丁串（如 `changxiwang`）不会词序互换；规格未要求，调用方应传空格或中文名。
+5. feature-02：`list_hcp` 与 `query_hcp` 共用「薄 handler + `@hca/db` + 可注入」；测 stub 的 `add_hcp` 须传 schema 必填字段，空参在 SDK 校验层失败、到不了 handler。
+6. OGT-1 / feature-03 done：缺 `candidate_id` 在 MCP SDK Zod 层失败，契约测断言 `isError` + 正文含字段名；见 [mcp2-test §9](mcp2.0/mcp2-test.md)。
+7. OGT-1 / feature-03 done：改 `@hca/domain` 后须 `npm run build -w @hca/domain`，否则 `@hca/db` 单测仍读旧 dist。
+8. OGT-1 / feature-03 done：`.env` 中 `MCP_URL` 常缺 `/mcp`；对外服务用 `internalMcpUrl` 补全，否则库外检索恒降级。
 
 **Opportunities**
 
 1. task-01：根 `Makefile` 的 `up`/`down` 可封装 `dev:hcp-engagement-mcp`，减少 HTTP 模式「进程未起 Cursor 连不上」。
 2. feature-01：`loadRootEnv` 与 Web 500 错误体净化仍分散，可另开小任务。
+3. feature-02：全量 list 无分页；HCP 规模显著增大时再开 PBI 讨论 limit/cursor。
+4. OGT-1 / feature-03 done：根 `.env` / `.env.local` 可将 `MCP_URL` 改为 `http://127.0.0.1:3200/mcp`，与 release 示例一致。
 
 **Future actions**
 
 1. task-01：下一条同类本地 MCP 故事开工前，在 README 或 release §6.1 补一句「改 mcp.json 后 Reload Window + 确认 :3300 在跑」。
 2. feature-01 / DEF-001：合并 mysql2 与姓名规则时，先跑 `@hca/db` 纯函数再启 MCP；重启后 Cursor 需 Reload MCP 会话。
+3. feature-02：下一条写库类工具（feature-03 `add_hcp`）开工前，先写 InMemoryTransport 契约测再换 stub；**landed**（OGT-1 已先契约测再接实库）。
+4. OGT-1 / feature-03 done：下一条需连对内 MCP 的对外工具故事开工前，在 release §6 或 README 写一句「`MCP_URL` 须含 `/mcp` 或依赖 `internalMcpUrl`」。
+5. Sprint-end：Sprint 2 sprint-end 时回看本 sprint 遗留 Future actions #1 与 #4 是否落地。
+
+**Learnings**
+
+9. Sprint-end：Sprint 1 为首个 sprint，无更早 sprint 的 Future action 需评分；四条 SBI 全部 Done，Sprint Goal 经实机验证达成（`list_hcp` count=6、朱大龙经 `query_hcp` 检出 + `add_hcp` 写入成功）。
+
+**Opportunities**
+
+5. Sprint-end：改进项 #1（Makefile up/down 封装）与 #2（loadRootEnv/错误净化）未落地，Sprint 2 开工时评估是否顺手处理或开新故事。
 
 ---
 
@@ -103,7 +120,7 @@ Additional Done Criteria, on top of the Definition of Done:
 
 [返回文首](#sprint-backlog-hcp-engagement-assistant)
 
-Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并生成一人一策，同时 Agent 在 ROCKS 范式下达到可验收质量，以便洞察与方案链路可对外复用。
+Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察与带引用的学术证据（ADR-012：一人一策不经对外 MCP），同时 Agent 在 ROCKS 范式下达到可验收质量。
 
 依赖 Sprint 1 对外 MCP 进程与 HCP 主数据工具。
 
@@ -114,7 +131,7 @@ Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并生成一人一策，
 | # | Code | SBI | Parent PBI | Module/Type | Related specs | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | feature-01 | get_hcp_insights 对外工具 | [MCP2-03 get_hcp_insights · HCP 洞察](./product-backlog.md#L81) | mcp2.0/Feature | - [Agent 洞察](agent/agent-function-spec.md)<br>- [Web 洞察页](app/app-function-spec.md) | **ToDo** |
-| 2 | feature-02 | propose_engagement_options 对外工具 | [MCP2-04 propose_engagement_options · 一人一策](./product-backlog.md#L87) | mcp2.0/Feature | - [Agent proposeOptions](agent/agent-function-spec.md)<br>- [Web 一人一策](app/app-function-spec.md) | **ToDo** |
+| 2 | feature-02 | retrieve_academic 对外工具 | [MCP2-04 retrieve_academic · 学术证据检索](./product-backlog.md#L87) | mcp2.0/Feature | - [Agent 学术检索 I-AGT-007](agent/agent-function-spec.md)<br>- [Web 洞察页](app/app-function-spec.md) | **ToDo** |
 | 3 | feature-03 | Agent ROCKS 质量优化 | [AGT2-01 Agent 优化 · ROCKS 范式](./product-backlog.md#L117) | agent/Feature | - [Agent 功能规格](agent/agent-function-spec.md)<br>- [Agent 设计](agent/agent-design.md) | **ToDo** |
 
 ### Retrospective
@@ -139,7 +156,7 @@ Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并生成一人一策，
 
 [返回文首](#sprint-backlog-hcp-engagement-assistant)
 
-Sprint Goal: 集成方对一人一策做合规预审，且系统按计划自动刷新已保存数字分身，以便对外闭环合规并减轻人工维护。
+Sprint Goal: 集成方通过对外 MCP 检索合规条款引用（ADR-012：预审不经对外 MCP），且系统按计划自动刷新已保存数字分身。
 
 依赖 Sprint 2 方案生成与 Agent 基线。
 
@@ -149,7 +166,7 @@ Sprint Goal: 集成方对一人一策做合规预审，且系统按计划自动�
 
 | # | Code | SBI | Parent PBI | Module/Type | Related specs | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | feature-01 | precheck_compliance 对外工具 | [MCP2-05 precheck_compliance · 合规预审](./product-backlog.md#L96) | mcp2.0/Feature | - [Agent 合规闸门](agent/agent-function-spec.md)<br>- [Web 合规检查](app/app-function-spec.md) | **ToDo** |
+| 1 | feature-01 | retrieve_compliance 对外工具 | [MCP2-05 retrieve_compliance · 合规条款检索](./product-backlog.md#L96) | mcp2.0/Feature | - [Agent 合规检索 I-AGT-008](agent/agent-function-spec.md)<br>- [对内 build_twin](mcp/mcp-function-spec.md) | **ToDo** |
 | 2 | feature-02 | 定时刷新数字分身 | [TWIN2-01 定时自动更新数字分身](./product-backlog.md#L108) | mcp/Task | - [对内 build_twin](mcp/mcp-function-spec.md)<br>- [安装与运行 §11](spec1.0/4.install-dependencies.md) | **ToDo** |
 
 ### Retrospective

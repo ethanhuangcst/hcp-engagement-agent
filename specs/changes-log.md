@@ -1,8 +1,58 @@
 # 变更记录（HCP Engagement Assistant）
 
 > 类型：Framework (process) artifact，产品：HCP Engagement Assistant
-> as_of: 2026-10-19
+> as_of: 2026-10-20
 > [Definition](../.cursor/templates/framework.sdd.works/sdd-scrum-practices.md#changes-logmd)
+
+---
+
+## 2026-10-20
+
+### ADR-012：对外 MCP 2.0 只暴露数据面（specs 同步）
+
+**原因**：外部 agent 调用方 prompt 可被注入，服务器无法验证其意图与 `product_context`；受监管内容的生成与合规闸门触发须留在可信执行环境。
+
+**变更内容**：
+- 新增 [ADR-012](../docs/adr/ADR-012-mcp2-data-plane-only.md)：工具集改为 `list_hcp`、`query_hcp`、`add_hcp`、`get_hcp_insights`、`retrieve_academic`、`retrieve_compliance`；`propose_engagement_options` / `precheck_compliance` 移除；`tenant_id` 不作工具入参；本地草拟与远程提案边界写明。
+- specs 同步：product-backlog（概览、pb-4/pb-5、PBI 表、变更记录）、mcp2-design（§1 边界、§3 映射）、mcp2-stories（US-MCP2-002/003）、mcp2-test（§3 门禁）、architecture（§5.2、§5.5、AGT2-01 交付面、Sprint 门禁）、sprint-backlog（Sprint 2/3 目标与 feature 行）。
+- 代码无变更：Agent 包内部五 tool 与包级 API 不变；`retrieve_*` 两个 MCP 工具随 Sprint 2/3 落地。
+
+**验收**：specs 全文不再把 propose / precheck 列为对外工具；ADR-012 与六处 specs 口径一致。
+
+---
+
+### Sprint 1 关闭（sprint-end）
+
+**原因**：四条 SBI（task-01、feature-01、feature-02、feature-03）均 Done；用户确认 Sprint Goal 达成（不打开 Web 即可列表、查询并新增已保存 HCP）。
+
+**验收**：`list_hcp` 实调 count=6；朱大龙经 `query_hcp` 库外检出、`add_hcp` 写入成功（`hcp_a5054096151`）；三包测试与 typecheck 全绿。
+
+---
+
+### OGT-1 / feature-03 Done：add_hcp 候选令牌门与 query_hcp 库外检索扩展
+
+**原因**：Sprint 1 需集成方经 `query_hcp` 库外检出、人选认后 `add_hcp` 写库；库内医院/科室短式包含匹配（ADR-011）；写前模糊查重（ADR-009）与候选令牌（ADR-010）。
+
+**变更内容**：
+- `@hca/domain`：`AuthorIdsSchema.openalex_aliases`（ADR-004 加式）。
+- `@hca/db`：`confirmAndSaveTwin` / `normalizeAuthorIds`；`filtersMatch` ADR-011；导出 `NameMatchTier`、`normalizeCompare`。
+- `@hca/hcp-engagement-mcp`：`CandidateStore`；`query_hcp` `include_external` + `internalMcpUrl`；`add_hcp` `candidate_id` 门；契约测 29 项。
+- 规格与 ADR：`mcp2-design` §6 增补 / §8、`mcp2-test` §6 增补 / §9、`mcp2-stories` US-MCP2-004/006；`5.hcp-twin-data-dictionary` §3.2.1；[ADR-010](../docs/adr/ADR-010-external-resolve-and-candidate-token.md)、[ADR-011](../docs/adr/ADR-011-hospital-department-substring-match.md)。
+
+**验收**：`@hca/domain` 12/12、`@hca/db` 39/39、`@hca/hcp-engagement-mcp` 29/29；typecheck 三包通过；实机降级路径、完整旅程（含令牌作废）；用户实调朱大龙·鼓楼医院·内分泌科写入 `hcp_a5054096151`；close confirm OGT-1 / feature-03 可用。
+
+---
+
+### feature-02 Done：list_hcp 对外工具
+
+**原因**：Sprint 1 需集成方通过 MCP 列出与 Web 同范围的已保存 HCP（不含 `_agent_general`）。
+
+**变更内容**：
+- `@hca/hcp-engagement-mcp`：`list_hcp` 接 `@hca/db` `listTwins`，返回 `{ count, items }`；`ListTwinsFn` 可注入；DB 失败映射 `INTERNAL_ERROR`。
+- 契约测：`list_hcp` 全量/空库/错误不泄漏连接串；`add_hcp` stub 测改用合法必填参数。
+- 规格：`specs/mcp2.0/mcp2-stories.md`（US-MCP2-005）、`mcp2-design.md` §7、`mcp2-test.md` §8。
+
+**验收**：`npm run test -w @hca/db` 23/23、`@hca/hcp-engagement-mcp` 9/9；MCP 实调 `list_hcp` count=5、无 `_agent_general`；用户 close confirm feature-02 可用。
 
 ---
 

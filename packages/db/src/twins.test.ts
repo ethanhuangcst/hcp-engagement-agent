@@ -376,3 +376,39 @@ describe("@hca/db with mocked mysql2", () => {
     expect(nameSql).not.toContain("$1");
   });
 });
+
+describe("filtersMatch 医院科室包含匹配（ADR-011）", () => {
+  const xiehe = {
+    name_zh: "测试甲",
+    hospital: "北京协和医院",
+    department: "肝胆外科",
+  };
+
+  it("should_match_hospital_substring_when_short_form_given", () => {
+    expect(filtersMatch(xiehe, { hospital: "协和医院" })).toBe(true);
+    expect(filtersMatch(xiehe, { hospital: "北京协和医院" })).toBe(true);
+    expect(
+      filtersMatch(
+        { name_zh: "测试乙", hospital: "复旦大学附属中山医院", department: "科室" },
+        { hospital: "中山医院" },
+      ),
+    ).toBe(true);
+  });
+
+  it("should_not_substring_match_when_shorter_side_below_min_length", () => {
+    expect(filtersMatch(xiehe, { hospital: "协和" })).toBe(false);
+    expect(filtersMatch(xiehe, { hospital: "医院" })).toBe(false);
+  });
+
+  it("should_match_department_substring_when_short_word_given", () => {
+    expect(filtersMatch(xiehe, { department: "外科" })).toBe(true);
+    expect(filtersMatch(xiehe, { department: "肝胆外科" })).toBe(true);
+    expect(filtersMatch(xiehe, { department: "科" })).toBe(false);
+  });
+
+  it("should_keep_city_exact_normalized_when_filtering", () => {
+    const wuhan = { name_zh: "测试丙", hospital: "医院", department: "科室", city: "武汉" };
+    expect(filtersMatch(wuhan, { city: "武汉" })).toBe(true);
+    expect(filtersMatch(wuhan, { city: "武汉市" })).toBe(false);
+  });
+});

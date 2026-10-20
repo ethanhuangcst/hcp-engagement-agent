@@ -5,6 +5,8 @@ export const AuthorIdsSchema = z.object({
   orcid: z.string().nullable().optional(),
   pubmed_author: z.string().nullable().optional(),
   openalex: z.string().nullable().optional(),
+  /** 同一 HCP 的其他已确认 OpenAlex 簇（ADR-004）：去重且不含主 openalex */
+  openalex_aliases: z.array(z.string()).optional(),
   google_scholar: z.string().nullable().optional(),
   scopus_author_id: z.string().nullable().optional(),
   wos_researcher_id: z.string().nullable().optional(),

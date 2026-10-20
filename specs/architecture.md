@@ -146,7 +146,7 @@ flowchart TB
 | 包名 | `@hca/hcp-engagement-mcp`（`packages/hcp-engagement-mcp`） |
 | 骨架 | 沿用 `packages/hcp-twin-mcp/src/server.ts` 的「逻辑与传输解耦」模式：`tools/`（注册与 handler）、`transport/`（Streamable HTTP）、`errors.ts`（MCP_ERROR 映射） |
 | Transport | 仅 Streamable HTTP（ADR-008，stdio 已移除）；监听 `:3300`（`MCP2_PORT` 可覆盖）；日志走 stderr |
-| 注册 | 六工具分三 Sprint 落地（S1 三工具、S2 两工具、S3 一工具）；工具一经注册即稳定，后续只加不改 |
+| 注册 | 六工具分三 Sprint 落地（S1 三工具、S2 两工具、S3 一工具）；工具一经注册即稳定，参数与返回的扩展须有 ADR 背书（ADR-009 / ADR-010） |
 | 配置 | `DATABASE_URL`、LLM/RAG 与 Web 同源 env；无新增密钥 |
 
 ### 5.2 六工具契约总表
@@ -155,12 +155,12 @@ flowchart TB
 
 | 工具 | PBI | Annotations | 读/写 | 主要依赖 | 失败码 |
 |------|-----|-------------|-------|----------|--------|
-| `query_hcp` | MCP2-01 | `readOnlyHint: true` | 读 | `@hca/db` `listTwins` / `getTwin` + 内存过滤 | `VALIDATION_ERROR` / `NOT_FOUND` |
+| `query_hcp` | MCP2-01 | `readOnlyHint: true`；`openWorldHint: true` | 读 | `@hca/db` `listTwins` / `getTwin` + 内存过滤；`include_external` → 对内 `resolve_hcp_identity`（HTTP，ADR-010） | `VALIDATION_ERROR` / `NOT_FOUND`；外源失败降级不报错 |
 | `list_hcp` | MCP2-06 | `readOnlyHint: true` | 读 | `@hca/db` `listTwins` | `INTERNAL_ERROR` |
-| `add_hcp` | MCP2-02 | 写库；非删除；非幂等 | 写 | 共享 `confirmAndSaveTwin`（见 §5.4） | `VALIDATION_ERROR` / `INTERNAL_ERROR` |
+| `add_hcp` | MCP2-02 | 写库；非删除；非幂等 | 写 | 候选令牌（进程内 TTL 缓存，ADR-010）→ 共享 `confirmAndSaveTwin`（§5.4；ADR-009 查重） | `VALIDATION_ERROR` / `NOT_FOUND`（令牌无效）/ `INTERNAL_ERROR` |
 | `get_hcp_insights` | MCP2-03 | `readOnlyHint: true` | 读 | `@hca/db` `getInsights` + `getTwin` | `NOT_FOUND` |
-| `propose_engagement_options` | MCP2-04 | 写库；`openWorldHint: true` | 写 | `@hca/hcp-engagement-agent` `proposeOptions` | `NOT_FOUND` / `DOING_NOW_INPUT_INSUFFICIENT` / `VALIDATION_ERROR` / `LLM_UNAVAILABLE` |
-| `precheck_compliance` | MCP2-05 | 更新闸门；同 `option_run_id` 幂等 | 写 | Agent `runComplianceGate` | `NOT_FOUND` / `VALIDATION_ERROR` |
+| `retrieve_academic` | MCP2-04 | `readOnlyHint: true`；`openWorldHint: true` | 读 | `@hca/medical-kb` 学术检索（对齐 I-AGT-007；ADR-012） | `NOT_FOUND` / `INTERNAL_ERROR` |
+| `retrieve_compliance` | MCP2-05 | `readOnlyHint: true`；description 声明非预审 | 读 | `@hca/medical-kb` 合规检索（对齐 I-AGT-008；`tenant_id` 来自服务端鉴权上下文，ADR-012） | `NOT_FOUND` / `INTERNAL_ERROR` |
 
 六工具的入参、返回字段与错误语义逐条对应 product-backlog 的 MCP list，此处不重复；差异点见 §5.3–§5.5。
 
@@ -168,7 +168,7 @@ flowchart TB
 
 - 三个读工具直接调 `@hca/db` 现有函数；**排除 `_agent_general` 占位医生**（`AGENT_GENERAL_HCP_ID`）。
 - `list_hcp` 无分页，一次返回全量 `{ count, items[] }`；items 含 `hcp_id`、姓名、医院、科室、`as_of`、标签、一句话洞察摘要（来自 `doing_now.summary`）。
-- `query_hcp`：`hcp_id` 与 `name` 至少传一；`hcp_id` 存在时只查这一位（仍放 `items` 数组）；`hospital` / `department` / `city` 为可选叠加过滤；多条命中全返回。
+- `query_hcp`：`hcp_id` 与 `name` 至少传一；`hcp_id` 存在时只查这一位（仍放 `items` 数组）；`hospital` / `department` / `city` 为可选叠加过滤（医院/科室为归一相等或包含匹配，ADR-011；城市为归一相等）；多条命中全返回。可选 `include_external`（默认 false）同步检索库外候选并签发 `candidate_id`（ADR-010）；候选与库内同人去重；外源失败降级为仅库内并提示。
 - `get_hcp_insights`：返回 `{ twin, insights }`；`insights.doing_now.summary` 为一句话洞察；twin 或 insights 缺失 → `NOT_FOUND`。
 
 ### 5.4 写路径 1：add_hcp 与共享 confirm 服务重构
@@ -179,23 +179,23 @@ flowchart TB
 
 1. 抽出共享服务 `confirmAndSaveTwin(input): Promise<{ twin, hcpId }>`，落点 `packages/db/src/confirm.ts`（`@hca/db` 导出）。
 2. BFF 路由改为薄调用；行为不变，靠既有契约测试护住回归。
-3. `add_hcp` handler 组装入参后调同一服务；**不**触发 build。
+3. `add_hcp` handler 以 `candidate_id` 从令牌缓存换取身份入参后调同一服务（ADR-010）；**不**触发 build。
 
 | 规则 | 说明 |
 |------|------|
 | `hcp_id` 已存在 | `VALIDATION_ERROR`（不覆盖已有 Twin；更新走 Web 编辑或 TWIN2-01） |
-| 必填字段 | `hcp_id`、`name_zh`、`hospital`、`department`；缺 → `VALIDATION_ERROR` |
-| 草稿字段 | `author_ids_draft` / `tags_draft` 走与 Web confirm 相同的校验（ADR-004：主 ID + `openalex_aliases`） |
-| 返回 | `{ twin, hcp_id, knowledge_jobs? }`；`knowledge_jobs` 仅在学术按需 ingest 被触发时出现，可为空 |
+| 同名疑似同人 | 写前按 `query_hcp` 姓名规则查重（`name_zh` 中文精确、`name_en` 拉丁档）；命中且编号不同 → 不写库，返回 `status: "confirmation_required"` 与 `possible_duplicates[]`（医院/科室归一相同者排前）；带 `confirm_not_duplicate: true` 重调写入（[ADR-009](../../docs/adr/ADR-009-add-hcp-duplicate-check.md)） |
+| 候选令牌 | 入参 `candidate_id` 必填；令牌不存在 / 过期 / 已用 → `NOT_FOUND`（TTL 默认 30 分钟）；身份字段由缓存中的候选生成（[ADR-010](../../docs/adr/ADR-010-external-resolve-and-candidate-token.md)） |
+| 草稿字段 | 候选携带的文献号按 ADR-004 落主 ID + `openalex_aliases` 并镜像 `profile.external_ids`；候选无标签草稿，标签走确认保存默认档 |
+| 返回 | 写入成功 `{ twin, hcp_id, knowledge_jobs? }`；疑似同人 `{ status: "confirmation_required", possible_duplicates[] }`；`knowledge_jobs` 仅在学术按需 ingest 被触发时出现，可为空 |
 
-### 5.5 写路径 2：propose / precheck 与 Agent 集成
+### 5.5 决策面不对外：propose / precheck（ADR-012）
 
-- `propose_engagement_options`：调 Agent `proposeOptions`；返回 `{ run_id, options[], gate_result?, run, llm? }`，每条 Option 含 `academic_refs[]`、`compliance_refs[]`、`disclaimers[]`、`mlr_status: draft_not_reviewed`。
-  - **新增可选入参**（Agent 签名向后兼容扩展）：
-    - `tenant_id`：透传给 `retrieve_compliance` 过滤，只拉该租户 SOP；不传则不含客户专属 SOP。
-    - `product_context`：拼入当次生成上下文；只影响本次，不写 Twin。
-- `precheck_compliance`：调 Agent `runComplianceGate`，按 `option_run_id` 幂等更新 `gate_result`；`option_id` 可选，只审一条；返回 `{ status, findings[], gate_result, run, options[] }`；`gate_result.status ∈ { pass, conditional, reject }`。
-- 两个写工具均**不替代**正式 MLR；响应含固定 disclaimer。
+- `propose_engagement_options` 与 `precheck_compliance` **不注册为对外 MCP 工具**：调用方 prompt 可被注入，服务器无法验证其意图与 `product_context` 真实性；方案生成与合规闸门触发仅经服务器内嵌 agent + Web App（[ADR-012](../docs/adr/ADR-012-mcp2-data-plane-only.md)）。
+- Agent 包内部五 tool 与包级 API（`proposeOptions`、`runComplianceGate`）不变；`propose` 主路径「`retrieve_compliance` 不可跳过」不受影响；响应仍含固定 disclaimer、不替代正式 MLR。
+- 对外新增两个数据面检索工具：`retrieve_academic`（MCP2-04，Sprint 2）与 `retrieve_compliance`（MCP2-05，Sprint 3），对齐 Agent 内部 I-AGT-007 / I-AGT-008；`retrieve_compliance` 返回条款引用（`clause_id` / `authority` / `version`），`tenant_id` 来自服务端鉴权上下文、不作工具入参，租户鉴权未上线前仅返回全局种子。
+- 外部本地 agent 可基于数据面工具在本地生成方案草稿并做本地预审：方案含双引用、恒标 `mlr_status: draft_not_reviewed`；预审基于条款引用，标注不替代服务器闸门与正式 MLR；不触发服务器决策面副作用。
+- 远程提案若立项：独立 MCP（带鉴权与 tenant 作用域）或 Web App，不复用数据面 MCP。
 
 ### 5.6 错误与观测
 
@@ -232,7 +232,7 @@ flowchart TB
 | 评测门禁 | 三类任务各建 eval-set（含朱同玉 fixture 锚点）；每次提示词或模型变更跑 eval，通过才合入 |
 | 时延 | Options 生成与对话首响应记时延预算；超预算触发降级 |
 | 降级 | 无 Key、超时或 LLM 失败 → 既有规则路径（`ruleProposeOptions` / `ruleSynthesizeDoingNow`）；`LLM_UNAVAILABLE` 错误码保留 |
-| 交付面 | 经现有 Agent 包 + BFF；对外 MCP 的 `propose_engagement_options` 自动受益 |
+| 交付面 | 经现有 Agent 包 + BFF；对外 MCP 无决策面工具（ADR-012），ROCKS 收益经 Web 呈现 |
 
 ---
 
@@ -263,8 +263,8 @@ Sprint 门禁：
 | Sprint | 必绿 |
 |--------|------|
 | 1 | 进程启动 + tools/list 含三工具；三工具 happy path + `VALIDATION_ERROR` / `NOT_FOUND` 各一例 |
-| 2 | `get_hcp_insights`、`propose_engagement_options` 契约 + Agent 集成（mock LLM）；ROCKS eval-set 建立并首跑 |
-| 3 | `precheck_compliance` 三种 gate status 各一断言；TWIN2-01 调度器单测（TTL 跳过、失败不阻断、env 关闭） |
+| 2 | `get_hcp_insights`、`retrieve_academic` 契约 + medical-kb 集成（无 LLM，ADR-012）；ROCKS eval-set 建立并首跑 |
+| 3 | `retrieve_compliance` 契约（条款引用、`tenant_id` 非入参、description 非预审声明，ADR-012）；TWIN2-01 调度器单测（TTL 跳过、失败不阻断、env 关闭） |
 
 覆盖率：变更包语句/分支 ≥ 80%；错误映射与幂等更新路径行覆盖 100%。
 

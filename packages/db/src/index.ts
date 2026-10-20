@@ -22,7 +22,15 @@ export {
   type TwinListItem,
   type QueryTwinsInput,
   type QueryTwinsResult,
+  type NameMatchTier,
 } from "./twins.js";
+export {
+  confirmAndSaveTwin,
+  normalizeAuthorIds,
+  type ConfirmAndSaveInput,
+  type ConfirmAndSaveResult,
+  type PossibleDuplicate,
+} from "./confirm.js";
 
 export {
   upsertEngagementOptions,

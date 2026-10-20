@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  AuthorIdsSchema,
   VirtualTwinSchema,
   assertAuthorIdsForLiteratureIngest,
   hasActiveP0AuthorId,
@@ -117,5 +118,20 @@ describe("mcpError", () => {
     });
     expect(isMcpError(e)).toBe(true);
     expect(e.retryable).toBe(false);
+  });
+});
+
+describe("AuthorIds openalex_aliases（ADR-004）", () => {
+  it("parses openalex_aliases as optional string array", () => {
+    const r = AuthorIdsSchema.safeParse({
+      openalex: "A1",
+      openalex_aliases: ["A2", "A3"],
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("keeps twin parse backward compatible without aliases", () => {
+    const r = AuthorIdsSchema.safeParse({ openalex: "A1" });
+    expect(r.success).toBe(true);
   });
 });

@@ -198,6 +198,8 @@ function normalizeCompare(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, "");
 }
 
+export { normalizeCompare };
+
 function stripLatinPunctuation(value: string): string {
   return value.replace(/[-'\u2019]/g, "");
 }
@@ -260,10 +262,12 @@ function editDistance(a: string, b: string): number {
 }
 
 /** 0 精确，1 词序互换精确，2 编辑距离 ≤1；不命中为 null */
+export type NameMatchTier = 0 | 1 | 2;
+
 export function nameMatchTier(
   name: string,
   identity: TwinIdentity,
-): 0 | 1 | 2 | null {
+): NameMatchTier | null {
   const needle = name.trim();
   if (!needle) return null;
   if (identity.name_zh === needle) return 0;
@@ -307,20 +311,32 @@ export function nameMatches(name: string, identity: TwinIdentity): boolean {
   return nameMatchTier(name, identity) !== null;
 }
 
-/** 可选 hospital / department / city 过滤（有值才比） */
+/** ADR-011：归一相等（档 0）或双向子串（档 1，短边达 minLen 才触发） */
+function orgFieldMatches(
+  identityValue: string,
+  filterValue: string,
+  minLen: number,
+): boolean {
+  const a = normalizeCompare(identityValue);
+  const b = normalizeCompare(filterValue);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  if (Math.min(a.length, b.length) < minLen) return false;
+  return a.includes(b) || b.includes(a);
+}
+
+/** 可选过滤：hospital/department 归一相等或包含匹配（ADR-011）；city 仅归一相等 */
 export function filtersMatch(
   identity: TwinIdentity,
   filters: { hospital?: string; department?: string; city?: string },
 ): boolean {
   if (filters.hospital !== undefined && filters.hospital !== "") {
-    if (normalizeCompare(identity.hospital) !== normalizeCompare(filters.hospital)) {
+    if (!orgFieldMatches(identity.hospital, filters.hospital, 3)) {
       return false;
     }
   }
   if (filters.department !== undefined && filters.department !== "") {
-    if (
-      normalizeCompare(identity.department) !== normalizeCompare(filters.department)
-    ) {
+    if (!orgFieldMatches(identity.department, filters.department, 2)) {
       return false;
     }
   }
