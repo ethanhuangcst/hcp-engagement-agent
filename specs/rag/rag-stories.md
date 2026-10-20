@@ -1,6 +1,6 @@
 # medical-knowledge-base（RAG）用户故事与验收标准（ATDD）
 
-> as_of：2026-07-17  
+> as_of：2026-10-20（新增 US-RAG-006：DEF-002 元数据层 MySQL 方言修复）  
 > 依据：[`rag-function-spec.md`](./rag-function-spec.md)（F-RAG-* / I-RAG-*）  
 > 角色默认：**Agent / BFF / 运维调用方**（下文称「调用方」）  
 > 验收锚点：合规种子命中含条款号；朱同玉相关专科可按需命中  
@@ -226,6 +226,52 @@ Feature: 租户 SOP 与 eval
 
 ---
 
+## US-RAG-006 元数据层 MySQL 方言修复（DEF-002）
+
+**As a** 平台所有者  
+**I want to** medical-kb 的 `rag_ingest_jobs` / `ingest_manifest` 读写与 MySQL（ADR-005）方言一致  
+**So that** 灌注任务、状态回写与 manifest 更新在 MySQL 上真实可用，支撑 `retrieve_academic` / `retrieve_compliance`  
+
+**覆盖**：F-RAG-017、018（含 013 的 manifest 写路径）· [DEF-002](../issues-log.md) · [MKB2-01](../product-backlog.md#pb-9)  
+**MVP**：MVP-3 缺陷修复  
+
+### 验收标准
+
+```gherkin
+Feature: medical-kb 元数据层 MySQL 方言
+
+  Scenario: jobs 读写使用 MySQL 方言
+    Given getPool 返回 MySQL 连接池
+    When 调用方执行 createJob / getJobById / getLatestJobBySpecialty / findInProgressJob / updateJob
+    Then SQL 使用 ? 占位符，进行中过滤用 IN (?, ?)
+    And INSERT / UPDATE 后按 job_id 回读 SELECT 返回完整行
+    And 五个函数的入参与返回形状与修复前一致
+
+  Scenario: manifest upsert 使用 ON DUPLICATE KEY UPDATE
+    Given 同一 doc_id 重复灌库
+    When 执行 upsertManifest 与 upsertAcademicManifest
+    Then SQL 为 INSERT ... AS new ON DUPLICATE KEY UPDATE（行别名形式）
+    And 不再出现 $n 占位、::date cast 或 ON CONFLICT 语法
+
+  Scenario: JSON 列往返正确
+    Given rag_ingest_jobs.error 为 MySQL JSON 列
+    When 写入错误对象并读回
+    Then 写入传 JSON 字符串，读出经解析还原为对象
+    And 非法 JSON 内容不产生未捕获异常
+
+  Scenario: 回归门禁全绿
+    When 运行 npm run typecheck -w @hca/medical-kb 与 npm run test -w @hca/medical-kb
+    Then 两者通过，无 Postgres 方言残留
+```
+
+### 规则清单
+
+- 表结构不动：`rag_ingest_jobs` / `ingest_manifest` 已由 MySQL 迁移 `002_mvp4_rag.sql` 建好。
+- `knowledge_status` 权威仍在 jobs / manifest，不写 Twin JSON。
+- `loadRootEnv` 收敛不在本故事（OGT：单一 env 配置与 loader 收敛）。
+
+---
+
 ## 故事与功能追溯矩阵
 
 | 用户故事 | F-RAG 覆盖 | 主要接口 | MVP |
@@ -235,9 +281,11 @@ Feature: 租户 SOP 与 eval
 | US-RAG-003 | 009、011、013 | I-RAG-002、005 | MVP-3 |
 | US-RAG-004 | 008、012、014–017、019–020、027 | I-RAG-001、003、004 | MVP-3 |
 | US-RAG-005 | 021–022、025 | I-RAG-006 | 后置 |
+| US-RAG-006 | 013、017、018 | （元数据层修复，DEF-002） | MVP-3 缺陷修复 |
 
 ## 建议验收顺序
 
+0. 缺陷修复：US-RAG-006（MVP-3 验收路径前置）  
 1. MVP-3：US-RAG-001 → 002 → 003 → 004  
 2. 后置：US-RAG-005  
 

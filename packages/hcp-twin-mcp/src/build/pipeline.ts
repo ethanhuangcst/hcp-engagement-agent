@@ -26,6 +26,8 @@ import type { BuildStatus } from "./types.js";
 export type PipelineDeps = {
   store: TwinStore;
   http?: HttpClient;
+  /** ADR-013：build 成功后的洞察回填钩子（装配层注入 ensureDoingNow） */
+  onBuildComplete?: (hcpId: string, runId: string) => void | Promise<void>;
 };
 
 function today(): string {
@@ -317,5 +319,8 @@ export async function runBuildStages(
 }
 
 export function createBuildQueue(deps: PipelineDeps): BuildQueue {
-  return new BuildQueue((status, update) => runBuildStages(deps, status, update));
+  return new BuildQueue(
+    (status, update) => runBuildStages(deps, status, update),
+    { onBuildComplete: deps.onBuildComplete },
+  );
 }

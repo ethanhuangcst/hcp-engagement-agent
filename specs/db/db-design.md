@@ -63,7 +63,7 @@ MySQL 8（hca · hcp_twins 等）
 - Postgres → MySQL 全量数据迁移脚本（ADR-005 已有命令名，另开故事）。
 - 改 Web BFF 路由逻辑。
 - `list_hcp` / `add_hcp` 实现（仍属 feature-02/03）。
-- `loadRootEnv` 约 6 处复制的收敛（另开小任务；本修复不扩散）。
+- `loadRootEnv` 约 6 处复制的收敛（已列 OGT：单一 env 配置文件与 loader 收敛，2026-10-20 起；见 `status.md` 当前 OGT）。
 - Web 500/502 直接回 `err.message` 的净化（P2，另开小任务）。
 
 ## 6. 风险

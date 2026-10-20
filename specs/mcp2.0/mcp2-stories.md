@@ -285,8 +285,8 @@ Feature: list_hcp
 **I want to** 在不打开 Web 的情况下把一位 query_hcp 检出、经人选认的库外医生新增为主数据  
 **So that** 后续可在该医生上做查询、洞察与一人一策  
 
-**覆盖**：Sprint 1 `feature-03` · [MCP2-02](../product-backlog.md#pb-2)  
-**约束**：新增来源限库外候选令牌，入参只收 `candidate_id`（[ADR-010](../../docs/adr/ADR-010-external-resolve-and-candidate-token.md)）；写入前走 ADR-009 同名查重。
+**覆盖**：Sprint 1 `feature-03` · Sprint 2 `feature-05` 联动（ADR-013）· [MCP2-02](../product-backlog.md#pb-2)
+**约束**：新增来源限库外候选令牌，入参只收 `candidate_id`（[ADR-010](../../docs/adr/ADR-010-external-resolve-and-candidate-token.md)）；写入前走 ADR-009 同名查重；写库成功后异步触发刷新（[ADR-013](../../docs/adr/ADR-013-insight-synthesis-triggers.md)）。
 
 ### 验收标准
 
@@ -307,12 +307,20 @@ Feature: add_hcp
     When 调用 query_hcp 传入返回的 hcp_id
     Then 返回 count 等于 1 且 items 含该医生的完整分身
 
-  Scenario: 不自动开始构建
+  Scenario: 写入不阻塞构建并异步触发刷新
     Given 一个有效且未用过的 candidate_id
     When 调用 add_hcp 传入该 candidate_id
-    Then twin_version 为 1 且无 build.runId
-    And insights 为空模板（无 doing_now 摘要、无机会列表）
+    Then twin_version 为 1 且 insights 为空模板（无 doing_now 摘要、无机会列表）
+    And 返回含 refresh.run_id 供 get_twin_status 查询进度
+    And 服务端异步对该 hcp_id 起一次 build，不阻塞本次返回
     And 响应不含 knowledge_jobs 键
+
+  Scenario: 触发失败不影响新增结果
+    Given 一个有效且未用过的 candidate_id
+    And 服务端异步 build 触发入队失败
+    When 调用 add_hcp 传入该 candidate_id
+    Then 工具结果仍为成功且记录已写入
+    And 失败记入服务端日志、不在工具结果中报错
 
   Scenario: 令牌无效则拒绝
     When 调用 add_hcp 传入未签发、已过期或已作废的 candidate_id

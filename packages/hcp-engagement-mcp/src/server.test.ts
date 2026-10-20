@@ -15,6 +15,7 @@ import {
   type QueryTwinsFn,
   type ResolveCandidateInput,
   type ResolveIdentityFn,
+  type TriggerBuildFn,
 } from "./server.js";
 import type {
   ConfirmAndSaveResult,
@@ -47,6 +48,7 @@ type Deps = {
   listTwins?: ListTwinsFn;
   resolveIdentity?: ResolveIdentityFn;
   addHcp?: AddHcpFn;
+  triggerBuild?: TriggerBuildFn;
   candidateStore?: CandidateStore;
 };
 
@@ -379,6 +381,7 @@ describe("OGT-1 query_hcp include_external（ADR-010）", () => {
 describe("OGT-1 add_hcp 候选令牌门（ADR-009 / ADR-010）", () => {
   function makeDeps(overrides?: {
     addHcp?: AddHcpFn;
+    triggerBuild?: TriggerBuildFn;
     store?: CandidateStore;
   }): Deps & { store: CandidateStore } {
     const store = overrides?.store ?? new CandidateStore();
@@ -386,6 +389,8 @@ describe("OGT-1 add_hcp 候选令牌门（ADR-009 / ADR-010）", () => {
       store,
       candidateStore: store,
       addHcp: overrides?.addHcp ?? vi.fn(async () => savedResult()),
+      triggerBuild:
+        overrides?.triggerBuild ?? vi.fn(async () => ({ runId: "run_test_refresh" })),
     };
   }
 
@@ -538,6 +543,88 @@ describe("OGT-1 add_hcp 候选令牌门（ADR-009 / ADR-010）", () => {
       .join("");
     expect(text ?? "").not.toContain("mysql://");
     expect(text ?? "").not.toContain("10.0.0.1");
+    await client.close();
+  });
+});
+
+describe("add_hcp ADR-013 异步刷新触发", () => {
+  function makeDeps(overrides?: {
+    addHcp?: AddHcpFn;
+    triggerBuild?: TriggerBuildFn;
+    store?: CandidateStore;
+  }) {
+    const store = overrides?.store ?? new CandidateStore();
+    const addHcp = vi.fn(overrides?.addHcp ?? (async () => savedResult()));
+    const triggerBuild = vi.fn(
+      overrides?.triggerBuild ?? (async () => ({ runId: "run_test_refresh" })),
+    );
+    return { store, candidateStore: store, addHcp, triggerBuild };
+  }
+
+  it("should_return_refresh_run_id_when_trigger_succeeds", async () => {
+    const deps = makeDeps();
+    const token = deps.store.issue(candidatePayload());
+    const client = await connect(deps);
+    const result = await client.callTool({ name: "add_hcp", arguments: { candidate_id: token } });
+    expect(result.isError).not.toBe(true);
+    const body = result.structuredContent as {
+      hcp_id?: string;
+      refresh?: { run_id?: string };
+    };
+    expect(body.hcp_id).toBe("hcp_new");
+    expect(body.refresh?.run_id).toBe("run_test_refresh");
+    expect(deps.triggerBuild).toHaveBeenCalledTimes(1);
+    expect(deps.triggerBuild).toHaveBeenCalledWith({ hcpId: "hcp_new", mode: "incremental" });
+    await client.close();
+  });
+
+  it("should_still_succeed_without_refresh_when_trigger_fails", async () => {
+    const deps = makeDeps({
+      triggerBuild: vi.fn(async () => {
+        throw new Error("connect ECONNREFUSED http://127.0.0.1:3200/mcp");
+      }),
+    });
+    const token = deps.store.issue(candidatePayload());
+    const client = await connect(deps);
+    const result = await client.callTool({ name: "add_hcp", arguments: { candidate_id: token } });
+    expect(result.isError).not.toBe(true);
+    const body = result.structuredContent as {
+      hcp_id?: string;
+      refresh?: { run_id?: string };
+    };
+    expect(body.hcp_id).toBe("hcp_new");
+    expect(body).not.toHaveProperty("refresh");
+    const text = (result.content as { text?: string }[] | undefined)
+      ?.map((c) => c.text ?? "")
+      .join("");
+    expect(text ?? "").not.toContain("ECONNREFUSED");
+    await client.close();
+  });
+
+  it("should_not_trigger_when_confirmation_required", async () => {
+    const deps = makeDeps({
+      addHcp: vi.fn((): Promise<ConfirmAndSaveResult> =>
+        Promise.resolve({
+          status: "confirmation_required",
+          possible_duplicates: [
+            {
+              hcp_id: "hcp_dup",
+              name_zh: "张外源",
+              hospital: "上海中山医院",
+              department: "肝外科",
+              match_tier: 1,
+            },
+          ],
+          truncated: false,
+        })),
+    });
+    const token = deps.store.issue(candidatePayload());
+    const client = await connect(deps);
+    const result = await client.callTool({ name: "add_hcp", arguments: { candidate_id: token } });
+    expect(result.isError).not.toBe(true);
+    expect(deps.triggerBuild).not.toHaveBeenCalled();
+    const body = result.structuredContent as { status?: string };
+    expect(body.status).toBe("confirmation_required");
     await client.close();
   });
 });

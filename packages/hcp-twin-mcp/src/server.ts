@@ -171,7 +171,7 @@ export function createMcpServer(store: TwinStore): McpServer {
         title: z.string().nullable().optional(),
         city: z.string().optional(),
         author_ids_draft: z
-          .record(z.string(), z.string().nullable().optional())
+          .record(z.string(), z.union([z.string(), z.array(z.string())]).nullable().optional())
           .optional(),
         tags_draft: z
           .object({

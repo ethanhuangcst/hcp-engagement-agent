@@ -53,6 +53,39 @@ function hasEnoughFacts(twin: VirtualTwin, insights: HcpInsights): boolean {
   const title = Boolean(twin.profile.title || twin.identity?.title);
   return themes + interests + opps >= 1 || title;
 }
+export { hasEnoughFacts };
+
+/**
+ * ADR-013：LLM 路径草稿（synthesizeDoingNow 与 ensureDoingNow 共用）。
+ * 失败抛 AgentError（LLM_*）；不落库。
+ */
+export async function llmDraftDoingNow(
+  llm: LlmClient,
+  twin: VirtualTwin,
+  insights: HcpInsights,
+): Promise<DoingNow> {
+  const result = await llm.chat([
+    { role: "system", content: SYSTEM },
+    {
+      role: "user",
+      content: `请为以下 HCP 生成 doing_now JSON。\n\n${buildContext(twin, insights)}`,
+    },
+  ]);
+  const json = extractJsonObject(result.content);
+  const asOf = new Date().toISOString().slice(0, 10);
+  const draft = DoingNowSchema.safeParse({
+    ...(typeof json === "object" && json ? json : {}),
+    as_of: asOf,
+    llm: { provider: result.provider, model: result.model },
+  });
+  if (!draft.success) {
+    throw agentError("LLM_ERROR", "LLM 产出不符合 DoingNow 契约", {
+      details: { issues: draft.error.issues },
+      retryable: true,
+    });
+  }
+  return draft.data;
+}
 
 export type SynthesizeDoingNowResult = {
   doing_now: DoingNow;
@@ -143,27 +176,7 @@ export async function synthesizeDoingNow(
   }
 
   try {
-    const result = await llm.chat([
-      { role: "system", content: SYSTEM },
-      {
-        role: "user",
-        content: `请为以下 HCP 生成 doing_now JSON。\n\n${buildContext(twin, insights)}`,
-      },
-    ]);
-    const json = extractJsonObject(result.content);
-    const asOf = new Date().toISOString().slice(0, 10);
-    const draft = DoingNowSchema.safeParse({
-      ...(typeof json === "object" && json ? json : {}),
-      as_of: asOf,
-      llm: { provider: result.provider, model: result.model },
-    });
-    if (!draft.success) {
-      throw agentError("LLM_ERROR", "LLM 产出不符合 DoingNow 契约", {
-        details: { issues: draft.error.issues },
-        retryable: true,
-      });
-    }
-    return persist(draft.data);
+    return persist(await llmDraftDoingNow(llm, twin, insights));
   } catch (err) {
     if (isLlmStrict()) throw err as AgentError;
     return persist(ruleSynthesizeDoingNow(twin, insights));

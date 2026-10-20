@@ -55,7 +55,7 @@ export const ConfirmAndSaveInputSchema = z.object({
   title: z.string().nullable().optional(),
   city: z.string().optional(),
   author_ids_draft: z
-    .record(z.string(), z.string().nullable().optional())
+    .record(z.string(), z.union([z.string(), z.array(z.string())]).nullable().optional())
     .optional(),
   tags_draft: z
     .object({
@@ -114,7 +114,7 @@ export type ResolveCandidate = {
   match_note: string;
   evidence: ResolveEvidence[];
   hcpId?: string;
-  author_ids_draft?: Record<string, string | null | undefined>;
+  author_ids_draft?: Record<string, string | string[] | null | undefined>;
   tags_draft?: typeof ZHU_TAGS;
 };
 
@@ -359,7 +359,7 @@ function buildIdentityTwin(input: {
   department: string;
   title?: string | null;
   city?: string;
-  author_ids_draft?: Record<string, string | null | undefined>;
+  author_ids_draft?: Record<string, string | string[] | null | undefined>;
   tags_draft?: { hcp_tier?: z.infer<typeof HcpTierSchema>; role_tags?: z.infer<typeof RoleTagSchema>[] };
 }): VirtualTwin {
   const asOf = new Date().toISOString().slice(0, 10);

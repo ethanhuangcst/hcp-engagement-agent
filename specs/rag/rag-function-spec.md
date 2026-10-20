@@ -13,7 +13,7 @@
 | 学术 ingest | Twin `specialty/themes` **按需**灌注；不做全科 / 全 PubMed 预灌 |
 | 合规 ingest | P0 种子库（RDPAC 等）策展；客户 SOP 上传 + `tenant_id`；**不按病种自动爬** |
 | Citation | 每条 chunk 含 source / version / as_of；Agent 生成须带 `academic_refs` + `compliance_refs` |
-| **数据驻留与安全** | 业务元数据（manifest）在**香港 Postgres**；语料源文件可暂存 `HCA_DATA_DIR/rag/corpus`；向量在内网 Qdrant；默认**不**用公有云向量 SaaS；Qdrant **不对公网暴露**；浏览器禁止直连 |
+| **数据驻留与安全** | 业务元数据（manifest）在 **MySQL 主库（ADR-005）**；语料源文件可暂存 `HCA_DATA_DIR/rag/corpus`；向量在内网 Qdrant；默认**不**用公有云向量 SaaS；Qdrant **不对公网暴露**；浏览器禁止直连 |
 | 批次 | 功能与对外接口「实现批次」填 **MVP-1…MVP-4**（见 [`../1.product-definition.md`](../1.product-definition.md)） |
 
 ```text
@@ -38,7 +38,7 @@ Twin specialty/themes ──► ingest_on_demand ──► academic_index (本�
 
 ### 目录与库表分工
 
-- **Postgres（香港）**：`ingest_manifest` 等元数据；与 Twin 共用 `DATABASE_URL`
+- **MySQL 主库（ADR-005）**：`ingest_manifest` 等元数据；与 Twin 共用 `DATABASE_URL`
 - **本地/卷 `HCA_DATA_DIR`（默认 `./data`）**：语料源文件暂存 + Qdrant 卷
 
 ```text
@@ -54,7 +54,7 @@ data/
 
 | 资产 | 位置 | Git | 公网 |
 |------|------|-----|------|
-| ingest 元数据 | 香港 Postgres | 不进 Git | 仅服务端经 `DATABASE_URL` |
+| ingest 元数据 | MySQL 主库（ADR-005） | 不进 Git | 仅服务端经 `DATABASE_URL` |
 | 主题语料（PDF/文本） | `data/rag/corpus/**` | **忽略**（仅 `.gitkeep`） | 不托管、不公开下载 |
 | 向量索引 | `data/qdrant/` 或 Docker volume | **忽略** | Qdrant **不**映射公网 |
 | 研究型说明（非语料） | `knowledge/rag-medical-knowledge-base/*.md` | 可入库 | 无运行时密钥/客户 SOP |
@@ -76,7 +76,7 @@ data/
 | 租户 SOP | 物理路径 `corpus/tenants/{id}/` + payload `tenant_id`；检索强制过滤；禁止跨租户返回 |
 | 鉴权 | 生产 BFF 鉴权后才调 medical-kb；本地开发可放宽但不得改默认绑定 |
 | 日志 | 不打印完整 SOP/大段合规正文；脱敏 Key 与路径中的租户机密名 |
-| 备份 | 备份 Postgres + `data/rag` + `data/qdrant` 按客户数据分级；不进公开对象存储未加密桶 |
+| 备份 | 备份 MySQL 主库 + `data/rag` + `data/qdrant` 按客户数据分级；不进公开对象存储未加密桶 |
 
 ---
 
@@ -130,8 +130,8 @@ data/
 | 18 | F-RAG-014 | 专科归一化 | 别名 → 受控 `specialty` / MeSH；禁止仅自由文本当 ingest query | MVP-3 |
 | 19 | F-RAG-015 | Coverage check | 按 specialty 判断 chunk/近窗文献是否充足 → ready \| sparse \| pending | MVP-3 |
 | 20 | F-RAG-016 | 按需学术 ingest | **先落** `corpus/academic/{specialty}/` 再 embed upsert；异步不阻塞 Twin。MVP-3 允许 **fixture / 本地语料优先**；在线 PubMed 拉取为可选增强 | MVP-3 |
-| 21 | F-RAG-017 | Ingest 状态回写 | 写 Postgres `rag_ingest_jobs` / `ingest_manifest`（`knowledge_status` · `knowledge_job_id` · 时间戳）；**不**写入 Twin JSON；UI 经 `get_ingest_status` 或联表 | MVP-3 |
-| 22 | F-RAG-018 | Ingest manifest | 更新 Postgres `ingest_manifest`（doc_id、版本、as_of、specialty、本地 path） | MVP-3 |
+| 21 | F-RAG-017 | Ingest 状态回写 | 写 MySQL `rag_ingest_jobs` / `ingest_manifest`（`knowledge_status` · `knowledge_job_id` · 时间戳）；**不**写入 Twin JSON；UI 经 `get_ingest_status` 或联表 | MVP-3 |
+| 22 | F-RAG-018 | Ingest manifest | 更新 MySQL `ingest_manifest`（doc_id、版本、as_of、specialty、本地 path） | MVP-3 |
 | 23 | F-RAG-019 | 异步任务与互斥 | MVP-3：**进程内异步** + 同 specialty 互斥/去重即可。BullMQ/Redis 为**后置 · LOW PRIORITY**（多实例/高并发时再上） | MVP-3 · LOW PRIORITY（BullMQ） |
 | 24 | F-RAG-020 | 获取与版权底线 | MVP-3：**摘要 / OA / fixture 优先**；闭源不存全文；第三方仅作拉取源。完整 NCBI 配额限速管线见 [`ToDo.md`](../ToDo.md)，**LOW PRIORITY**，不挡本批验收 | MVP-3 · LOW PRIORITY（NCBI 管线） |
 | 25 | F-RAG-021 | 租户 SOP 入库 | 文件进 `corpus/tenants/{id}/sop/`；写入**同一** `compliance_index`，payload 强制 `tenant_id`；跨租户检索拒绝；**不分租户 collection**。**LOW PRIORITY** | 后置 · LOW PRIORITY |
@@ -245,7 +245,7 @@ Query
 - 一次性全科 / 全 PubMed 预灌
 - 学术与合规混为单一索引
 - 无授权批量爬取知网/万方
-- pgvector 作主向量库（本项目向量仅 Qdrant；**业务主库已是香港 Postgres**）
+- pgvector 作主向量库（本项目向量仅 Qdrant；**业务主库已是 MySQL，ADR-005**）
 
 ---
 
@@ -256,7 +256,7 @@ Query
 | 1 | Parent-Document 是否进 P0 | **不进 P0 / MVP-3**。保持架构 P2；最早作为 **后置可选增强**（F-RAG-022），不挡合规种子与按需学术闭环 | 召回仍用小块；生成侧暂不拉 parent |
 | 2 | 租户 SOP：metadata 过滤 vs 物理分 collection | **单一 `compliance_index` + payload `tenant_id` 强制过滤**；语料物理目录已按 `corpus/tenants/{id}/` 隔离。**不为每租户拆 Qdrant collection**（除非未来审计强制，另开 ADR） | 跨租户 → `TENANT_ISOLATION_VIOLATION` 或过滤为空 |
 | 3 | embedding/rerank 部署形态 | **默认：进程内模型或同机/内网推理服务**（`EMBEDDING_MODEL` / `RERANK_MODEL` 为本地路径或内网 URL）。公有云 embedding/rerank API **仅例外**：须显式配置，且只传切块文本、Key 仅服务端 | 见 §环境变量；禁止默认把整库上传云端 |
-| 4 | `knowledge_status` 写 Twin vs 仅 manifest | **权威在 Postgres**：`rag_ingest_jobs` + `ingest_manifest`。**不写入 Twin JSON / 数据字典 profile**（避免 Twin 混入 RAG 运维态）。UI/F-WEB-039 经 `get_ingest_status`（jobId 或 specialty）读取；列表若需展示，BFF **联表** job，或可选 `hcp_twins` **表级旁路列**镜像最近状态（非 twin JSONB 内字段） | F-RAG-017；字典不增 knowledge_* 文档字段 |
+| 4 | `knowledge_status` 写 Twin vs 仅 manifest | **权威在 MySQL（ADR-005）**：`rag_ingest_jobs` + `ingest_manifest`。**不写入 Twin JSON / 数据字典 profile**（避免 Twin 混入 RAG 运维态）。UI/F-WEB-039 经 `get_ingest_status`（jobId 或 specialty）读取；列表若需展示，BFF **联表** job，或可选 `hcp_twins` **表级旁路列**镜像最近状态（非 twin JSONB 内字段） | F-RAG-017；字典不增 knowledge_* 文档字段 |
 | 5 | 开发环境是否默认关闭 `UNSAFE_QDRANT_BIND` | **不关闭**。绑定检查**始终开启**：`127.0.0.1` / `localhost` / Docker internal 视为 `bind_safe`。仅当 `QDRANT_ALLOW_NON_LOCAL=true` 时允许非本机 URL；生产禁止公网裸暴露 | F-RAG-002b、I-RAG-007 `bind_safe` |
 
 ### 对接口/功能的直接含义

@@ -43,6 +43,7 @@
       "files": [
         "specs/mcp/mcp-design.md",
         "specs/mcp/mcp-stories.md",
+        "specs/mcp/mcp-tests.md",
         "specs/mcp/mcp-function-spec.md"
       ]
     },
@@ -59,6 +60,7 @@
       "files": [
         "specs/rag/rag-design.md",
         "specs/rag/rag-stories.md",
+        "specs/rag/rag-tests.md",
         "specs/rag/rag-function-spec.md"
       ]
     }

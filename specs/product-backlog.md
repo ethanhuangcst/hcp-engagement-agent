@@ -74,16 +74,16 @@
   - **返回**：`{ count, items[] }`；含 `hcp_id`、姓名、医院、科室、`as_of`、标签、一句话洞察摘要等。
   - **失败**：`INTERNAL_ERROR`。
 - <a id="pb-2"></a>[MCP2-02](#pb-2) `add_hcp` · 新增 HCP
-  - **做什么**：仅新增 `query_hcp` 检索到并经人选认的库外 HCP：凭 `candidate_id` 确认身份后写入库（同 Web「确认并保存」）；不自动开始「构建情报」。写前仍按 ADR-009 姓名规则查重，命中疑似同人先返回待确认清单。
+  - **做什么**：仅新增 `query_hcp` 检索到并经人选认的库外 HCP：凭 `candidate_id` 确认身份后写入库（同 Web「确认并保存」）；不阻塞等待构建。写库成功后异步起一次 build，返回 `refresh: { run_id }` 供调用方经 `get_twin_status` 查进度（ADR-013）。写前仍按 ADR-009 姓名规则查重，命中疑似同人先返回待确认清单。
   - **Annotations**：写库；非删除；非幂等。
   - **参数**：`candidate_id`（必填，来自 `query_hcp` 库外候选）；可选 `confirm_not_duplicate`（布尔；确认疑似同人确非重复后置 `true` 强制写入）。身份字段不再由调用方填写，由候选内容生成。
-  - **返回**：写入成功为 `{ twin, hcp_id, knowledge_jobs? }`；疑似同人时为 `{ status: "confirmation_required", possible_duplicates[] }`（未写库，每条含 hcp_id、姓名、医院、科室、命中档位）。写入成功后候选令牌即作废。
+  - **返回**：写入成功为 `{ twin, hcp_id, refresh: { run_id } }`；疑似同人时为 `{ status: "confirmation_required", possible_duplicates[] }`（未写库，每条含 hcp_id、姓名、医院、科室、命中档位）。写入成功后候选令牌即作废。
   - **失败**：`VALIDATION_ERROR`、`NOT_FOUND`（候选令牌不存在或已过期，需重新 `query_hcp` 后再选）、`INTERNAL_ERROR`。
 - <a id="pb-3"></a>[MCP2-03](#pb-3) `get_hcp_insights` · HCP 洞察
-  - **做什么**：读取洞察页数据（一句话洞察及科研、热力、机会等块）。
-  - **Annotations**：只读。
+  - **做什么**：读取洞察页数据（一句话洞察及科研、热力、机会等块）。`doing_now` 为空模板且 Twin 事实足够时，服务器内经 `ensureDoingNow` 合成一次并写回缓存（ADR-013）；同一 HCP 有进行中 run 时复用，LLM 失败降级返回空模板 + `pending`，不报 INTERNAL_ERROR。
+  - **Annotations**：读 + 幂等缓存回填（`readOnlyHint: false`，ADR-013）。
   - **参数**：`hcp_id`（必填）。
-  - **返回**：`{ twin, insights }`；`doing_now.summary` 为一句话洞察。
+  - **返回**：`{ twin, insights }`；`doing_now.summary` 为一句话洞察；按需合成发生的调用附 `synthesized: true`。
   - **失败**：`NOT_FOUND`。
 - <a id="pb-4"></a>[MCP2-04](#pb-4) `retrieve_academic` · 学术证据检索
   - **做什么**：按 HCP 与条件检索 medical-kb 学术证据，返回带引用的 chunk；**不生成方案、不写库**。
@@ -104,8 +104,13 @@
 ## 后台维护
 
 - <a id="pb-6"></a>[TWIN2-01](#pb-6) 定时自动更新数字分身
-  - 系统按计划对已保存医生重新采集并写回数字分身与洞察。
+  - 系统按计划对已保存医生重新采集并写回数字分身与洞察；每个 HCP build 完成后经 `ensureDoingNow` 合成并写回一句话洞察（ADR-013）。
+  - `add_hcp` 异步触发的 build 与本故事共用同一管线与洞察合成入口。
   - 对外 MCP 不提供手动更新或触发构建的入口。
+- <a id="pb-9"></a>[MKB2-01](#pb-9) 元数据层 MySQL 方言修复
+  - medical-kb 的 `rag_ingest_jobs` / `ingest_manifest` 读写改为 MySQL 方言（`?` 占位、`ON DUPLICATE KEY UPDATE` 行别名、写后回读），表结构不变（[ADR-005](../../docs/adr/ADR-005-mysql-primary-store.md)、[DEF-002](issues-log.md)）。
+  - 修复 `retrieve_academic` / `retrieve_compliance`（MCP2-04 / 05）依赖的灌注与 manifest 数据面；`knowledge_status` 权威仍在 jobs / manifest，不写 Twin JSON。
+  - 方案 A（原地改方言）已确认；`loadRootEnv` 收敛不在本 PBI（另列 OGT）。
 
 
 <a id="agent"></a>
@@ -132,9 +137,10 @@
 | 3 | 对外服务 | [MCP2-02](#pb-2) | add_hcp · 新增 HCP | Implementable | - [Web 确认保存](app/app-function-spec.md)<br>- [对内 confirm_and_save_twin](mcp/mcp-function-spec.md) | Sprint 1 | Done |
 | 4 | 对外服务 | [MCP2-03](#pb-3) | get_hcp_insights · HCP 洞察 | Implementable | - [Agent 洞察与 doing_now](agent/agent-function-spec.md)<br>- [Web 洞察页](app/app-function-spec.md) | Sprint 2 | ToDo |
 | 5 | 对外服务 | [MCP2-04](#pb-4) | retrieve_academic · 学术证据检索 | Implementable | - [Agent 学术检索 I-AGT-007](agent/agent-function-spec.md)<br>- [Web 洞察页](app/app-function-spec.md) | Sprint 2 | ToDo |
-| 6 | 对外服务 | [MCP2-05](#pb-5) | retrieve_compliance · 合规条款检索 | Implementable | - [Agent 合规检索 I-AGT-008](agent/agent-function-spec.md)<br>- [Web 合规检查](app/app-function-spec.md) | Sprint 3 | ToDo |
-| 7 | 后台维护 | [TWIN2-01](#pb-6) | 定时自动更新数字分身 | Implementable | - [对内 build_twin](mcp/mcp-function-spec.md)<br>- [安装与运行 §11](spec1.0/4.install-dependencies.md) | Sprint 3 | ToDo |
+| 6 | 对外服务 | [MCP2-05](#pb-5) | retrieve_compliance · 合规条款检索 | Implementable | - [Agent 合规检索 I-AGT-008](agent/agent-function-spec.md)<br>- [Web 合规检查](app/app-function-spec.md) | Sprint 2 | ToDo |
+| 7 | 后台维护 | [TWIN2-01](#pb-6) | 定时自动更新数字分身 | Implementable | - [对内 build_twin](mcp/mcp-function-spec.md)<br>- [安装与运行 §11](spec1.0/4.install-dependencies.md) | Sprint 2 | Done |
 | 8 | Agent | [AGT2-01](#pb-8) | Agent 优化 · ROCKS 范式 | Implementable | - [Agent 功能规格](agent/agent-function-spec.md)<br>- [Agent 设计](agent/agent-design.md) | Sprint 2 | ToDo |
+| 9 | 后台维护 | [MKB2-01](#pb-9) | 元数据层 MySQL 方言修复（DEF-002） | Implementable | - [US-RAG-006](rag/rag-stories.md)<br>- [rag 测试计划](rag/rag-tests.md)<br>- [DEF-002](issues-log.md) | Sprint 2 | Done |
 
 [返回目录](#index)
 
@@ -146,6 +152,8 @@
 
 | Date | Change |
 | --- | --- |
+| 2026-10-20 | DEF-002 方案 A 确认：新增 MKB2-01（medical-kb 元数据层 MySQL 方言修复，Sprint 2）；US-RAG-006 入 rag 故事；rag 模块新增测试计划 rag-tests.md 并入 artifacts-map；rag 规格九处 Postgres 口径改 MySQL（ADR-005）。 |
+| 2026-10-20 | Sprint 3 并入 Sprint 2：MCP2-05、TWIN2-01 的 Sprint 列改为 Sprint 2；见 `sprint-backlog.md`、`changes-log.md`。 |
 | 2026-10-20 | ADR-012：对外 MCP 只暴露数据面；MCP2-04 / MCP2-05 改为 `retrieve_academic` / `retrieve_compliance`，`propose_engagement_options` / `precheck_compliance` 退出对外工具集；见 [ADR-012](../docs/adr/ADR-012-mcp2-data-plane-only.md)。 |
 | 2026-10-20 | `query_hcp` 可选过滤扩展：医院/科室支持包含匹配（ADR-011），城市仍归一精确。 |
 | 2026-10-20 | OGT-1：`query_hcp` 增加 `include_external` 双源检索与库外候选 `candidate_id`；`add_hcp` 入参改为凭 `candidate_id` 新增；见 [ADR-010](../../docs/adr/ADR-010-external-resolve-and-candidate-token.md)。 |
@@ -159,6 +167,7 @@
 | 2026-10-19 | 新增 MCP2-06 list_hcp_twins、AGT2-01 Agent 优化；对外 MCP 能力与工具名对齐（get_hcp_twin 等）。 |
 | 2026-10-19 | 用户确认后写入 Product Backlog 表格：6 条 PBI，Size 均为 Implementable，Sprint 均为 —。 |
 | 2026-10-19 | 按确认调整需求：去掉调用方准入；更新改为后台定时任务 TWIN2-01，不列入对外服务；其余五条对外能力保留。 |
+| 2026-10-20 | 按确认落 ADR-013：`get_hcp_insights` 改读 + 按需幂等合成回填；`add_hcp` 写库成功后异步触发 build 并返回 `refresh: { run_id }`；TWIN2-01 build 完成经 `ensureDoingNow` 回填洞察。 |
 | 2026-10-19 | 写入 2.0 需求列表首版。 |
 
 [返回目录](#index)

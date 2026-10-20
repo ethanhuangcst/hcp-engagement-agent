@@ -68,6 +68,7 @@ export async function buildTwinTool(
   const queue = getOrCreateBuildQueue({
     store,
     http: deps?.http,
+    onBuildComplete: deps?.onBuildComplete,
   });
   const enq = queue.enqueue(parsed.data.hcpId, parsed.data.mode);
   if (!enq.ok) {

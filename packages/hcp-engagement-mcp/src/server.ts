@@ -51,6 +51,12 @@ export type ResolveIdentityFn = (input: {
 /** ADR-009/010：add_hcp 写库注入（缺省 @hca/db confirmAndSaveTwin） */
 export type AddHcpFn = (input: ConfirmAndSaveInput) => Promise<ConfirmAndSaveResult>;
 
+/** ADR-013：add_hcp 写库成功后异步触发对内 build_twin（缺省经 @hca/mcp-client 走 MCP_URL） */
+export type TriggerBuildFn = (input: {
+  hcpId: string;
+  mode: "incremental";
+}) => Promise<{ runId: string }>;
+
 function stubNotImplemented(tool: string, feature: string) {
   const error = mcpError(
     "INTERNAL_ERROR",
@@ -121,6 +127,33 @@ export function internalMcpUrl(
   }
 }
 
+/** ADR-013：MCP_URL 触发对内 build_twin（incremental，保留 user_override F-MCP-029） */
+async function defaultTriggerBuild(
+  input: Parameters<TriggerBuildFn>[0],
+): Promise<{ runId: string }> {
+  const client = createMcpClient(internalMcpUrl());
+  try {
+    const res = await client.buildTwin({
+      hcpId: input.hcpId,
+      mode: input.mode,
+    });
+    if (!res.ok) {
+      throw new Error(
+        `build_twin 失败：${
+          (res.error as { message?: string } | undefined)?.message ?? "未知错误"
+        }`,
+      );
+    }
+    const runId = (res.data as { runId?: string } | undefined)?.runId;
+    if (!runId || typeof runId !== "string") {
+      throw new Error("build_twin 返回缺少 runId");
+    }
+    return { runId };
+  } finally {
+    await client.close().catch(() => {});
+  }
+}
+
 function twinIdentityOf(twin: VirtualTwin) {
   return (
     twin.identity ?? {
@@ -143,6 +176,8 @@ export type CreateMcpServerOptions = {
   resolveIdentity?: ResolveIdentityFn;
   /** 测试注入；缺省走 @hca/db confirmAndSaveTwin */
   addHcp?: AddHcpFn;
+  /** ADR-013：测试注入；缺省经 @hca/mcp-client 调对内 build_twin（MCP_URL） */
+  triggerBuild?: TriggerBuildFn;
   /** 测试注入；缺省进程内新建（ADR-010 令牌缓存） */
   candidateStore?: CandidateStore;
 };
@@ -166,6 +201,7 @@ export function createMcpServer(options?: CreateMcpServerOptions): McpServer {
   const runList = options?.listTwins ?? defaultListTwinsFn;
   const runResolve = options?.resolveIdentity ?? defaultResolveIdentity;
   const runAdd = options?.addHcp ?? defaultConfirmAndSave;
+  const runTriggerBuild = options?.triggerBuild ?? defaultTriggerBuild;
   const tokens = options?.candidateStore ?? new CandidateStore();
 
   const server = new McpServer(
@@ -342,7 +378,7 @@ export function createMcpServer(options?: CreateMcpServerOptions): McpServer {
     "add_hcp",
     {
       description:
-        "新增 HCP 档案（写库、非幂等、不触发 build）。仅接受 query_hcp 检出、经人选认的库外候选：传 candidate_id（必填，约 30 分钟有效，写入成功即作废）；可选 confirm_not_duplicate 确认疑似同人确非重复。身份字段由候选载荷生成，不接受直传。",
+        "新增 HCP 档案（写库、非幂等；写库成功后异步触发 incremental build）。仅接受 query_hcp 检出、经人选认的库外候选：传 candidate_id（必填，约 30 分钟有效，写入成功即作废）；可选 confirm_not_duplicate 确认疑似同人确非重复。身份字段由候选载荷生成，不接受直传。写库成功时返回 refresh.run_id，可用 Web 构建进度页或对内 get_twin_status 查询进度；触发失败不影响新增结果（返回体不含 refresh 键）。",
       inputSchema: {
         candidate_id: z
           .string()
@@ -395,7 +431,29 @@ export function createMcpServer(options?: CreateMcpServerOptions): McpServer {
           });
         }
         tokens.invalidate(args.candidate_id);
-        return textResult({ twin: result.twin, hcp_id: result.hcp_id });
+        /** ADR-013：写库成功后异步触发对内 build；触发失败不影响新增结果 */
+        let refresh: { run_id: string } | undefined;
+        try {
+          const r = await runTriggerBuild({
+            hcpId: result.hcp_id,
+            mode: "incremental",
+          });
+          refresh = { run_id: r.runId };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.error(
+            JSON.stringify({
+              event: "add_hcp_trigger_build_failed",
+              hcp_id: result.hcp_id,
+              message,
+            }),
+          );
+        }
+        return textResult({
+          twin: result.twin,
+          hcp_id: result.hcp_id,
+          ...(refresh ? { refresh } : {}),
+        });
       } catch {
         return mcpErrorResult(
           mcpError("INTERNAL_ERROR", "add_hcp 写库失败", {

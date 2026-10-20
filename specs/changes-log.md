@@ -8,6 +8,80 @@
 
 ## 2026-10-20
 
+### OGT-1 Done：单一 `.env.local` 与 `loadRootEnv` 收敛
+
+**原因**：env 加载逻辑在 6 处复制且口径不一（部分只读 `.env`）；仓库根只有 `.env.local` 时这些入口静默跳过 env，live 测试与 CLI 依赖手工 source。
+
+**变更内容**：
+- `@hca/db`：`index.ts` 导出 `loadRootEnv`（唯一实现，`.env` 后 `.env.local` 覆盖）。
+- 删除五处 CLI 复制改引共享实现：twin-mcp / engagement-mcp cli、medical-kb 两个 seed cli、agent `synthesize-zhu`（后三处原只读 `.env`，属隐性故障一并修复）。
+- 删除三处测试 `loadEnv` 复制（medical-kb `api.test.ts`、agent `api.test.ts` / `engagement.test.ts`，原同样只读 `.env`），改 `loadRootEnv()` 并保留 `chdir`。
+- `.env.example` 首行注释改 `Copy to .env.local`（用户确认 diff，仅此一行）。
+- `spec1.0/4.install-dependencies.md`：§0.2、推荐顺序、§11.1、§14 四处 `cp` 与门禁表改 `.env.local`；§7.3 示例块与两处密钥规则同步。
+
+**验收**：包目录 cwd 冒烟加载 `.env.local` 成功；清空 shell env 后 medical-kb 24/24、agent 27/27（均 live）自加载通过；db 39/39、twin-mcp 41/41、engagement-mcp 32/32；全仓 typecheck 0 错误；用户 close confirm OGT-1 可用。
+
+---
+
+### feature-05 Done：定时刷新数字分身（TWIN2-01）
+
+**原因**：TWIN2-01 需系统按计划自动刷新已保存数字分身；ADR-013 要求 build 完成后经 `ensureDoingNow` 回填洞察、`add_hcp` 异步触发共用管线。
+
+**变更内容**：
+- `@hca/hcp-twin-mcp`：`scheduler/refresh.ts`（`createRefreshScheduler`，cron 门 / TTL / 排除 `_agent_general` / 顺序执行 / 失败隔离 / JSON 结构化 stderr 日志）与 `scheduler/boot.ts` 装配；`build/queue.ts` 加 `onBuildComplete` 钩子与 `waitFinished`；依赖 `node-cron ^3.0.3`。
+- `@hca/hcp-engagement-agent`：`ensure-doing-now.ts`（幂等 / in-flight 去重 / LLM 失败降级 pending）。
+- `@hca/hcp-engagement-mcp`：`add_hcp` 注入 `TriggerBuildFn`，写库成功后异步触发 build 并返回 `refresh: { run_id }`；触发失败仅记日志不阻塞写库。
+- 规格：ADR-013 相关口径已在前序变更同步。
+
+**验收**：twin-mcp 41/41、engagement-mcp 32/32、db 39/39、agent 27/27（live LLM）；typecheck 全绿；用户 close confirm feature-05 可用；`product-backlog.md` TWIN2-01 行 Done。
+
+---
+
+### feature-06 Done：元数据层 MySQL 方言修复（DEF-002 关闭）
+
+**原因**：DEF-002：`jobs.ts` 与 `api.ts` / `academic.ts` 的元数据读写仍是 Postgres 方言（`$n` 占位、`ANY($2::text[])`、`ON CONFLICT DO UPDATE`、`RETURNING *`），打 MySQL 池必失败；ADR-005 迁移遗留，被过期 db dist 掩盖。
+
+**变更内容**：
+- `@hca/medical-kb`：`jobs.ts` 五函数改 MySQL 方言（`?` 占位、`IN (?, ?)`、写后按 `job_id` 回读 SELECT、`error` 列写 `JSON.stringify` 读侧容错解析）；`api.ts` / `academic.ts` 两个 manifest upsert 改 `INSERT ... AS new ON DUPLICATE KEY UPDATE` 并导出；`IngestJobRow extends RowDataPacket` 对齐 db 包模式；新增 type-only 依赖 `mysql2 ^3.24.6`。
+- 新增 `src/mysql-dialect.test.ts` 11 用例（mock `getPool`，断言方言形状、参数与占位符一致、回读与 JSON 往返）。
+- [issues-log](issues-log.md)：DEF-002 移入已关闭。
+- 知识笔记：[local-binary-exec-bit.md](knowledge/ops/local-binary-exec-bit.md)。
+
+**验收**：medical-kb 24/24（含 live MySQL 真跑 upsert / jobs 路径与 Qdrant 灌库检索）、`@hca/hcp-engagement-agent` 27/27 回归、全仓 typecheck 0 错误、全仓 dist 重建；用户 close confirm feature-06 与 DEF-002 关闭。
+
+---
+
+### ADR-013：洞察 LLM 合成三触发源与幂等回填（specs 同步）
+
+**原因**：用户确认组合方案——`add_hcp` 写库成功后异步触发一次刷新（返回 `refresh: { run_id }`）；`get_hcp_insights` 空模板且事实足够时服务器内合成并写回缓存。否则不经网页的 MCP 调用方拿不到 LLM 洞察，链路不闭环。
+
+**变更内容**：
+- 新增 [ADR-013](../docs/adr/ADR-013-insight-synthesis-triggers.md)：统一幂等入口 `ensureDoingNow(hcpId)`；三触发源（build 完成、TWIN2-01 定时、`get_hcp_insights` 按需）收敛到该入口；LLM 失败降级空模板 + `pending`；`get_hcp_insights` `readOnlyHint` 改 `false`，并写明对 ADR-012 的修订（洞察缓存回填属数据面幂等写，非决策面）。
+- `mcp2-design.md`：§3 映射表 `get_hcp_insights`、`add_hcp` 行更新；§8 增补异步触发；新增 §9 `get_hcp_insights` 技术设计。
+- `agent-design.md`：§3 新增 `ensureDoingNow` 入口行；§5 路径 A 补三触发源。
+- `architecture.md`：§5.2 工具表 `get_hcp_insights` 行；§6 TWIN2-01 表补洞察合成与 `add_hcp` 联动；§9 Sprint 2/3 门禁补 ADR-013 项；§11 决策表补 ADR-2.0-7。
+- `product-backlog.md`：MCP2-02、MCP2-03、TWIN2-01 需求 bullets 更新 + 变更记录行。
+- 代码无变更：实现随 Sprint 2 的 feature-05（基建）与 feature-01（接线）落地。
+
+**验收**：specs 全文 `get_hcp_insights` 不再标注纯读；ADR-013 与五处 specs 口径一致。
+
+---
+
+### Sprint 排期：Sprint 3 并入 Sprint 2
+
+**原因**：用户确认 Option A，将 Sprint 3 的合规检索与定时刷新与 Sprint 2 的数据面洞察、学术检索、Agent ROCKS 合并为一轮交付。
+
+**变更内容**：
+- `product-backlog.md`：MCP2-05、TWIN2-01 的 Sprint 列改为 Sprint 2。
+- `sprint-backlog.md`：Sprint 2 目标更新；新增 SBI feature-04 / feature-05；移除 Sprint 3 章节；Total sprints 改为 2。
+- `status.md`：项目进度与下一步可选对齐合并后的 Sprint 2。
+
+**验收**：`sprint-backlog.md` 仅 Sprint 1（Done）与 Sprint 2（ToDo）；五条未完成 PBI 的 Sprint 列均为 Sprint 2。
+
+---
+
+## 2026-10-20
+
 ### ADR-012：对外 MCP 2.0 只暴露数据面（specs 同步）
 
 **原因**：外部 agent 调用方 prompt 可被注入，服务器无法验证其意图与 `product_context`；受监管内容的生成与合规闸门触发须留在可信执行环境。

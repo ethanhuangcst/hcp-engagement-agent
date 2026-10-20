@@ -36,8 +36,8 @@
 | --- | --- | --- |
 | `list_hcp` | 读 | `@hca/db` `listTwins` |
 | `query_hcp` | 读 | `@hca/db` `queryTwins`（`hcp_id` 走 `getTwin`；姓名过滤见 §6）；`include_external` → 对内 `resolve_hcp_identity`（HTTP，ADR-010，见 §6 增补） |
-| `add_hcp` | 写 | 候选令牌（ADR-010）→ 确认保存路径（对齐 `/api/twins/confirm`，不自动 build；详见 §8） |
-| `get_hcp_insights` | 读 | `@hca/db` insights + twin |
+| `add_hcp` | 写 + 异步触发刷新（ADR-013） | 候选令牌（ADR-010）→ 确认保存路径（对齐 `/api/twins/confirm`）；写库成功后异步起一次 build，返回 `refresh: { run_id }`（详见 §8 增补） |
+| `get_hcp_insights` | 读 + 按需幂等回填（ADR-013） | `@hca/db` insights + twin；空模板且事实足够时服务器内经 `ensureDoingNow` 合成并写回（详见 §9） |
 | `retrieve_academic` | 读 | `@hca/medical-kb` 学术检索（对齐 Agent I-AGT-007；MCP2-04，Sprint 2，ADR-012） |
 | `retrieve_compliance` | 读 | `@hca/medical-kb` 合规检索（对齐 Agent I-AGT-008；`tenant_id` 来自服务端鉴权上下文，MCP2-05，Sprint 3，ADR-012） |
 
@@ -212,3 +212,46 @@ MySQL hcp_twins + hcp_insights
 - MCP handler 以 `candidate_id` 查进程内令牌缓存（签发在 `query_hcp` 库外检索，见 §6 增补）：查不到 / 过期 / 已用 → `NOT_FOUND`；命中则由候选载荷组装 `confirmAndSaveTwin` 入参（文献号按 ADR-004 落主 ID + `openalex_aliases` 并镜像），写入成功后作废令牌。`AddHcpFn` 注入项与 `queryTwins` / `listTwins` 同模式，方便契约测试注入。
 - Web BFF 路由（另一仓库）迁移到同一共享服务不在本故事；另开任务。
 - 无新依赖、无新表、无迁移。环境需要 `DATABASE_URL`（与 Web 同一 MySQL）；`MCP_URL` 属 §6 增补的 `query_hcp` 检索链路，add_hcp 本身不访问公开源。
+
+### §8 增补（ADR-013）：`add_hcp` 异步触发刷新
+
+| 规则 | 行为 |
+| --- | --- |
+| 触发时机 | `confirmAndSaveTwin` 写库成功（`{ twin, hcpId }` 分支）后，异步（不阻塞返回、不 await）对新建 `hcp_id` 起一次 build。疑似同人确认分支（`confirmation_required`）不触发 |
+| 返回 | 成功分支返回体增加 `refresh: { run_id }`；`run_id` 来自触发的构建 run。build 入队失败不回滚写入、不影响成功返回，只记 stderr 结构化日志 |
+| 进度查询 | 调用方用既有对内 `get_twin_status`（经 BFF 代理）按 `run_id` 查询；本工具不新增进度查询入口 |
+| 落点 | 触发点在 MCP handler 层（拿到写入成功结果后 fire-and-forget 调用对内 build 入口）；`confirmAndSaveTwin` 共享服务保持纯写库，Web BFF 复用不受影响 |
+
+## 9. feature-01 `get_hcp_insights` 技术设计（Sprint 2，ADR-013）
+
+读为主、按需幂等回填：insights 已有 `doing_now` 时纯读；空模板且 Twin 事实足够时，服务器内经 `ensureDoingNow` 合成一次并写回缓存。
+
+```text
+MCP Client
+   │ get_hcp_insights
+   ▼
+handler（packages/hcp-engagement-mcp）
+   │ getTwin + getInsights（@hca/db）
+   ├─ doing_now 已存在 → 直接返回（纯读路径）
+   └─ 空模板且事实足够 → ensureDoingNow(hcpId)（服务器内同步合成，复用 synthesizeDoingNow 的 reused 语义）
+        ├─ 成功 → 写回 hcp_insights 缓存，返回完整 insights
+        ├─ 进行中 run → 返回该 run 对应的当前状态（不重复起任务）
+        └─ LLM 失败 → 返回空模板 + pending: true，不报 INTERNAL_ERROR
+```
+
+| 规则 | 行为 |
+| --- | --- |
+| 入参 | `hcp_id` 必填；不存在的编号 → `NOT_FOUND` |
+| 纯读路径 | `insights.doing_now` 已存在：不调 LLM、不写库，行为与纯读一致 |
+| 按需合成 | `doing_now` 为空且 Twin 事实（专长、主题、标签等）足够时调用 `ensureDoingNow`；同一 HCP 已有进行中的 run 时复用该 run（去重），不并发起第二个任务 |
+| 事实不足 | Twin 无足够事实（如身份 twin 刚建、无专长与主题）：不调 LLM，返回空模板 + `pending: true`，`repair_hint` 指明等待 TWIN2-01 刷新或 Web 编辑补充 |
+| 降级 | LLM 失败、超时、无 Key：返回空模板 + `pending: true`；错误记结构化日志，不映射 `INTERNAL_ERROR` |
+| 写回 | 合成结果写 `hcp_insights`（幂等缓存回填，ADR-013）；失败时不写，下次调用重试 |
+| 返回 | `{ twin, insights }`；按需合成发生的调用在 insights 顶层附 `synthesized: true` 标记，便于调用方区分即时合成与存量 |
+| Annotations | `readOnlyHint: false`（幂等缓存回填，ADR-012 修订见 ADR-013）、`openWorldHint: false` |
+
+实现落点：
+
+- `ensureDoingNow(hcpId)` 落在 Agent/BFF 侧既有 `synthesizeDoingNow` 同层（收敛为共享服务），三个触发源（build 完成、TWIN2-01 定时、本工具按需）调用同一入口；本故事补齐该入口并把 `get_hcp_insights` 接上。
+- handler 对 `ensureDoingNow` 与 `getInsights`/`getTwin` 采用注入，同 §7 模式，便于契约测试注入假 LLM 与假库。
+- 环境需要 `DATABASE_URL` 与 LLM Key（与 Web 合成同一配置）；Key 缺失走降级路径，不算配置错误。

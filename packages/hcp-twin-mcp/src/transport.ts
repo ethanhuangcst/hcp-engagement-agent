@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { createStore } from "./store.js";
 import { createMcpServer } from "./server.js";
+import { startRefreshSchedulerFromEnv, wireBuildBackfill } from "./scheduler/boot.js";
 
 /**
  * 产品路径默认 live。mock 仅允许 CI / 显式放行：
@@ -29,6 +30,9 @@ export function getTwinMode(): "mock" | "live" {
 
 export async function startStdio(): Promise<void> {
   const store = createStore(getTwinMode());
+  /** ADR-013：先装配带钩子的共享队列，再起调度器（未设 CRON 即关闭） */
+  wireBuildBackfill(store);
+  void startRefreshSchedulerFromEnv(store);
   const server = createMcpServer(store);
   const transport = new StdioServerTransport();
   await server.connect(transport);
@@ -36,6 +40,9 @@ export async function startStdio(): Promise<void> {
 
 export async function startHttp(port = Number(process.env.MCP_PORT ?? 3200)): Promise<void> {
   const store = createStore(getTwinMode());
+  /** ADR-013：先装配带钩子的共享队列，再起调度器（未设 CRON 即关闭） */
+  wireBuildBackfill(store);
+  void startRefreshSchedulerFromEnv(store);
   /** 每会话独立 McpServer：SDK 禁止同一 Server 二次 connect */
   const transports = new Map<string, StreamableHTTPServerTransport>();
 

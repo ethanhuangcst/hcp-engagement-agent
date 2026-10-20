@@ -1,36 +1,14 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { upsertInsights, upsertTwin, getInsights } from "@hca/db";
+import { loadRootEnv, upsertInsights, upsertTwin, getInsights } from "@hca/db";
 import { DoingNowSchema, HcpInsightsSchema } from "@hca/domain";
 import { resolveLlmConfig } from "./config.js";
 import { health } from "./health.js";
 import { synthesizeDoingNow } from "./synthesize.js";
 import { sampleZhuInsights, sampleZhuTwin, ZHU_HCP_ID } from "./fixtures/zhu.js";
 
-function loadEnv(): void {
-  const root = resolve(process.cwd(), "../..");
-  const path = resolve(root, ".env");
-  if (!existsSync(path)) return;
-  for (const line of readFileSync(path, "utf8").split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eq = trimmed.indexOf("=");
-    if (eq <= 0) continue;
-    const key = trimmed.slice(0, eq).trim();
-    let value = trimmed.slice(eq + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    if (process.env[key] === undefined) process.env[key] = value;
-  }
-  process.chdir(root);
-}
-
-loadEnv();
+loadRootEnv();
+process.chdir(resolve(process.cwd(), "../.."));
 
 describe("domain DoingNow coerce", () => {
   it("coerces legacy string doing_now", () => {

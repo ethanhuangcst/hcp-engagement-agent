@@ -158,7 +158,7 @@ flowchart TB
 | `query_hcp` | MCP2-01 | `readOnlyHint: true`；`openWorldHint: true` | 读 | `@hca/db` `listTwins` / `getTwin` + 内存过滤；`include_external` → 对内 `resolve_hcp_identity`（HTTP，ADR-010） | `VALIDATION_ERROR` / `NOT_FOUND`；外源失败降级不报错 |
 | `list_hcp` | MCP2-06 | `readOnlyHint: true` | 读 | `@hca/db` `listTwins` | `INTERNAL_ERROR` |
 | `add_hcp` | MCP2-02 | 写库；非删除；非幂等 | 写 | 候选令牌（进程内 TTL 缓存，ADR-010）→ 共享 `confirmAndSaveTwin`（§5.4；ADR-009 查重） | `VALIDATION_ERROR` / `NOT_FOUND`（令牌无效）/ `INTERNAL_ERROR` |
-| `get_hcp_insights` | MCP2-03 | `readOnlyHint: true` | 读 | `@hca/db` `getInsights` + `getTwin` | `NOT_FOUND` |
+| `get_hcp_insights` | MCP2-03 | `readOnlyHint: false`（幂等缓存回填，ADR-013） | 读 + 按需合成 | `@hca/db` `getInsights` + `getTwin`；空模板且事实足够时经 `ensureDoingNow` 合成并写回（ADR-013） | `NOT_FOUND`；LLM 失败降级空模板 + `pending` |
 | `retrieve_academic` | MCP2-04 | `readOnlyHint: true`；`openWorldHint: true` | 读 | `@hca/medical-kb` 学术检索（对齐 I-AGT-007；ADR-012） | `NOT_FOUND` / `INTERNAL_ERROR` |
 | `retrieve_compliance` | MCP2-05 | `readOnlyHint: true`；description 声明非预审 | 读 | `@hca/medical-kb` 合规检索（对齐 I-AGT-008；`tenant_id` 来自服务端鉴权上下文，ADR-012） | `NOT_FOUND` / `INTERNAL_ERROR` |
 
@@ -217,7 +217,9 @@ flowchart TB
 | 刷新范围 | 全部已保存医生（`listTwins()`，排除 `_agent_general`）；逐个顺序执行，避免打满外网 API 配额 |
 | 跳过规则 | 距上次成功刷新 < `TWIN_REFRESH_TTL_HOURS`（默认 24）的 HCP 跳过 |
 | 失败 | 单个 HCP 失败不阻断本轮；记 stderr 结构化日志；Twin 正文保留上次成功版本 |
-| 对外暴露 | 无。对外 MCP 不提供手动更新或触发构建的入口 |
+| 洞察合成 | 每个 HCP build 完成后调用 `ensureDoingNow(hcpId)` 合成并写回一句话洞察（ADR-013）；合成失败不阻断刷新轮次 |
+| `add_hcp` 联动 | `add_hcp` 写库成功后异步起一次 build，返回 `refresh: { run_id }`（ADR-013）；build 完成后经同一洞察合成入口回填 |
+| 对外暴露 | 无手动刷新入口。洞察回填是数据面幂等写（ADR-013），不属于「构建/刷新」工具 |
 
 ---
 
@@ -263,8 +265,8 @@ Sprint 门禁：
 | Sprint | 必绿 |
 |--------|------|
 | 1 | 进程启动 + tools/list 含三工具；三工具 happy path + `VALIDATION_ERROR` / `NOT_FOUND` 各一例 |
-| 2 | `get_hcp_insights`、`retrieve_academic` 契约 + medical-kb 集成（无 LLM，ADR-012）；ROCKS eval-set 建立并首跑 |
-| 3 | `retrieve_compliance` 契约（条款引用、`tenant_id` 非入参、description 非预审声明，ADR-012）；TWIN2-01 调度器单测（TTL 跳过、失败不阻断、env 关闭） |
+| 2 | `get_hcp_insights` 契约（含按需合成、降级、幂等回填，ADR-013）+ `retrieve_academic` 契约 + medical-kb 集成（无 LLM，ADR-012）；ROCKS eval-set 建立并首跑 |
+| 3 | `retrieve_compliance` 契约（条款引用、`tenant_id` 非入参、description 非预审声明，ADR-012）；TWIN2-01 调度器单测（TTL 跳过、失败不阻断、env 关闭、洞察合成触发与进行中 run 去重，ADR-013） |
 
 覆盖率：变更包语句/分支 ≥ 80%；错误映射与幂等更新路径行覆盖 100%。
 
@@ -291,6 +293,7 @@ Sprint 门禁：
 | ADR-2.0-4 | TWIN2-01 进程内调度器 | 最轻方案满足约束；无新进程 | 独立 worker / BullMQ |
 | ADR-2.0-5 | 2.0 不做鉴权，仅内网可达 | 用户决策（2026-10-19） | Bearer Token |
 | ADR-2.0-6 | ROCKS 优化走模板版本 + eval 门禁 | 可回滚、可评测；交付面不变 | 即席改提示词 |
+| ADR-2.0-7 | 洞察 LLM 合成三触发源 + 幂等回填（ADR-013，修订 ADR-012） | MCP 调用方不经网页也能拿到洞察；缓存回填属数据面幂等写 | `get_hcp_insights` 保持纯读、链路不闭环 |
 
 ---
 

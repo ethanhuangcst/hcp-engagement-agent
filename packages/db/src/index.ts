@@ -5,6 +5,8 @@ export {
   _resetPoolForTests,
 } from "./client.js";
 
+export { loadRootEnv } from "./load-env.js";
+
 export {
   AGENT_GENERAL_HCP_ID,
   upsertTwin,

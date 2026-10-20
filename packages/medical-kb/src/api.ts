@@ -117,7 +117,7 @@ function discoverComplianceChunkFiles(paths?: string[]): string[] {
   return discoverChunkFiles(getComplianceCorpusRoot());
 }
 
-async function upsertManifest(row: {
+export async function upsertManifest(row: {
   doc_id: string;
   index_name: string;
   version: string;
@@ -129,13 +129,13 @@ async function upsertManifest(row: {
   const pool = getPool();
   await pool.query(
     `INSERT INTO ingest_manifest (doc_id, index_name, version, as_of, corpus_path, chunk_count, authority, updated_at)
-     VALUES ($1,$2,$3,$4::date,$5,$6,$7,NOW())
-     ON CONFLICT (doc_id) DO UPDATE SET
-       version = EXCLUDED.version,
-       as_of = EXCLUDED.as_of,
-       corpus_path = EXCLUDED.corpus_path,
-       chunk_count = EXCLUDED.chunk_count,
-       authority = EXCLUDED.authority,
+     VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+     AS new ON DUPLICATE KEY UPDATE
+       version = new.version,
+       as_of = new.as_of,
+       corpus_path = new.corpus_path,
+       chunk_count = new.chunk_count,
+       authority = new.authority,
        updated_at = NOW()`,
     [
       row.doc_id,

@@ -46,6 +46,7 @@ LOOP:
 | API | 触发 | 行为 |
 |-----|------|------|
 | `synthesizeDoingNow` | Twin 完成后 / `POST /api/insights/doing-now` | 写 `doing_now`（列表与洞察页**同源**） |
+| `ensureDoingNow` | `get_hcp_insights` 按需 / build 完成 / TWIN2-01 定时（ADR-013） | 幂等合成 `doing_now` 并写回缓存；已有进行中 run 时复用，不重复起任务 |
 | `proposeOptions` | 一人一策「生成方案」 | 薄 LangGraph 提案主路径 |
 | `chat` | Agent Tab / 页底短对话 | `open_chat` \| `revise_options` |
 | `runComplianceGate` | 「送合规闸门」 | Fail-fast；不替代 MLR |
@@ -84,6 +85,12 @@ BFF → synthesizeDoingNow(hcpId)
   → LlmClient → doing_now.summary (+ analysis?)
   → 写 Postgres insights；metadata.llm
 ```
+
+三个触发源（ADR-013）收敛到幂等入口 `ensureDoingNow(hcpId)`，内部走同一 `synthesizeDoingNow` 语义：
+
+1. build 完成：对内 build 管线结束后调用（含 TWIN2-01 定时与 `add_hcp` 异步触发的 build）。
+2. TWIN2-01 定时：调度器逐 HCP 刷新后经 build 完成回调触发。
+3. 工具内按需：对外 `get_hcp_insights` 读到空模板且事实足够时服务器内调用；LLM 失败降级返回空模板 + `pending: true`。
 
 ### B. 提案（薄 LangGraph）
 

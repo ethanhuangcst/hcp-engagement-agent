@@ -1,7 +1,15 @@
 export {
   synthesizeDoingNow,
+  hasEnoughFacts,
+  llmDraftDoingNow,
   type SynthesizeDoingNowResult,
 } from "./synthesize.js";
+export {
+  ensureDoingNow,
+  resetEnsureDoingNowForTests,
+  type EnsureDoingNowResult,
+  type EnsureDoingNowDeps,
+} from "./ensure-doing-now.js";
 export { ruleSynthesizeDoingNow } from "./rule-doing-now.js";
 export {
   retrieveAcademicForAgent,

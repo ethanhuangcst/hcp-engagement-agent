@@ -8,9 +8,9 @@
 
 ## 当前项目进度
 
-- Total sprints: 3
-- Current WIP sprint: none
-- Sprint goal: none
+- Total sprints: 2
+- Current WIP sprint: Sprint 2
+- Sprint goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规证据引用，系统按计划自动刷新已保存数字分身，且 Agent 在 ROCKS 范式下达到可验收质量。
 
 <a id="index"></a>
 
@@ -19,7 +19,6 @@
 - [RID Log](#rid-log-risksimpediments-dependencies)
 - [Sprint 1](#sprint-1)
 - [Sprint 2](#sprint-2)
-- [Sprint 3](#sprint-3)
 - [未排期 PBI](#unplanned-pbis)
 
 ---
@@ -120,68 +119,49 @@ Additional Done Criteria, on top of the Definition of Done:
 
 [返回文首](#sprint-backlog-hcp-engagement-assistant)
 
-Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察与带引用的学术证据（ADR-012：一人一策不经对外 MCP），同时 Agent 在 ROCKS 范式下达到可验收质量。
+Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规证据引用，系统按计划自动刷新已保存数字分身，且 Agent 在 ROCKS 范式下达到可验收质量。
 
 依赖 Sprint 1 对外 MCP 进程与 HCP 主数据工具。
 
-**Status: ToDo**
+**Status: WIP**
+
+### **Done**
+
+| # | Code | SBI | Parent PBI | Module/Type | Related specs | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| 6 | feature-06 | 元数据层 MySQL 方言修复 | [MKB2-01 元数据层 MySQL 方言修复（DEF-002）](./product-backlog.md#pb-9) | rag/Task | - [US-RAG-006](rag/rag-stories.md)<br>- [rag 测试计划](rag/rag-tests.md) | **Done** |
+| 5 | feature-05 | 定时刷新数字分身 | [TWIN2-01 定时自动更新数字分身](./product-backlog.md#L106) | mcp/Task | - [对内 build_twin](mcp/mcp-function-spec.md)<br>- [安装与运行 §11](spec1.0/4.install-dependencies.md) | **Done** |
 
 ### **ToDo**
 
 | # | Code | SBI | Parent PBI | Module/Type | Related specs | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | feature-01 | get_hcp_insights 对外工具 | [MCP2-03 get_hcp_insights · HCP 洞察](./product-backlog.md#L81) | mcp2.0/Feature | - [Agent 洞察](agent/agent-function-spec.md)<br>- [Web 洞察页](app/app-function-spec.md) | **ToDo** |
-| 2 | feature-02 | retrieve_academic 对外工具 | [MCP2-04 retrieve_academic · 学术证据检索](./product-backlog.md#L87) | mcp2.0/Feature | - [Agent 学术检索 I-AGT-007](agent/agent-function-spec.md)<br>- [Web 洞察页](app/app-function-spec.md) | **ToDo** |
-| 3 | feature-03 | Agent ROCKS 质量优化 | [AGT2-01 Agent 优化 · ROCKS 范式](./product-backlog.md#L117) | agent/Feature | - [Agent 功能规格](agent/agent-function-spec.md)<br>- [Agent 设计](agent/agent-design.md) | **ToDo** |
+| 1 | feature-01 | get_hcp_insights 对外工具 | [MCP2-03 get_hcp_insights · HCP 洞察](./product-backlog.md#L82) | mcp2.0/Feature | - [Agent 洞察](agent/agent-function-spec.md)<br>- [Web 洞察页](app/app-function-spec.md) | **ToDo** |
+| 2 | feature-02 | retrieve_academic 对外工具 | [MCP2-04 retrieve_academic · 学术证据检索](./product-backlog.md#L88) | mcp2.0/Feature | - [Agent 学术检索 I-AGT-007](agent/agent-function-spec.md)<br>- [Web 洞察页](app/app-function-spec.md) | **ToDo** |
+| 3 | feature-03 | Agent ROCKS 质量优化 | [AGT2-01 Agent 优化 · ROCKS 范式](./product-backlog.md#L115) | agent/Feature | - [Agent 功能规格](agent/agent-function-spec.md)<br>- [Agent 设计](agent/agent-design.md) | **ToDo** |
+| 4 | feature-04 | retrieve_compliance 对外工具 | [MCP2-05 retrieve_compliance · 合规条款检索](./product-backlog.md#L94) | mcp2.0/Feature | - [Agent 合规检索 I-AGT-008](agent/agent-function-spec.md)<br>- [Web 合规检查](app/app-function-spec.md) | **ToDo** |
 
 ### Retrospective
 
 **Learnings**
 
-尚无记录。
+#### 1. [Oct 20, 2026], feature-06 done
+- `tools/qdrant/qdrant` 丢执行位使 `start-qdrant.sh` 误判「未安装」而重新下载，卡在 GitHub 直连 0 字节；`chmod +x` 已有二进制即恢复，见 [local-binary-exec-bit.md](./knowledge/ops/local-binary-exec-bit.md)。
+- 改 `@hca/db` 等被依赖包源码后不重建 dist 会掩盖跨包缺陷：Sprint 1 Learnings #7 在 feature-06 复发，全仓重建后 DEF-002 才在 typecheck 暴露。
+- 在普通 Shell 调用里 `nohup ... &` 起的常驻进程会在命令结束后被回收；本地常驻服务（Qdrant）须用可存续的后台终端承载。
+
+#### 2. [Oct 20, 2026], feature-05 done
+- 回顾门已运行，无新增 durable 教训；stale dist 复发教训已在本 sprint #1 记录，调度器测试模式（mock node-cron 断言到点回调）属实现细节不入知识库。
 
 **Opportunities**
 
-尚无记录。
+#### 1. [Oct 20, 2026], feature-06 done
+- `start-qdrant.sh` 可改为「已有二进制优先 `chmod +x` 复用，仅在缺失时下载」，避免 GitHub 直连停滞阻塞 live 测试。
 
 **Future actions**
 
-尚无记录。
-
----
-
-<a id="sprint-3"></a>
-
-## Sprint 3
-
-[返回文首](#sprint-backlog-hcp-engagement-assistant)
-
-Sprint Goal: 集成方通过对外 MCP 检索合规条款引用（ADR-012：预审不经对外 MCP），且系统按计划自动刷新已保存数字分身。
-
-依赖 Sprint 2 方案生成与 Agent 基线。
-
-**Status: ToDo**
-
-### **ToDo**
-
-| # | Code | SBI | Parent PBI | Module/Type | Related specs | Status |
-| --- | --- | --- | --- | --- | --- | --- |
-| 1 | feature-01 | retrieve_compliance 对外工具 | [MCP2-05 retrieve_compliance · 合规条款检索](./product-backlog.md#L96) | mcp2.0/Feature | - [Agent 合规检索 I-AGT-008](agent/agent-function-spec.md)<br>- [对内 build_twin](mcp/mcp-function-spec.md) | **ToDo** |
-| 2 | feature-02 | 定时刷新数字分身 | [TWIN2-01 定时自动更新数字分身](./product-backlog.md#L108) | mcp/Task | - [对内 build_twin](mcp/mcp-function-spec.md)<br>- [安装与运行 §11](spec1.0/4.install-dependencies.md) | **ToDo** |
-
-### Retrospective
-
-**Learnings**
-
-尚无记录。
-
-**Opportunities**
-
-尚无记录。
-
-**Future actions**
-
-尚无记录。
+#### 1. [Oct 20, 2026], feature-06 done
+- 下一条依赖本地 Qdrant 的 SBI 开工前，把「复用已有二进制（含 `chmod +x`）」落进 `scripts/start-qdrant.sh`；检查点：下一条同类 SBI。
 
 ---
 

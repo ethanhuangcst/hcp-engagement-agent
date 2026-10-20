@@ -285,6 +285,72 @@ Feature: Resources 与 live 验收
 
 ---
 
+## US-MCP-007 定时刷新数字分身与洞察回填（TWIN2-01 / ADR-013）
+
+**As a** 平台所有者  
+**I want to** 系统按计划自动刷新已保存医生的数字分身并回填一句话洞察  
+**So that** 不经人工触发，MCP 调用方与 Web 看到的都是较新的分身与洞察  
+
+**覆盖**：F-MCP-036、037 · Sprint 2 `feature-05` · [TWIN2-01](../product-backlog.md#pb-6) · [ADR-013](../../docs/adr/ADR-013-insight-synthesis-triggers.md)  
+**MVP**：MVP-2.0  
+
+### 验收标准
+
+```gherkin
+Feature: 定时刷新与洞察回填
+
+  Scenario: 未配置 cron 时刷新关闭
+    Given 进程未设置 TWIN_REFRESH_CRON
+    When 进程启动并度过任意时长
+    Then 不发起任何定时刷新
+    And 进程行为与 1.0 完全一致
+
+  Scenario: 到期 HCP 按计划刷新
+    Given TWIN_REFRESH_CRON 已配置为周期触发
+    And 已保存医生中存在距上次成功刷新超过 TTL 的 HCP
+    When 调度器执行本轮
+    Then 逐个对该 HCP 走 build 管线并写回分身
+    And 刷新范围不含 _agent_general
+
+  Scenario: TTL 内的 HCP 跳过
+    Given 某 HCP 距上次成功刷新不足 TWIN_REFRESH_TTL_HOURS
+    When 本轮刷新执行
+    Then 该 HCP 不重新构建
+
+  Scenario: 单个 HCP 失败不阻断本轮
+    Given 本轮含多个到期 HCP
+    When 其中一个构建失败
+    Then 其余 HCP 仍继续刷新
+    And 失败记入结构化日志且 Twin 正文保留上次成功版本
+
+  Scenario: 构建成功后回填一句话洞察
+    Given 某 HCP 的 build 成功完成
+    When 构建完成钩子触发
+    Then ensureDoingNow 被调用一次并写回 doing_now
+    And 同一 HCP 已有进行中的合成 run 时复用该 run、不重复起任务
+
+  Scenario: add_hcp 写库成功后异步触发刷新
+    Given 对外 add_hcp 刚写入一位新 HCP
+    When 写入成功返回
+    Then 返回体含 refresh.run_id 供 get_twin_status 查询进度
+    And 服务端异步对该 hcp_id 起一次 build，不阻塞返回
+    And 疑似同人待确认分支不触发
+
+  Scenario: 触发失败不影响新增结果
+    Given 一个有效且未用过的 candidate_id
+    And 服务端异步 build 触发入队失败
+    When 调用 add_hcp 传入该 candidate_id
+    Then 工具结果仍为成功且记录已写入
+    And 失败记入服务端日志、不在工具结果中报错
+
+  Scenario: 洞察合成失败降级
+    Given 某次 ensureDoingNow 的 LLM 调用失败
+    When 调用方随后读取该 HCP 洞察
+    Then 得到空模板与 pending 状态，而非 INTERNAL_ERROR
+```
+
+---
+
 ## 故事与功能追溯矩阵
 
 | 用户故事 | F-MCP 覆盖 | 主要接口 | MVP |
@@ -295,6 +361,7 @@ Feature: Resources 与 live 验收
 | US-MCP-004 | 007、025 | I-MCP-004、005 | MVP-1 |
 | US-MCP-005 | 018–024、027–029 | I-MCP-002、003 | MVP-1 |
 | US-MCP-006 | 026、028、033–034 | I-MCP-008–010 | MVP-1 |
+| US-MCP-007 | 036–037 | 复用 I-MCP-002、003 | MVP-2.0 |
 
 ## 建议验收顺序
 

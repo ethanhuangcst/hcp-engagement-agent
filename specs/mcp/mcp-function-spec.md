@@ -90,6 +90,8 @@ Research Collector **仅**使用同时满足下列条件的源：公开 HTTP API
 | 33 | F-MCP-033 | KOL 样本对照验收 | 数据字典 §16：resolve / AuthorIds / specialties / tags 对照断言 | MVP-1 |
 | 34 | F-MCP-034 | 朱同玉 live 验收 | live 产出符合字典与 fixture 形状 | MVP-1 |
 | 35 | F-MCP-035 | 环境变量与配置 | `MCP_TRANSPORT`、`MCP_PORT`、`DATABASE_URL`、`HCA_DATA_DIR?`、`TWIN_MODE`、`CRAWLER_HEADLESS`、`NCBI_API_KEY`、`REDIS_URL` | MVP-1 |
+| 36 | F-MCP-036 | 定时刷新调度器（TWIN2-01） | 进程内 node-cron；`TWIN_REFRESH_CRON` 未设 = 关闭；全部已保存医生（排除 `_agent_general`）逐个刷新；TTL（`TWIN_REFRESH_TTL_HOURS`，默认 24）内跳过；单个失败不阻断本轮 | MVP-2.0 |
+| 37 | F-MCP-037 | 构建完成洞察回填与刷新触发（ADR-013） | build 成功后经 `ensureDoingNow` 幂等回填 `doing_now`（进行中 run 复用、LLM 失败降级空模板 + pending）；`add_hcp` 写库成功后异步触发一次 build 并返回 `refresh: { run_id }` | MVP-2.0 |
 
 ---
 

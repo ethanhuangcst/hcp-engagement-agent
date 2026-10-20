@@ -2,7 +2,7 @@
 
 > as_of：2026-07-17  
 > 规格：[`rag-function-spec.md`](./rag-function-spec.md) · 架构 §5.3 · 安装 §6  
-> 包：`@hca/medical-kb` · 向量：Qdrant · 元数据：香港 Postgres  
+> 包：`@hca/medical-kb` · 向量：Qdrant · 元数据：MySQL 主库（ADR-005）  
 > 原则：**rag-implementation**（Hybrid + citation；禁止全科预灌、禁止混库）
 
 ## 1. 结论
@@ -34,13 +34,13 @@ Agent：retrieve_academic ‖ retrieve_compliance（强制 citation）
 | 做 | 不做 |
 |----|------|
 | ingest / Hybrid 检索 / citation 出参 | Twin 采集（MCP）、Engagement 生成（Agent） |
-| corpus 落盘 + Qdrant upsert + Postgres manifest | 浏览器直连、公有云向量 SaaS（默认） |
+| corpus 落盘 + Qdrant upsert + MySQL manifest | 浏览器直连、公有云向量 SaaS（默认） |
 | specialty 归一化、coverage、异步 job | 知网/万方无授权爬取 |
 
 ```text
 BFF / Agent ──► medical-kb API ──► Qdrant（向量）
                       │
-                      ├─► Postgres（ingest_manifest / job）
+                      ├─► MySQL（ingest_manifest / job）
                       └─► data/rag/corpus（源文件暂存）
 ```
 
@@ -61,7 +61,7 @@ LangGraph 双路编排在 **Agent**；本包只提供 `retrieve_*` / `ingest_*`�
 
 ```text
 Web「确认并保存」
-  → BFF 写 Twin（Postgres）
+  → BFF 写 Twin（MySQL）
   → BFF F-WEB-039：POST /api/rag/ingest 或内联调用
        body: { specialty, themes?, hcpId, force? }
   → medical-kb.ingest_on_demand  → 立即返回 { jobId, knowledge_status }
@@ -71,7 +71,7 @@ Web「确认并保存」
        → 拉公开源（PubMed / OpenAlex / 指南摘要；OA 优先）
        → 写入 data/rag/corpus/academic/{specialty}/
        → 切块 → embed → upsert academic_index
-       → 更新 Postgres ingest_manifest + rag_ingest_jobs（knowledge_status）
+       → 更新 MySQL ingest_manifest + rag_ingest_jobs（knowledge_status）
        → （可选）BFF 联表展示；不写 Twin JSON
   → UI 可选轮询 get_ingest_status(jobId)
 ```
@@ -117,7 +117,7 @@ Web「确认并保存」
 | 4 | 自检：条款号唯一、无处方/统方教唆语、无客户机密 | checklist |
 | 5 | 运行 `seed_compliance`（CLI 或内部 API I-RAG-005） | upsert Qdrant + manifest |
 | 6 | `retrieve_compliance` 抽测 3 条敏感互动问法 | 命中含 clause_id |
-| 7 | 记录 manifest：`doc_id / version / as_of / path` | Postgres |
+| 7 | 记录 manifest：`doc_id / version / as_of / path` | MySQL |
 
 客户 SOP：放入 `corpus/tenants/{tenantId}/sop/` → `upsert_tenant_sop`；检索强制 `tenant_id`。
 
@@ -310,7 +310,7 @@ Query
 
 ---
 
-## 11. Postgres 元数据（示意）
+## 11. MySQL 元数据（ADR-005；DEF-002 修复口径）
 
 | 表 / 实体 | 用途 |
 |-----------|------|
@@ -318,7 +318,13 @@ Query
 | `rag_ingest_jobs` | jobId、specialty、status（= knowledge_status）、progress、error、hcpId?；**权威状态源** |
 | Twin | **不**在 Twin JSON / 数据字典写入 knowledge_*；列表展示由 BFF 联表 jobs；可选 `hcp_twins` 表级旁路列镜像（非 JSONB 文档字段） |
 
-与 Twin 共用 `DATABASE_URL`。向量**不**进 Postgres。
+方言与往返规则（DEF-002 / US-RAG-006）：
+
+- 占位符一律 `?`；进行中过滤用 `status IN (?, ?)`，不用 `ANY($n::text[])`。
+- MySQL 无 `RETURNING`：`INSERT` / `UPDATE` 后按主键回读 `SELECT`。
+- manifest upsert 用 `INSERT ... AS new ON DUPLICATE KEY UPDATE`（行别名形式，MySQL 8.0.19+），不用 `ON CONFLICT ... EXCLUDED`。
+- `error` 为 MySQL JSON 列：写入传 JSON 字符串；mysql2 读出为字符串，读侧解析还原对象。
+- 与 Twin 共用 `DATABASE_URL`。向量**不**进 MySQL。
 
 ---
 

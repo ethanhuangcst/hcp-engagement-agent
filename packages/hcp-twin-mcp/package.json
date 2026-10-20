@@ -25,10 +25,13 @@
   "dependencies": {
     "@hca/db": "*",
     "@hca/domain": "*",
+    "@hca/hcp-engagement-agent": "*",
     "@modelcontextprotocol/sdk": "^1.25.0",
+    "node-cron": "^3.0.3",
     "zod": "^4.4.0"
   },
   "devDependencies": {
+    "@types/node-cron": "^3.0.11",
     "@vitest/coverage-v8": "^4.1.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",

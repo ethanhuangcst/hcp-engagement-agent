@@ -1,6 +1,6 @@
 # 对外 MCP 2.0 测试说明
 
-> as_of：2026-10-20（新增 §8 feature-02 list_hcp 检查；新增 §9 feature-03 add_hcp 检查，含写前查重 ADR-009；OGT-1 增补：§6 库外检索与令牌缓存、§9 改为候选令牌入参，ADR-010；医院/科室过滤包含匹配，ADR-011；ADR-012 数据面口径：§3 Sprint 门禁 2/3 改 `retrieve_academic` / `retrieve_compliance`）  
+> as_of：2026-10-20（新增 §8 feature-02 list_hcp 检查；新增 §9 feature-03 add_hcp 检查，含写前查重 ADR-009；OGT-1 增补：§6 库外检索与令牌缓存、§9 改为候选令牌入参，ADR-010；医院/科室过滤包含匹配，ADR-011；ADR-012 数据面口径：§3 Sprint 门禁 2/3 改 `retrieve_academic` / `retrieve_compliance`；2026-10-20 ADR-013 + Sprint 3 并入：§3 门禁合并为 Sprint 2、§9 增异步刷新触发检查）  
 > 基线：项目 [7.test-strategy.md](../spec1.0/7.test-strategy.md)（common-test-strategy 更严者胜）  
 > 故事：[mcp2-stories.md](./mcp2-stories.md)
 
@@ -26,8 +26,7 @@
 | Sprint | 必绿 |
 | --- | --- |
 | 1 | `task-01`（已绿）：HTTP 启动 + `GET /health` + url 接入 tools/list 含三工具。`feature-01`：见 §6 |
-| 2 | `get_hcp_insights`、`retrieve_academic` 契约 + medical-kb 集成（无 LLM，ADR-012） |
-| 3 | `retrieve_compliance` 契约：条款引用返回、`tenant_id` 非入参、description 非预审声明 |
+| 2 | `get_hcp_insights` 契约（含按需合成、降级、幂等回填，ADR-013）+ `retrieve_academic` 契约 + medical-kb 集成（无 LLM，ADR-012）+ `retrieve_compliance` 契约（条款引用返回、`tenant_id` 非入参、description 非预审声明）+ TWIN2-01 调度器单测（[../mcp/mcp-tests.md](../mcp/mcp-tests.md)；ADR-013）。原 Sprint 3 已并入本行 |
 
 ## 4. 命令（随包落地后更新）
 
@@ -130,3 +129,9 @@ npm run test -w @hca/hcp-engagement-mcp
 npm run test -w @hca/db
 npm run test -w @hca/hcp-engagement-mcp
 ```
+
+§9 增补（ADR-013）：`add_hcp` 异步刷新触发。对应 [mcp2-design.md](./mcp2-design.md) §8 增补、[mcp2-stories.md](./mcp2-stories.md) US-MCP2-006 新增场景；调度器与 `ensureDoingNow` 行为断言在 [../mcp/mcp-tests.md](../mcp/mcp-tests.md)，本层不复制。
+
+| 层 | 用例 | 通过 | 失败或空 |
+| --- | --- | --- | --- |
+| 契约 | Vitest + MCP `Client` / `InMemoryTransport`，注入 `AddHcpFn` 与 build 触发件 | 写入成功 → 返回含 `refresh.run_id`；fire-and-forget 不阻塞（响应先于触发完成） | 注入触发抛错 / activeRun 冲突 → 返回仍成功且记录已写入；`confirmation_required` 分支不触发、无 `refresh` 键 |

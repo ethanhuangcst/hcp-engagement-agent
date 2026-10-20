@@ -65,3 +65,45 @@ Tools：`resolve_hcp_identity` → `build_twin` Stage C（F-MCP-012–014、021�
 
 锚点：OpenAlex `A5101900733` · ORCID `0000-0002-6197-0698` · NCT01794871（中山 / tyzhu@fudan.edu.cn）。  
 论文矩阵：OpenAlex→DOI→PubMed/EuropePMC/Crossref 可对齐；ORCID works 空；CT.gov 旁证可用。
+
+---
+
+## TWIN2-01 定时刷新与洞察回填（2.0 技术设计）
+
+Stories：[mcp-stories.md](./mcp-stories.md) US-MCP-007 · Tests：[mcp-tests.md](./mcp-tests.md) · 决策：[ADR-013](../../docs/adr/ADR-013-insight-synthesis-triggers.md)
+
+### Stack
+
+| 层 | 选型 | 说明 |
+| --- | --- | --- |
+| 调度 | node-cron（进程内） | ADR-2.0-4：无新进程、无 Redis 依赖 |
+| 构建 | 既有 `src/build/queue.ts` Stage A–E 管线 | 复用 `enqueue(hcpId, mode)` 的同 hcpId 单 active run 去重（F-MCP-018） |
+| 洞察回填 | `ensureDoingNow(hcpId)` 幂等入口 | 三触发源收敛（ADR-013）；复用 `synthesizeDoingNow` 的 reused 语义 |
+
+### Runtime
+
+- 位置：`packages/hcp-twin-mcp/src/scheduler/`，随 MCP 进程启动，不新增服务。
+- 开关：`TWIN_REFRESH_CRON` 未设为关闭，进程行为与 1.0 完全一致。
+- 刷新范围：`listTwins()` 全部已保存医生，排除 `_agent_general`，逐个顺序执行，避免打满外网配额。
+- 跳过：距上次成功刷新不足 `TWIN_REFRESH_TTL_HOURS`（默认 24）的 HCP 跳过。
+- 失败：单个 HCP 失败不阻断本轮；stderr 结构化日志；Twin 正文保留上次成功版本。
+
+### Data
+
+- 无新表、无迁移；复用 `hcp_twins` / `hcp_insights`（ADR-005）。
+- 洞察回填写 `hcp_insights.doing_now`，幂等；进行中合成 run 复用，不重复起任务。
+
+### Integrations
+
+- 构建完成钩子：`BuildQueue.run` 成功分支调用注入的 `onBuildComplete(hcpId)`，由启动装配接到 `ensureDoingNow`；钩子失败不改变 build 状态、不阻断队列。
+- `ensureDoingNow` 落 `packages/hcp-engagement-agent`（`synthesizeDoingNow` 同层收敛导出，ADR-013）；`hcp-twin-mcp` 以 workspace 依赖直调，测试注入假钩子。
+- `add_hcp` 异步触发：对外 MCP handler 写库成功后 fire-and-forget 调对内 `build_twin`（HTTP，`MCP_URL` 含 `/mcp`），返回 `refresh: { run_id }`；入队失败（含 activeRun 冲突）不影响成功返回，只记日志。
+
+### Security
+
+- 密钥只经环境变量（`DATABASE_URL`、LLM Key）；stderr 日志无堆栈、无连接串、无 Key。
+- 对外不暴露手动刷新入口；洞察回填属数据面幂等写（ADR-013）。
+
+### Tests
+
+见 [mcp-tests.md](./mcp-tests.md)；基线 **common-test-strategy** 与 [spec1.0/7.test-strategy.md](../spec1.0/7.test-strategy.md)（更严者胜）。

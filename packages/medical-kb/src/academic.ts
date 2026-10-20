@@ -164,7 +164,7 @@ function academicPointId(chunk: AcademicSeedChunk, index: number): string {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
 }
 
-async function upsertAcademicManifest(row: {
+export async function upsertAcademicManifest(row: {
   doc_id: string;
   specialty: string;
   version: string;
@@ -176,14 +176,14 @@ async function upsertAcademicManifest(row: {
   const pool = getPool();
   await pool.query(
     `INSERT INTO ingest_manifest (doc_id, index_name, specialty, version, as_of, corpus_path, chunk_count, authority, updated_at)
-     VALUES ($1,$2,$3,$4,$5::date,$6,$7,$8,NOW())
-     ON CONFLICT (doc_id) DO UPDATE SET
-       specialty = EXCLUDED.specialty,
-       version = EXCLUDED.version,
-       as_of = EXCLUDED.as_of,
-       corpus_path = EXCLUDED.corpus_path,
-       chunk_count = EXCLUDED.chunk_count,
-       authority = EXCLUDED.authority,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+     AS new ON DUPLICATE KEY UPDATE
+       specialty = new.specialty,
+       version = new.version,
+       as_of = new.as_of,
+       corpus_path = new.corpus_path,
+       chunk_count = new.chunk_count,
+       authority = new.authority,
        updated_at = NOW()`,
     [
       row.doc_id,
