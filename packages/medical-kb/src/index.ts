@@ -6,6 +6,11 @@ export {
 } from "./api.js";
 
 export {
+  complianceCoverage,
+  findOutdatedComplianceVersions,
+} from "./compliance-coverage.js";
+
+export {
   retrieveAcademic,
   ingestOnDemand,
   getIngestStatus,
@@ -17,6 +22,9 @@ export {
 export {
   normalizeSpecialty,
   tryNormalizeSpecialty,
+  specialtyDisplayName,
+  openAlexConceptSpecialty,
+  OPENALEX_CONCEPT_SPECIALTY_KEYS,
   CONTROLLED_SPECIALTY_KEYS,
   CONTROLLED_KEYS,
 } from "./specialty.js";
@@ -33,9 +41,11 @@ export {
   GetIngestStatusInputSchema,
   RetrieveComplianceInputSchema,
   RagCoverageSchema,
+  RagComplianceCoverageSchema,
   type RagChunk,
   type RagError,
   type RagCoverage,
+  type RagComplianceCoverage,
   type ComplianceSeedChunk,
   type AcademicSeedChunk,
 } from "./types.js";

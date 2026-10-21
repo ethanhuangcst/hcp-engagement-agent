@@ -23,6 +23,10 @@ export type MessageKey =
   | "newtwin.dept.mismatch"
   | "newtwin.dept.preview.title"
   | "newtwin.dept.preview.ok"
-  | "newtwin.dept.preview.skipped";
+  | "newtwin.dept.preview.skipped"
+  | "newtwin.dept.incoming"
+  | "newtwin.dept.gate.checkbox"
+  | "newtwin.dept.gate.required"
+  | "newtwin.dept.missing.block";
 
 export type Messages = Record<MessageKey, string>;

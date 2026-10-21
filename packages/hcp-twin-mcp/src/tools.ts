@@ -18,8 +18,15 @@ import {
 } from "./fixtures/zhu-tongyu.js";
 import { applyTagOverride, ruleTagFromProfile, tagsFromTwin } from "./tagging.js";
 import { createHttpClient } from "./collectors/http.js";
-import { searchOpenAlexAuthors } from "./collectors/openalex.js";
-import { tryNormalizeSpecialty, DEPARTMENT_PATTERNS } from "@hca/hcp-engagement-agent";
+import {
+  fetchOpenAlexWorkConcepts,
+  searchOpenAlexAuthors,
+} from "./collectors/openalex.js";
+import {
+  tryNormalizeSpecialty,
+  openAlexConceptSpecialty,
+  DEPARTMENT_PATTERNS,
+} from "@hca/hcp-engagement-agent";
 
 export const ResolveInputSchema = z.object({
   name: z.string().min(1),
@@ -64,6 +71,8 @@ export const ConfirmAndSaveInputSchema = z.object({
       role_tags: z.array(RoleTagSchema).optional(),
     })
     .optional(),
+  /** MCP2-10（DEF-006，D2）：科室来源留痕追加项，落 profile.tags.evidence_refs */
+  extra_evidence_refs: z.array(z.string().min(1)).optional(),
 });
 
 export const HealthCheckInputSchema = z.object({});
@@ -120,7 +129,9 @@ export type DepartmentMismatch = {
   signal_side: string;
 };
 
-/** MCP2-09：由数据源主题词推导信号与 mismatch；信号缺失或不可归一化时降级为仅来源标注 */
+/** MCP2-09：由数据源主题词推导信号与 mismatch；信号缺失或不可归一化时降级为仅来源标注。
+ * feature-12 跟进（B+ 设计）：主题词先走受控别名表，再走 OpenAlex 概念映射表
+ * （Hemodialysis / Dialysis 等领域概念 → 受控专科键），泛化词两表都不命中。 */
 export function departmentSignalOf(
   deptInput: string,
   concepts: string[] | undefined,
@@ -133,7 +144,8 @@ export function departmentSignalOf(
     null;
   let signalSpecialty: string | undefined;
   for (const topic of concepts) {
-    const key = tryNormalizeSpecialty(topic);
+    const key =
+      tryNormalizeSpecialty(topic) ?? openAlexConceptSpecialty(topic);
     if (key) {
       signalSpecialty = key;
       break;
@@ -221,56 +233,73 @@ export async function resolveHcpIdentity(
         hospital,
         roleHints: [],
       });
-      const candidates: ResolveCandidate[] = hits.slice(0, 5).map((h, i) => {
-        const hcpId = `hcp_${h.id.toLowerCase()}`;
-        const { signal, mismatch } = departmentSignalOf(
-          dept.trim(),
-          h.concepts,
-        );
-        return {
-          candidate_id: `c-live-${h.id}`,
-          name_zh: name.trim(),
-          name_en: h.display_name,
-          hospital: h.institution ?? hospital.trim(),
-          department: dept.trim(),
-          department_provenance: {
-            origin: "caller_input",
-            verified: false,
-          },
-          ...(signal ? { department_signal: signal } : {}),
-          ...(mismatch ? { department_mismatch: mismatch } : {}),
-          title: null,
-          distinguish:
-            h.institution
-              ? `OpenAlex 机构：${h.institution}`
-              : "OpenAlex 作者命中；请核医院科室",
-          confidence: i === 0 ? "high" : "medium",
-          match_note: `live OpenAlex · ${h.id}`,
-          evidence: [
-            {
-              kind: "OpenAlex",
-              url: `https://openalex.org/authors/${h.id}`,
+      // feature-12 跟进（B+ 设计）：卡片全列 + 论文级主题词补信号。
+      // 作者级主题词推不出受控科室的候选，懒加载其论文概念再推一次；
+      // 论文源失败时降级为仅作者级信号，不阻塞整次 resolve。
+      const candidates: ResolveCandidate[] = await Promise.all(
+        hits.slice(0, 5).map(async (h, i): Promise<ResolveCandidate> => {
+          const hcpId = `hcp_${h.id.toLowerCase()}`;
+          let { signal, mismatch } = departmentSignalOf(dept.trim(), h.concepts);
+          if (!signal?.specialty) {
+            let workTopics: string[] = [];
+            try {
+              workTopics = await fetchOpenAlexWorkConcepts(http, h.id);
+            } catch {
+              workTopics = [];
+            }
+            if (workTopics.length > 0) {
+              // 合并去重：作者级在前、论文级补入，保持插入序（卡片展示与信号推导同源）
+              const merged = [
+                ...new Set([...(h.concepts ?? []), ...workTopics]),
+              ];
+              ({ signal, mismatch } = departmentSignalOf(dept.trim(), merged));
+            }
+          }
+          return {
+            candidate_id: `c-live-${h.id}`,
+            name_zh: name.trim(),
+            name_en: h.display_name,
+            hospital: h.institution ?? hospital.trim(),
+            department: dept.trim(),
+            department_provenance: {
+              origin: "caller_input",
+              verified: false,
             },
-            ...(h.orcid
-              ? [{ kind: "ORCID", url: `https://orcid.org/${h.orcid}` }]
-              : []),
-          ],
-          hcpId,
-          author_ids_draft: {
-            openalex: h.id,
-            orcid: h.orcid,
-            pubmed_author: null,
-            google_scholar: null,
-            scopus_author_id: null,
-            cnki_scholar: null,
-          },
-          tags_draft: {
-            ...tags_draft,
-            hcp_tier: i === 0 ? "T2" : "T3",
-            tag_confidence: "medium",
-          },
-        };
-      });
+            ...(signal ? { department_signal: signal } : {}),
+            ...(mismatch ? { department_mismatch: mismatch } : {}),
+            title: null,
+            distinguish:
+              h.institution
+                ? `OpenAlex 机构：${h.institution}`
+                : "OpenAlex 作者命中；请核医院科室",
+            confidence: i === 0 ? "high" : "medium",
+            match_note: `live OpenAlex · ${h.id}`,
+            evidence: [
+              {
+                kind: "OpenAlex",
+                url: `https://openalex.org/authors/${h.id}`,
+              },
+              ...(h.orcid
+                ? [{ kind: "ORCID", url: `https://orcid.org/${h.orcid}` }]
+                : []),
+            ],
+            hcpId,
+            author_ids_draft: {
+              openalex: h.id,
+              orcid: h.orcid,
+              pubmed_author: null,
+              google_scholar: null,
+              scopus_author_id: null,
+              cnki_scholar: null,
+            },
+            tags_draft: {
+              ...tags_draft,
+              hcp_tier: i === 0 ? "T2" : "T3",
+              tag_confidence: "medium",
+            },
+          };
+        }),
+      );
       return {
         ok: true,
         data: {
@@ -430,8 +459,15 @@ function buildIdentityTwin(input: {
   city?: string;
   author_ids_draft?: Record<string, string | string[] | null | undefined>;
   tags_draft?: { hcp_tier?: z.infer<typeof HcpTierSchema>; role_tags?: z.infer<typeof RoleTagSchema>[] };
+  /** MCP2-10（DEF-006，D2）：科室来源留痕追加项 */
+  extra_evidence_refs?: string[];
 }): VirtualTwin {
   const asOf = new Date().toISOString().slice(0, 10);
+  /** MCP2-10（DEF-006，D2）：confirm_identity 之后按来源追加（department_signal / department_checked 等） */
+  const evidenceRefs = [
+    "confirm_identity",
+    ...(input.extra_evidence_refs ?? []),
+  ];
   const tags =
     input.tags_draft?.hcp_tier
       ? {
@@ -440,7 +476,7 @@ function buildIdentityTwin(input: {
           tag_confidence: "low" as const,
           tag_as_of: asOf,
           tag_method: "rule" as const,
-          evidence_refs: ["confirm_identity"],
+          evidence_refs: evidenceRefs,
         }
       : {
           hcp_tier: "T2" as const,
@@ -448,7 +484,7 @@ function buildIdentityTwin(input: {
           tag_confidence: "low" as const,
           tag_as_of: asOf,
           tag_method: "rule" as const,
-          evidence_refs: ["confirm_identity"],
+          evidence_refs: evidenceRefs,
         };
   return {
     meta: {
@@ -532,6 +568,7 @@ export async function confirmAndSaveTwin(
     city: input.city,
     author_ids_draft: input.author_ids_draft,
     tags_draft: input.tags_draft,
+    extra_evidence_refs: input.extra_evidence_refs,
   });
   await store.upsertTwin(twin);
   const insights: HcpInsights = {

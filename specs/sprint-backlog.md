@@ -129,22 +129,24 @@ Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规
 
 | # | Code | SBI | Parent PBI | Module/Type | Related specs | Status |
 | --- | --- | --- | --- | --- | --- | --- |
+| 13 | feature-13 | 合规知识覆盖信号与条款版本治理 | [MKB2-03 合规知识覆盖信号与条款版本治理](./product-backlog.md#pb-13) | rag/Feature | - [F-RAG-030–032](rag/rag-function-spec.md)<br>- [US-RAG-008](rag/rag-stories.md)<br>- [mcp2-design §11](mcp2.0/mcp2-design.md)<br>- [ADR-014](../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md) | **Done** |
+| 12 | feature-12 | add_hcp 入库科室以选中记录信号专科为准 | [MCP2-10 add_hcp 入库科室以选中记录信号专科为准（DEF-006，D2）](./product-backlog.md#pb-16) | mcp2.0/Task | - [US-MCP2-007 增补](mcp2.0/mcp2-stories.md)<br>- [mcp2-design §13.6](mcp2.0/mcp2-design.md)<br>- [mcp2 测试计划 §15](mcp2.0/mcp2-test.md)<br>- [DEF-006](issues-log.md)<br>- [F-WEB-047 增补](app/app-function-spec.md) | **Done** |
+| 11 | feature-11 | add_hcp 入库科室校验与预灌映射预览 | [MCP2-09 add_hcp 入库科室校验与预灌映射预览](./product-backlog.md#pb-14) | mcp2.0/Task | - [US-MCP2-007](mcp2.0/mcp2-stories.md)<br>- [mcp2-design §13](mcp2.0/mcp2-design.md)<br>- [mcp2 测试计划 §14](mcp2.0/mcp2-test.md)<br>- [DEF-005](issues-log.md) | **Done** |
+| 10 | feature-10 | 学术索引写入与恢复健壮性修复 | [MKB2-04 学术索引写入与恢复健壮性修复（DEF-003 / DEF-004）](./product-backlog.md#pb-15) | rag/Task | - [US-RAG-009](rag/rag-stories.md)<br>- [rag-design §20](rag/rag-design.md)<br>- [rag 测试计划 §7](rag/rag-tests.md) | **Done** |
+| 9 | feature-09 | 受控学科目录扩充与学术索引批量种子 | [MKB2-02 受控学科目录扩充与学术索引批量种子](./product-backlog.md#pb-12) | rag/Feature | - [ADR-014](../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md)<br>- [rag 功能规格 ingest_on_demand](rag/rag-function-spec.md) | **Done** |
+| 7 | feature-07 | 知识覆盖对齐（add_hcp 预灌 + coverage 信号） | [MCP2-07 知识覆盖对齐 · add_hcp 预灌 + retrieve_academic coverage 信号](./product-backlog.md#pb-10) | mcp2.0/Feature | - [Web 确认保存 F-WEB-039](app/app-function-spec.md)<br>- [ADR-014](../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md) | **Done** |
 | 6 | feature-06 | 元数据层 MySQL 方言修复 | [MKB2-01 元数据层 MySQL 方言修复（DEF-002）](./product-backlog.md#pb-9) | rag/Task | - [US-RAG-006](rag/rag-stories.md)<br>- [rag 测试计划](rag/rag-tests.md) | **Done** |
 | 5 | feature-05 | 定时刷新数字分身 | [TWIN2-01 定时自动更新数字分身](./product-backlog.md#L106) | mcp/Task | - [对内 build_twin](mcp/mcp-function-spec.md)<br>- [安装与运行 §11](spec1.0/4.install-dependencies.md) | **Done** |
+| 2 | feature-02 | retrieve_academic 对外工具 | [MCP2-04 retrieve_academic · 学术证据检索](./product-backlog.md#L88) | mcp2.0/Feature | - [Agent 学术检索 I-AGT-007](agent/agent-function-spec.md)<br>- [Web 洞察页](app/app-function-spec.md) | **Done** |
 | 1 | feature-01 | get_hcp_insights 对外工具 | [MCP2-03 get_hcp_insights · HCP 洞察](./product-backlog.md#L82) | mcp2.0/Feature | - [Agent 洞察](agent/agent-function-spec.md)<br>- [Web 洞察页](app/app-function-spec.md) | **Done** |
 
 ### **ToDo**
 
 | # | Code | SBI | Parent PBI | Module/Type | Related specs | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| 2 | feature-02 | retrieve_academic 对外工具 | [MCP2-04 retrieve_academic · 学术证据检索](./product-backlog.md#L88) | mcp2.0/Feature | - [Agent 学术检索 I-AGT-007](agent/agent-function-spec.md)<br>- [Web 洞察页](app/app-function-spec.md) | **WIP** |
 | 3 | feature-03 | Agent ROCKS 质量优化 | [AGT2-01 Agent 优化 · ROCKS 范式](./product-backlog.md#L115) | agent/Feature | - [Agent 功能规格](agent/agent-function-spec.md)<br>- [Agent 设计](agent/agent-design.md) | **ToDo** |
 | 4 | feature-04 | retrieve_compliance 对外工具 | [MCP2-05 retrieve_compliance · 合规条款检索](./product-backlog.md#L94) | mcp2.0/Feature | - [Agent 合规检索 I-AGT-008](agent/agent-function-spec.md)<br>- [Web 合规检查](app/app-function-spec.md) | **ToDo** |
-| 7 | feature-07 | 知识覆盖对齐（add_hcp 预灌 + coverage 信号） | [MCP2-07 知识覆盖对齐 · add_hcp 预灌 + retrieve_academic coverage 信号](./product-backlog.md#pb-10) | mcp2.0/Feature | - [Web 确认保存 F-WEB-039](app/app-function-spec.md)<br>- [ADR-014](../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md) | **WIP** |
-| 8 | feature-08 | ingest_academic 对外工具 | [MCP2-08 ingest_academic · 学术知识按需灌注](./product-backlog.md#pb-11) | mcp2.0/Feature | - [rag 功能规格 ingest_on_demand](rag/rag-function-spec.md)<br>- [ADR-014](../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md) | **ToDo** |
-| 9 | feature-09 | 受控学科目录扩充与学术索引批量种子 | [MKB2-02 受控学科目录扩充与学术索引批量种子](./product-backlog.md#pb-12) | rag/Feature | - [ADR-014](../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md)<br>- [rag 功能规格 ingest_on_demand](rag/rag-function-spec.md) | **WIP** |
-| 10 | feature-10 | 学术索引写入与恢复健壮性修复 | [MKB2-04 学术索引写入与恢复健壮性修复（DEF-003 / DEF-004）](./product-backlog.md#pb-15) | rag/Task | - [US-RAG-009](rag/rag-stories.md)<br>- [rag-design §20](rag/rag-design.md)<br>- [rag 测试计划 §7](rag/rag-tests.md) | **WIP**（feature-09 close 前置） |
-| 11 | feature-11 | add_hcp 入库科室校验与预灌映射预览 | [MCP2-09 add_hcp 入库科室校验与预灌映射预览](./product-backlog.md#pb-14) | mcp2.0/Task | - [US-MCP2-007](mcp2.0/mcp2-stories.md)<br>- [mcp2-design §13](mcp2.0/mcp2-design.md)<br>- [mcp2 测试计划 §14](mcp2.0/mcp2-test.md)<br>- [DEF-005](issues-log.md) | **WIP**（2026-10-21 开工；前置 feature-02/07 候选链路与预灌返回体已实现完成） |
+| 8 | feature-08 | ingest_academic 对外工具 | [MCP2-08 ingest_academic · 学术知识按需灌注](./product-backlog.md#pb-11) | mcp2.0/Feature | - [rag 功能规格 ingest_on_demand](rag/rag-function-spec.md)<br>- [ADR-014](../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md) | **WIP** |
 
 ### Retrospective
 
@@ -162,10 +164,23 @@ Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规
 - 验收演示把 MCP `structuredContent` 排版进 chat 后，用户追问「是工具返回还是你生成的」；此后同类演示须在首句标明数据来自 `tools/call`。
 - ADR-013 假设成立：`ensureDoingNow` 已在 feature-05 落地，本故事只做 MCP 接线。
 
+#### 4. [Oct 21, 2026], feature-02, feature-07, feature-09, feature-10, feature-11, feature-12 done
+- OpenAlex 作者级 `x_concepts` 只有约 5 个宽泛主题词，专科信号在论文级 concepts（`select=concepts`）经概念映射表归一，见 [openalex-department-signal-works-concepts.md](./knowledge/data/openalex-department-signal-works-concepts.md)。
+- stale dist 掩盖新导出的教训再次复发（`openAlexConceptSpecialty is not a function`），改被依赖包导出后必须先重建 dist 再跑下游测试。
+- ADR-013 / ADR-014 假设成立：叶定伟 live 验收中 `add_hcp` 预灌与 `coverage: ready` 信号按预期工作，无需修订。
+
+#### 5. [Oct 21, 2026], feature-13 合规知识覆盖信号与条款版本治理 done
+- Live 验收脚本须放在 workspace 根并用 `.mts` 后缀，否则 `/tmp` 下模块解析与 top-level await 易失败，见 [tsx-live-verify-from-workspace-root.md](./knowledge/ops/tsx-live-verify-from-workspace-root.md)。
+- `retrieveCompliance` 单测里 `rerank` mock 须为 `(query, texts)` 双参，与生产签名一致。
+- ADR-014 假设在合规侧成立：coverage 以 manifest 为准、sparse 附 repair_hint、seed 下线旧版本与学术侧同语义；MCP `retrieve_compliance` 接线仍归 feature-04。
+
 **Opportunities**
 
 #### 1. [Oct 20, 2026], feature-06 done
 - `start-qdrant.sh` 可改为「已有二进制优先 `chmod +x` 复用，仅在缺失时下载」，避免 GitHub 直连停滞阻塞 live 测试。
+
+#### 4. [Oct 21, 2026], feature-02, feature-07, feature-09, feature-10, feature-11, feature-12 done
+- 医院中英文名归一是下一个匹配质量缺口：库内存 `Nanfang Hospital` 时中文「南方医院」查不到库内记录，可另立小故事。
 
 **Future actions**
 
@@ -174,6 +189,12 @@ Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规
 
 #### 3. [Oct 21, 2026], feature-01 get_hcp_insights 对外工具 done
 - 下一条对外 MCP 工具 SBI（feature-02）验收演示首句标明 `tools/call` 来源；检查点：feature-02。
+
+#### 4. [Oct 21, 2026], feature-02, feature-07, feature-09, feature-10, feature-11, feature-12 done
+- 下一条依赖 `@hca/*` 跨包新导出的 SBI 开工前，先重建被依赖包 dist（检查点：下一条同类 SBI）；Sprint-end 时回看本条与 Opportunities #4（医院名归一）是否落成故事。
+
+#### 5. [Oct 21, 2026], feature-13 合规知识覆盖信号与条款版本治理 done
+- 下一条需 Qdrant + MySQL live 脚本验收的 SBI 开工前，在 release 或 README 补一句「临时脚本放仓库根 `.tmp-*.mts`」；检查点：下一条同类 SBI。
 
 ---
 
@@ -187,4 +208,3 @@ Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规
 
 | # | Component | PBI Code | Description | Size | Related | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| 13 | 后台维护 | [MKB2-03](./product-backlog.md#pb-13) | 合规知识覆盖信号与条款版本治理 | Implementable | - [F-RAG-030–032](rag/rag-function-spec.md)<br>- [US-RAG-008](rag/rag-stories.md) | ToDo |

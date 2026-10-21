@@ -95,7 +95,7 @@
   - **做什么**：检索合规知识库条款，返回条款引用（`clause_id` / `authority` / `version`）；工具 description 写明**不是预审判定、不替代**正式 MLR（[ADR-012](../docs/adr/ADR-012-mcp2-data-plane-only.md)）。
   - **Annotations**：只读（`readOnlyHint: true`）。
   - **参数**：对齐 I-AGT-008（`hcp_id` 必填；`query`、`interaction_type` 可选）。`tenant_id` **不作入参**：来自服务端鉴权上下文；租户鉴权未上线前仅返回全局种子。
-  - **返回**：`{ chunks[] }`，每条含条款引用与 citation。
+  - **返回**：`{ chunks[], coverage?, repair_hint? }`，每条 chunk 含条款引用与 citation；`coverage` 以 `ingest_manifest` 为权威列出各 authority（version / chunk_count / 最新 as_of），`sparse` 附 `repair_hint` 建议 `seed_compliance` 灌种，manifest 读取失败时降级省略该键（[MKB2-03](#pb-13) 增补，[mcp2-design §11](mcp2.0/mcp2-design.md)）；检索层契约已在 medical-kb 落地，feature-04 做对外 MCP 接线。
   - **失败**：`NOT_FOUND`、`INTERNAL_ERROR`。
 - <a id="pb-10"></a>[MCP2-07](#pb-10) 知识覆盖对齐 · `add_hcp` 预灌 + `retrieve_academic` coverage 信号
   - **做什么**：MCP 调用方与 Web 获得同等的知识库覆盖（[ADR-014](../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md)）。两件事：`add_hcp` 写库成功后 fire-and-forget 按 Twin 专科触发知识预灌（与 Web confirm 的 `triggerKnowledgeIngest` 同语义，失败只记日志不阻塞返回）；`retrieve_academic` 返回体增加 `coverage`（复用 `coverageCheck` 的 `status` 与专科 chunk 数），`sparse` 时附 `repair_hint` 建议补种。
@@ -111,7 +111,7 @@
 - <a id="pb-14"></a>[MCP2-09](#pb-14) add_hcp 入库科室校验与预灌映射预览
   - **做什么**：三件事。`resolve_hcp_identity` 候选的科室字段带来源标注（「来自调用方输入提示，未经数据源核实」，DEF-005），数据源（OpenAlex 主题/机构元数据）有可用信号时一并返回并与输入对照，不一致附 mismatch 提示。`add_hcp` 确认返回与 Web 确认页显示「科室 → 将预灌专科」映射结果（复用 `resolveSpecialtiesForIngest`），让确认者当场发现科室错标。department 映射不到任何受控专科时在返回中提示（预灌静默跳过的行为不变，但可见）。
   - **动因**：DEF-005 两次实际发生（陆林「神经科」错标 → 预灌错灌 neurology；王拥军「神经病」截断）；预灌按 department 正则静默执行，确认时无法发现错标。
-  - **范围外**：不自动纠正科室（OpenAlex 无可靠中文科室字段）；不新增对外工具。
+  - **范围外**：不自动纠正科室（OpenAlex 无可靠中文科室字段）；不新增对外工具。**后续修订（2026-10-21）**：入库科室规则与 mismatch 闸门已由 [MCP2-10](#pb-16)（DEF-006，D2 方向）取代本条范围外口径；本条交付的来源标注、信号对照与映射预览继续有效。
   - **验收口径**：候选与确认返回体含科室来源标注；mismatch 场景有提示；映射预览与实际预灌专科一致；测试覆盖输入错标场景。
   - **失败**：数据源信号不可用时降级为仅来源标注，不阻塞确认流程。
   - **规格**：[mcp2-design §13](mcp2.0/mcp2-design.md) · [US-MCP2-007](mcp2.0/mcp2-stories.md) · [mcp2 测试计划 §14](mcp2.0/mcp2-test.md) · [F-MCP-012 增补与 US-MCP-002 场景扩充](mcp/mcp-function-spec.md) · [mcp-design MCP2-09 节与 mcp-tests §5](mcp/mcp-design.md) · [F-WEB-047 与 US-WEB-004 场景扩充](app/app-function-spec.md) · [app-design §6](app/app-design.md)。
@@ -121,6 +121,15 @@
   - **动因**：DEF-003 实测 13/28 学科丢点（跨专科同 PMID 互相覆盖 point payload）；DEF-004 写入窗口进程被强杀 → Qdrant WAL 损坏 → 读路径 panic 不可恢复，`health()` 探不出坏 shard。
   - **范围外**：不动 MCP 工具面；不改 Web。
   - **验收口径**：28 学科盘-vs-库逐条相等；重跑幂等全 `skipped_ready`；health 探测发现坏 shard；恢复演练 ≤5 分钟恢复 28/28；测试见 rag-tests §7（US-RAG-009）。
+
+- <a id="pb-16"></a>[MCP2-10](#pb-16) add_hcp 入库科室以选中记录信号专科为准（DEF-006，D2）
+  - **做什么**：三件事。① 入库科室改规则：`add_hcp` 与 Web 确认保存的 `twin.identity.department` 取选中候选的 `department_signal.specialty`（信号专科）映射的受控专科标准中文名（如 psychiatry → 精神科），不再取调用方输入原文；查询表单科室仅作检索提示，确认页无科室编辑入口。② 强闸门：候选带 `department_mismatch`（输入侧与信号侧不一致）时须人工确认——MCP 侧新增可选参数 `confirm_department_checked: true`、Web 侧勾选「已人工核对科室」才放行，未确认返回 `department_confirmation_required` 不写库；记录无信号专科（`department_signal.specialty` 缺失）时阻断保存，返回 `DEPARTMENT_SIGNAL_MISSING`，`repair_hint` 提示换检索条件重查或人工核实。③ 预灌与入库一致：`specialty_preview` 的 department 行以入库科室（信号专科中文名）为输入，预灌专科与入库科室恒一致。
+  - **动因**：DEF-006（DEF-005 修复后 live 复验暴露）：侯凡凡输入「神内科」`matched: false` 仍原样入库；产品方向已定（2026-10-21，D2）。
+  - **数据现实约束**：OpenAlex 记录无科室字段，信号来自概念归一，可能缺失（侯凡凡无信号）或噪声（王拥军信号 radiology 而实际神经内科）；闸门必须人工兜底，放行即确认记录侧科室为准。
+  - **范围外**：不提供人工改写科室入口（MCP 无科室入参、Web 确认页无编辑框）；不新增对外工具；对内 resolve 契约不变（仍原样回显输入科室）。
+  - **验收口径**：入库科室等于选中记录信号专科的标准中文名；mismatch 与无信号两场景有强闸门且集成测试覆盖；确认页科室不可编辑；预灌专科与入库科室一致。
+  - **失败**：无信号专科时阻断保存（`DEPARTMENT_SIGNAL_MISSING`）；mismatch 未确认时返回 `department_confirmation_required` 不写库；均不降级为原样入库。
+  - **规格**：[mcp2-design §13 增补](mcp2.0/mcp2-design.md) · [US-MCP2-007 增补](mcp2.0/mcp2-stories.md) · [mcp2 测试计划 §14 增补](mcp2.0/mcp2-test.md) · [F-WEB-047 增补](app/app-function-spec.md) · [US-WEB-004 场景扩充](app/app-stories.md) · [app-design §6 修订](app/app-design.md)。
 
 
 <a id="background-maintenance"></a>
@@ -173,17 +182,18 @@
 | 2 | 对外服务 | [MCP2-06](#pb-7) | list_hcp · 列出 HCP | Implementable | - [Web 分身列表](app/app-function-spec.md)<br>- [对内 listTwins](mcp/mcp-function-spec.md) | Sprint 1 | Done |
 | 3 | 对外服务 | [MCP2-02](#pb-2) | add_hcp · 新增 HCP | Implementable | - [Web 确认保存](app/app-function-spec.md)<br>- [对内 confirm_and_save_twin](mcp/mcp-function-spec.md) | Sprint 1 | Done |
 | 4 | 对外服务 | [MCP2-03](#pb-3) | get_hcp_insights · HCP 洞察 | Implementable | - [Agent 洞察与 doing_now](agent/agent-function-spec.md)<br>- [Web 洞察页](app/app-function-spec.md) | Sprint 2 | Done |
-| 5 | 对外服务 | [MCP2-04](#pb-4) | retrieve_academic · 学术证据检索 | Implementable | - [Agent 学术检索 I-AGT-007](agent/agent-function-spec.md)<br>- [Web 洞察页](app/app-function-spec.md) | Sprint 2 | ToDo |
+| 5 | 对外服务 | [MCP2-04](#pb-4) | retrieve_academic · 学术证据检索 | Implementable | - [Agent 学术检索 I-AGT-007](agent/agent-function-spec.md)<br>- [Web 洞察页](app/app-function-spec.md) | Sprint 2 | Done |
 | 6 | 对外服务 | [MCP2-05](#pb-5) | retrieve_compliance · 合规条款检索 | Implementable | - [Agent 合规检索 I-AGT-008](agent/agent-function-spec.md)<br>- [Web 合规检查](app/app-function-spec.md) | Sprint 2 | ToDo |
 | 7 | 后台维护 | [TWIN2-01](#pb-6) | 定时自动更新数字分身 | Implementable | - [对内 build_twin](mcp/mcp-function-spec.md)<br>- [安装与运行 §11](spec1.0/4.install-dependencies.md) | Sprint 2 | Done |
 | 8 | Agent | [AGT2-01](#pb-8) | Agent 优化 · ROCKS 范式 | Implementable | - [Agent 功能规格](agent/agent-function-spec.md)<br>- [Agent 设计](agent/agent-design.md) | Sprint 2 | ToDo |
 | 9 | 后台维护 | [MKB2-01](#pb-9) | 元数据层 MySQL 方言修复（DEF-002） | Implementable | - [US-RAG-006](rag/rag-stories.md)<br>- [rag 测试计划](rag/rag-tests.md)<br>- [DEF-002](issues-log.md) | Sprint 2 | Done |
-| 10 | 对外服务 | [MCP2-07](#pb-10) | 知识覆盖对齐 · add_hcp 预灌 + coverage 信号 | Implementable | - [Web 确认保存 F-WEB-039](app/app-function-spec.md)<br>- [ADR-014](../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md) | Sprint 2 | ToDo |
+| 10 | 对外服务 | [MCP2-07](#pb-10) | 知识覆盖对齐 · add_hcp 预灌 + coverage 信号 | Implementable | - [Web 确认保存 F-WEB-039](app/app-function-spec.md)<br>- [ADR-014](../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md) | Sprint 2 | Done |
 | 11 | 对外服务 | [MCP2-08](#pb-11) | ingest_academic · 学术知识按需灌注 | Implementable | - [rag 功能规格 ingest_on_demand](rag/rag-function-spec.md)<br>- [ADR-014](../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md) | Sprint 2 | ToDo |
-| 12 | 后台维护 | [MKB2-02](#pb-12) | 受控学科目录扩充与学术索引批量种子 | Implementable | - [ADR-014](../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md)<br>- [rag 功能规格 ingest_on_demand](rag/rag-function-spec.md) | Sprint 2 | ToDo |
-| 13 | 后台维护 | [MKB2-03](#pb-13) | 合规知识覆盖信号与条款版本治理 | Implementable | - [F-RAG-030–032](rag/rag-function-spec.md)<br>- [US-RAG-008](rag/rag-stories.md) | — | ToDo |
-| 14 | 对外服务 | [MCP2-09](#pb-14) | add_hcp 入库科室校验与预灌映射预览 | Implementable | - [DEF-005](issues-log.md)<br>- [US-MCP2-007](mcp2.0/mcp2-stories.md)<br>- [mcp2-design §13](mcp2.0/mcp2-design.md)<br>- [F-MCP-012 增补](mcp/mcp-function-spec.md)<br>- [F-WEB-047](app/app-function-spec.md) | Sprint 2 | ToDo |
-| 15 | 后台维护 | [MKB2-04](#pb-15) | 学术索引写入与恢复健壮性修复（DEF-003 / DEF-004） | Implementable | - [US-RAG-009](rag/rag-stories.md)<br>- [F-RAG-023/029/033/034](rag/rag-function-spec.md)<br>- [rag-design §20](rag/rag-design.md)<br>- [rag 测试计划 §7](rag/rag-tests.md) | Sprint 2 | ToDo |
+| 12 | 后台维护 | [MKB2-02](#pb-12) | 受控学科目录扩充与学术索引批量种子 | Implementable | - [ADR-014](../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md)<br>- [rag 功能规格 ingest_on_demand](rag/rag-function-spec.md) | Sprint 2 | Done |
+| 13 | 后台维护 | [MKB2-03](#pb-13) | 合规知识覆盖信号与条款版本治理 | Implementable | - [F-RAG-030–032](rag/rag-function-spec.md)<br>- [US-RAG-008](rag/rag-stories.md) | Sprint 2 | Done |
+| 14 | 对外服务 | [MCP2-09](#pb-14) | add_hcp 入库科室校验与预灌映射预览 | Implementable | - [DEF-005](issues-log.md)<br>- [US-MCP2-007](mcp2.0/mcp2-stories.md)<br>- [mcp2-design §13](mcp2.0/mcp2-design.md)<br>- [F-MCP-012 增补](mcp/mcp-function-spec.md)<br>- [F-WEB-047](app/app-function-spec.md) | Sprint 2 | Done |
+| 15 | 后台维护 | [MKB2-04](#pb-15) | 学术索引写入与恢复健壮性修复（DEF-003 / DEF-004） | Implementable | - [US-RAG-009](rag/rag-stories.md)<br>- [F-RAG-023/029/033/034](rag/rag-function-spec.md)<br>- [rag-design §20](rag/rag-design.md)<br>- [rag 测试计划 §7](rag/rag-tests.md) | Sprint 2 | Done |
+| 16 | 对外服务 | [MCP2-10](#pb-16) | add_hcp 入库科室以选中记录信号专科为准（DEF-006，D2） | Implementable | - [DEF-006](issues-log.md)<br>- [US-MCP2-007 增补](mcp2.0/mcp2-stories.md)<br>- [mcp2-design §13.6](mcp2.0/mcp2-design.md)<br>- [mcp2 测试计划 §15](mcp2.0/mcp2-test.md)<br>- [F-WEB-047 增补](app/app-function-spec.md) | Sprint 2 | Done |
 
 [返回目录](#index)
 
@@ -195,6 +205,7 @@
 
 | Date | Change |
 | --- | --- |
+| 2026-10-21 | Sprint 2 批量收口（用户确认 1-10 全关）：MCP2-04 / MCP2-07 / MKB2-02 / MCP2-09 / MKB2-04 / MCP2-10 六条 Done（SBI feature-02 / 07 / 09 / 10 / 11 / 12）；DEF-003 / 004 / 005 / 006 关闭；OGT-1 关闭；回顾块写入 sprint-backlog，知识条目 [openalex-department-signal-works-concepts.md](./knowledge/data/openalex-department-signal-works-concepts.md)。 |
 | 2026-10-21 | MCP2-03 `get_hcp_insights` Done（Sprint 2 feature-01）：对外 MCP 接线 `ensureDoingNow`；契约 42/42、朱同玉实调、close confirm。 |
 | 2026-10-20 | DEF-002 方案 A 确认：新增 MKB2-01（medical-kb 元数据层 MySQL 方言修复，Sprint 2）；US-RAG-006 入 rag 故事；rag 模块新增测试计划 rag-tests.md 并入 artifacts-map；rag 规格九处 Postgres 口径改 MySQL（ADR-005）。 |
 | 2026-10-20 | Sprint 3 并入 Sprint 2：MCP2-05、TWIN2-01 的 Sprint 列改为 Sprint 2；见 `sprint-backlog.md`、`changes-log.md`。 |
@@ -219,6 +230,7 @@
 | 2026-10-21 | 用户确认新增 [MKB2-03](#pb-13)（合规知识覆盖信号与条款版本治理，未排期 Sprint）：动因是合规种子仅 10 条且检索稀疏不可见、同 `clause_id` 多版本并存无下线机制（ADR-014 学术侧已修，合规侧为独立缺口）；配套 F-RAG-030–032 与 US-RAG-008 已写入 rag 规格。 |
 | 2026-10-21 | [DEF-005](issues-log.md) 记录（resolve_hcp_identity 未核实科室回显；陆林/王拥军 twin 科室已修）；用户确认新增 [MCP2-09](#pb-14)（add_hcp 入库科室校验与预灌映射预览，未排期）。 |
 | 2026-10-21 | DEF-005 开工准备：MCP2-09 规格三模块写入（mcp2-design §13、US-MCP2-007、mcp2-test §14；mcp 模块 F-MCP-012 增补、US-MCP-002 三场景、mcp-design 新节、mcp-tests §5；app 模块 F-WEB-047、US-WEB-004 两场景、app-design §6），issues-log DEF-005 Related 补引用；用户确认排入 Sprint 2（SBI feature-11）；不动代码。 |
+| 2026-10-21 | DEF-006 记录（add_hcp 入库科室仍取调用方输入，未采用选中记录信号专科；侯凡凡「神内科」matched:false 仍原样入库，记录已删）；用户定方向 D2（入库科室以选中记录信号专科为准 + mismatch 强闸门 + 无信号阻断 + 确认页科室不可编辑）并确认新增 [MCP2-10](#pb-16) 排入 Sprint 2，规格先行；不动代码。 |
 | 2026-10-21 | DEF-003 / DEF-004 根因实锤与规格更新（issues-log 改写、rag-design §20、F-RAG-023/029 改写 + F-RAG-033/034 新增、US-RAG-009、rag-tests §7）；用户确认另立缺陷修复 PBI [MKB2-04](#pb-15) 并排入 Sprint 2（feature-09 close 前置）。 |
 
 [返回目录](#index)

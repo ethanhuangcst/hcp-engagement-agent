@@ -1,5 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { openAlexDisplayMatchesHcp, themesFromOpenAlex } from "./openalex.js";
+import {
+  fetchOpenAlexWorkConcepts,
+  openAlexDisplayMatchesHcp,
+  themesFromOpenAlex,
+} from "./openalex.js";
+import type { HttpClient } from "./http.js";
+
+/** feature-12 跟进（B+ 设计）：论文级概念聚合的单测桩，不外网 */
+function stubHttp(pages: Record<string, unknown>): HttpClient {
+  return {
+    async getJson<T>(url: string): Promise<T> {
+      const key = Object.keys(pages).find((k) => url.includes(k));
+      if (!key) throw new Error(`unexpected url: ${url}`);
+      return pages[key]! as T;
+    },
+    async getText() {
+      throw new Error("getText unused in this stub");
+    },
+  };
+}
 
 describe("openAlexDisplayMatchesHcp", () => {
   it("rejects unrelated Latin author for 朱同玉", () => {
@@ -101,5 +120,68 @@ describe("themesFromOpenAlex", () => {
     );
     expect(themes[0]).not.toBe("Medicine");
     expect(["Nephrology", "Kidney transplantation"]).toContain(themes[0]);
+  });
+});
+
+describe("fetchOpenAlexWorkConcepts（B+ 论文级科室信号）", () => {
+  it("should_prefer_specialty_level_concepts_over_broad_high_count", async () => {
+    const seenUrls: string[] = [];
+    const http: HttpClient = {
+      async getJson<T>(url: string): Promise<T> {
+        seenUrls.push(url);
+        return {
+          results: [
+            {
+              concepts: [
+                { display_name: "Medicine", level: 0 },
+                { display_name: "Hemodialysis", level: 1 },
+                { display_name: "Internal medicine", level: 1 },
+              ],
+            },
+            {
+              concepts: [
+                { display_name: "Medicine", level: 0 },
+                { display_name: "Dialysis", level: 1 },
+              ],
+            },
+          ],
+        } as T;
+      },
+      async getText() {
+        throw new Error("getText unused");
+      },
+    };
+    const concepts = await fetchOpenAlexWorkConcepts(http, "A5087290651");
+    // level≥1 专科概念排在宽泛 Medicine 之前，其次按出现次数
+    expect(concepts[0]).toBe("Hemodialysis");
+    expect(concepts).toContain("Dialysis");
+    expect(concepts).toContain("Internal medicine");
+    expect(concepts.indexOf("Medicine")).toBeGreaterThan(
+      concepts.indexOf("Hemodialysis"),
+    );
+    // 轻载荷：只取 concepts 字段
+    expect(seenUrls[0]).toContain("select=concepts");
+    expect(seenUrls[0]).toContain("filter=author.id:A5087290651");
+  });
+
+  it("should_cap_returned_concepts_at_eight", async () => {
+    const http = stubHttp({
+      "api.openalex.org/works": {
+        results: Array.from({ length: 5 }, () => ({
+          concepts: Array.from({ length: 12 }, (_, k) => ({
+            display_name: `Concept ${k}`,
+            level: 1,
+          })),
+        })),
+      },
+    });
+    const concepts = await fetchOpenAlexWorkConcepts(http, "A1");
+    expect(concepts).toHaveLength(8);
+  });
+
+  it("should_return_empty_when_openalex_id_unparseable", async () => {
+    const http = stubHttp({});
+    const concepts = await fetchOpenAlexWorkConcepts(http, "");
+    expect(concepts).toEqual([]);
   });
 });

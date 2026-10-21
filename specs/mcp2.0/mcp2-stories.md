@@ -1,6 +1,6 @@
 # 对外 MCP 2.0 用户故事与验收标准（ATDD）
 
-> as_of：2026-10-21（US-MCP2-006 补写前模糊查重与确认语义，ADR-009；OGT-1 并入库外检索与候选令牌，ADR-010，改写 US-MCP2-004 / US-MCP2-006；医院/科室过滤包含匹配，ADR-011；ADR-012 数据面口径：US-MCP2-002 / US-MCP2-003 改为洞察与学术证据、合规条款检索；2026-10-21 US-MCP2-002 的 get_hcp_insights 扩写为九场景，ADR-013 按需合成、幂等与降级；US-MCP2-002 的 retrieve_academic 扩写为七场景、US-MCP2-003 扩写为九场景并修 Sprint 标题；2026-10-21 retrieve_academic 增知识稀疏场景、US-MCP2-006 增专科预灌与预灌失败两场景，ADR-014，feature-07 实施批次落地；新增 US-MCP2-007 科室来源标注与预灌映射预览，MCP2-09 / DEF-005，Sprint 2 feature-11）  
+> as_of：2026-10-21（US-MCP2-006 补写前模糊查重与确认语义，ADR-009；OGT-1 并入库外检索与候选令牌，ADR-010，改写 US-MCP2-004 / US-MCP2-006；医院/科室过滤包含匹配，ADR-011；ADR-012 数据面口径：US-MCP2-002 / US-MCP2-003 改为洞察与学术证据、合规条款检索；2026-10-21 US-MCP2-002 的 get_hcp_insights 扩写为九场景，ADR-013 按需合成、幂等与降级；US-MCP2-002 的 retrieve_academic 扩写为七场景、US-MCP2-003 扩写为九场景并修 Sprint 标题；2026-10-21 retrieve_academic 增知识稀疏场景、US-MCP2-006 增专科预灌与预灌失败两场景，ADR-014，feature-07 实施批次落地；新增 US-MCP2-007 科室来源标注与预灌映射预览，MCP2-09 / DEF-005，Sprint 2 feature-11；2026-10-21 US-MCP2-007 增补四场景（入库科室取信号专科、mismatch 强闸门、无信号阻断、预灌与入库一致）并修订既有场景降级措辞，US-MCP2-006 入库科室口径改 D2 规则，MCP2-10 / DEF-006，Sprint 2 feature-12；同日 US-MCP2-003 增补 coverage 三场景（透传、稀疏建议灌种、manifest 失败降级省略），MKB2-03，[rag-design §19](../rag/rag-design.md) 同批验收；2026-10-21 新增 US-MCP2-008 学术知识按需灌注与进度查询（MCP2-08，[ADR-014](../../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md)，Sprint 2 feature-08 开工准备），并将 US-MCP2-002 知识稀疏场景 repair_hint 升级为点名 `ingest_academic`）  
 > 依据：[product-backlog.md](../product-backlog.md#external-service)、[mcp2-design.md](./mcp2-design.md)  
 > 角色：**MCP 调用方**（集成工程师 / 宿主 Agent）  
 > 样例 HCP：朱同玉 fixture（与 [7.test-strategy.md](../spec1.0/7.test-strategy.md) 一致）
@@ -299,7 +299,7 @@ Feature: add_hcp
     When 调用 add_hcp 仅传所选 candidate_id
     Then 工具结果为成功
     And 返回 twin 与 hcp_id
-    And twin 的 identity 含候选载荷中的姓名、医院、科室
+    And twin 的 identity 含候选载荷中的姓名、医院与按 D2 规则确定的科室（选中记录信号专科的标准中文名，见 US-MCP2-007 增补场景）
     And 响应无密钥、无堆栈、无内网路径
 
   Scenario: 新增后可立即按编号查到
@@ -316,7 +316,7 @@ Feature: add_hcp
 
   Scenario: 写库成功后按专科预灌知识库（ADR-014，feature-07）
     Given 一个有效且未用过的 candidate_id
-    And 候选所载科室或专长可归一化出至少一个受控专科
+    And 候选所载科室或专长可归一化出至少一个受控专科（MCP2-10 后入库候选必有信号专科，见 US-MCP2-007 增补场景）
     When 调用 add_hcp 传入该 candidate_id
     Then 工具结果为成功且记录已写入
     And 返回可选附 knowledge_jobs[]，每条含 specialty、job_id 与 knowledge_status
@@ -528,7 +528,7 @@ Feature: retrieve_academic
     Given 目标专科在学术库覆盖为 sparse
     When 调用 retrieve_academic
     Then 返回 chunks 且返回体含 coverage.status 为 sparse
-    And repair_hint 建议补种后重试
+    And repair_hint 建议调用 ingest_academic 补种后重试（ADR-014 决策 2；feature-08 落地后点名工具）
     And 本次调用不写库、不触发灌注任务
 ```
 
@@ -540,7 +540,7 @@ Feature: retrieve_academic
 **I want to** 检索合规知识库条款引用，确认计划的互动形式不触碰红线
 **So that** 不打开 Web 就能拿到可追溯的条款依据，正式预审仍走 MLR
 
-**覆盖**：Sprint 2 `feature-04`（`retrieve_compliance`）· [MCP2-05](../product-backlog.md#pb-5) · [ADR-012](../../docs/adr/ADR-012-mcp2-data-plane-only.md)（预审不经对外 MCP；`tenant_id` 不作入参）
+**覆盖**：Sprint 2 `feature-04`（`retrieve_compliance`）· [MCP2-05](../product-backlog.md#pb-5) · [ADR-012](../../docs/adr/ADR-012-mcp2-data-plane-only.md)（预审不经对外 MCP；`tenant_id` 不作入参）· coverage 增补：[MKB2-03](../product-backlog.md#pb-13) · [US-RAG-008](../rag/rag-stories.md) · [rag-design §19](../rag/rag-design.md)
 
 ### 验收标准
 
@@ -575,6 +575,24 @@ Feature: retrieve_compliance
     When 调用 retrieve_compliance 传 hcp_id 与 interaction_type
     Then interaction_type 原样透传底层检索
 
+  Scenario: 覆盖信号透传（MKB2-03 增补）
+    Given 合规库已灌种且 ingest_manifest 存在 authority 行
+    When 调用 retrieve_compliance
+    Then 返回体含 coverage，列出各 authority 的 version、chunk_count 与最新 as_of
+    And coverage 与 ingest_manifest 一致且 status 为 ready
+    And 无补种提示
+
+  Scenario: 稀疏建议灌种（MKB2-03 增补）
+    Given 合规库未灌种，ingest_manifest 无任何 authority 行
+    When 调用 retrieve_compliance
+    Then coverage.status 为 sparse
+    And 返回体附 repair_hint 建议运维 seed_compliance 灌种后重试
+
+  Scenario: manifest 读取失败降级省略（MKB2-03 增补）
+    Given ingest_manifest 读取失败
+    When 调用 retrieve_compliance
+    Then 检索照常返回 chunks，响应无 coverage 键，不报错
+
   Scenario: 编号不存在
     Given 该 hcp_id 不在库中或为 _agent_general
     When 调用 retrieve_compliance
@@ -607,8 +625,8 @@ Feature: retrieve_compliance
 **I want to** 在候选与确认返回中看见科室来源标注、数据源对照与「科室 → 将预灌专科」映射  
 **So that** 我不会把错标科室的候选确认入库并预灌错专科（DEF-005：陆林「神经科」错标预灌 neurology，应为 psychiatry）  
 
-**覆盖**：[mcp2-design §13](./mcp2-design.md)（承接 [F-MCP-012 增补](../mcp/mcp-function-spec.md) 与 [F-WEB-047](../app/app-function-spec.md)）  
-**关联**：[pb-14](../product-backlog.md#pb-14) · [DEF-005](../issues-log.md)  
+**覆盖**：[mcp2-design §13](./mcp2-design.md)（承接 [F-MCP-012 增补](../mcp/mcp-function-spec.md) 与 [F-WEB-047](../app/app-function-spec.md)）；入库科室规则与确认闸门见 [mcp2-design §13.6](./mcp2-design.md)（MCP2-10 / DEF-006，D2，feature-12）  
+**关联**：[pb-14](../product-backlog.md#pb-14) · [pb-16](../product-backlog.md#pb-16) · [DEF-005](../issues-log.md) · [DEF-006](../issues-log.md)  
 
 ### 验收标准
 
@@ -627,7 +645,7 @@ Feature: 科室来源标注与预灌映射预览（MCP2-09）
     And 数据源信号归一化为 psychiatry
     When 候选返回
     Then 候选附 department_mismatch 与两侧专科键
-    And mismatch 不阻塞确认流程（由确认者判断，不自动改写科室）
+    And mismatch 不报错，确认侧进入强闸门（见「信号与输入不一致时确认需人工确认」场景）
 
   Scenario: add_hcp 返回科室到预灌专科映射预览
     Given 候选科室「精神科」可归一化到受控专科 psychiatry
@@ -639,13 +657,14 @@ Feature: 科室来源标注与预灌映射预览（MCP2-09）
     Given 候选科室无法归一化到任何受控专科
     When 调用方确认 add_hcp
     Then specialty_preview 该行 matched 为 false 并附跳过提示
-    And 预灌静默跳过行为不变，add_hcp 仍成功返回
+    And 预灌静默跳过行为不变（MCP2-10 增补后此形态仅见于非科室行；科室行以入库科室为输入，见「预灌专科与入库科室一致」场景）
 
   Scenario: 数据源信号不可用时降级
     Given OpenAlex 主题与机构元数据均无可用科室信号
     When 调用方执行检索与确认
     Then 候选仅带来源标注，无 department_signal 与 department_mismatch
-    And 检索与确认不报错不阻塞
+    And 检索不报错不阻塞
+    And 确认被 DEPARTMENT_SIGNAL_MISSING 阻断（见「记录无信号专科时阻断保存」场景），不降级为原样入库
 
   Scenario: 确认页展示映射预览
     Given Web 确认页展示候选与确认返回（F-WEB-047）
@@ -654,7 +673,146 @@ Feature: 科室来源标注与预灌映射预览（MCP2-09）
     And 映射不到专科时显示跳过提示而非空白
 ```
 
+### 验收标准（MCP2-10 / DEF-006，D2 增补，feature-12）
+
+```gherkin
+Feature: 入库科室以选中记录信号专科为准与确认闸门（MCP2-10）
+
+  Scenario: 入库科室取选中记录的信号专科
+    Given 一位库外候选带 department_signal.specialty 为 nephrology
+    And 调用方输入科室为「神内科」
+    When 调用方确认 add_hcp（无 mismatch，无需 confirm_department_checked）
+    Then 工具结果为成功且记录已写入
+    And twin.identity.department 为「肾内科」（信号专科的标准中文名，不存「神内科」原文）
+    And tags.evidence_refs 含 department_signal
+
+  Scenario: 信号与输入不一致时确认需人工确认
+    Given 调用方输入科室归一化为 neurology
+    And 候选 department_signal.specialty 归一化为 psychiatry
+    When 调用方确认 add_hcp 未传 confirm_department_checked
+    Then 工具结果为非错误
+    And status 为 department_confirmation_required，附 department_mismatch 与 repair_hint
+    And 库中未新增记录且候选令牌不作废（可补参重试）
+    When 调用方重试 add_hcp 并传 confirm_department_checked 为 true
+    Then 工具结果为成功且记录已写入
+    And twin.identity.department 为「精神科」（放行后仍取信号侧）
+    And tags.evidence_refs 含 department_signal 与 department_checked
+
+  Scenario: 记录无信号专科时阻断保存
+    Given 一位库外候选无 department_signal 或其 specialty 无法归一化出受控专科键
+    When 调用方确认 add_hcp（无论是否传 confirm_department_checked）
+    Then 错误码为 VALIDATION_ERROR，code 为 DEPARTMENT_SIGNAL_MISSING
+    And repair_hint 提示换检索条件重新 query_hcp 检出带信号候选或人工核实
+    And 库中未新增记录且候选令牌不作废
+    And 不降级为原样入库
+
+  Scenario: 预灌专科与入库科室一致
+    Given 一位候选 department_signal.specialty 为 nephrology
+    When 调用方确认 add_hcp 成功
+    Then specialty_preview 的 department 行 input 为「肾内科」（入库科室）且 matched 为 true
+    And 预灌专科与入库科室同源一致，不存在「入库一个科、预灌另一个科」
+```
+
 ### 说明
 
 - 对内 resolve 行为（来源标注、信号归一化、mismatch 判定）的故事与测试归 mcp 模块：[US-MCP-002 后三场景](../mcp/mcp-stories.md)、[mcp-tests §5](../mcp/mcp-tests.md)。
-- 不自动纠正科室、不新增对外工具（pb-14 范围外）。
+- 来源标注、信号对照与映射预览归 MCP2-09（feature-11）；入库科室规则与确认闸门归 MCP2-10（feature-12，[mcp2-design §13.6](./mcp2-design.md)）：不提供人工改写科室入口、不新增对外工具；信号可能缺失或噪声（王拥军信号 radiology），闸门由人工兜底。
+
+---
+
+## US-MCP2-008 学术知识按需灌注与进度查询（Sprint 2 · feature-08）
+
+**As a** MCP 调用方
+**I want to** 按受控专科显式触发学术知识灌注，并按 job 或专科查询进度
+**So that** 检索稀疏的专科补种后能拿到带引用证据，不必等 Twin 确认或打开网页
+
+**覆盖**：Sprint 2 `feature-08` · [MCP2-08](../product-backlog.md#pb-11) · [ADR-014](../../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md) 决策 3 · 底层接口 [I-RAG-003 / I-RAG-004](../rag/rag-function-spec.md)
+**约束**：`hcp_id` 不作入参（灌注以专科为粒度，与调用方身份无关）；`force` 不对外（内部运维专用）。
+
+### 验收标准
+
+```gherkin
+Feature: ingest_academic / get_ingest_status
+
+  Scenario: 按受控专科触发知识灌注
+    Given 目标专科当前无进行中的同专科 ingest job 且覆盖非 ready
+    When 调用 ingest_academic 传该 specialty
+    Then 工具结果为成功
+    And 返回 job_id 与 knowledge_status 为 pending
+    And 立即返回，不等待公开源拉取、嵌入与写入完成
+    And 响应无密钥、无堆栈、无内网路径
+
+  Scenario: 中文别名归一化到受控键
+    Given 受控专科键 nephrology 的中文名为「肾内科」
+    When 调用 ingest_academic 传 肾内科
+    Then 服务端归一化出受控键 nephrology 并按该键触发
+    And 返回与进度查询均以归一化后的专科为准
+
+  Scenario: themes 可选透传
+    When 调用 ingest_academic 传 specialty 与 themes
+    Then themes 原样透传底层 ingest_on_demand 用于聚焦拉取
+
+  Scenario: 覆盖已 ready 时幂等跳过
+    Given 目标专科 coverageCheck 为 ready
+    When 调用 ingest_academic 传该专科
+    Then 工具结果为成功且 knowledge_status 为 ready
+    And 不重复拉取公开源、不新起异步 job，返回最近 ready job 的引用
+
+  Scenario: 同专科进行中返回进行中 job
+    Given 目标专科已有进行中的 ingest job
+    When 调用 ingest_academic 传该专科
+    Then 错误码为 INGEST_IN_PROGRESS
+    And 错误 details 附该进行中 job 的 job_id 与 specialty
+    And repair_hint 指向 get_ingest_status 查进度或稍后重试
+    And 不新起第二个 job
+
+  Scenario: 非受控专科无法归一化
+    Given 调用方传入的 specialty 无法归一化出任何受控专科键
+    When 调用 ingest_academic
+    Then 错误码为 VALIDATION_ERROR
+    And 未创建任何 job
+    And 响应无堆栈
+
+  Scenario: 缺少 specialty
+    When 调用 ingest_academic 且未传 specialty
+    Then 错误码为 VALIDATION_ERROR
+    And 响应无堆栈
+
+  Scenario: 按编号查询灌注进度
+    Given ingest_academic 刚返回一个 job_id
+    When 调用 get_ingest_status 传该 job_id
+    Then 返回该 job 的 status 与 knowledge_status
+    And job 进行中时附 progress
+    And job 失败时附 error
+
+  Scenario: 按专科查询最近 job
+    Given 目标专科存在最近一次 ingest job 且调用方未保存 job_id
+    When 调用 get_ingest_status 传 specialty
+    Then 返回该专科最近 job 的状态与进度
+
+  Scenario: 编号与专科都查不到
+    Given 传入的 job_id 不在 job 表，或传入的 specialty 无任何 job 记录
+    When 调用 get_ingest_status
+    Then 错误码为 NOT_FOUND
+    And repair_hint 建议先调 ingest_academic 取得 job 引用
+
+  Scenario: 灌注不写 Twin 不触发 build
+    When 调用 ingest_academic 与 get_ingest_status
+    Then 两工具不写 hcp_twins、不触发任何 HCP build
+    And knowledge_status 权威在 rag_ingest_jobs 与 ingest_manifest（F-RAG-017），不写 Twin JSON
+
+  Scenario: 补种后检索覆盖转 ready
+    Given 某专科覆盖为 sparse 且已按上述流程补种至 job 终态 ready
+    When 调用 retrieve_academic 查询该专科
+    Then 返回体 coverage.status 为 ready
+
+  Scenario: 工具注记
+    When 调用方列出 tools
+    Then ingest_academic 的 annotations.readOnlyHint 为 false 且 openWorldHint 为 true
+    And get_ingest_status 的 annotations.readOnlyHint 为 true
+```
+
+### 说明
+
+- 底层行为断言（coverage 门控、同专科互斥、job 状态机、别名归一化）归 rag 模块：[I-RAG-003 / I-RAG-004](../rag/rag-function-spec.md)、[rag 测试计划](../rag/rag-tests.md)；本故事只验收对外契约。
+- `INGEST_IN_PROGRESS` 为错误信封（对齐 pb-11 失败清单），「返回进行中 job」经错误 `details` 的 `job_id` 实现，调用方据此轮询。

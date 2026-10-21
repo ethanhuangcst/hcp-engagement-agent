@@ -1,6 +1,6 @@
 # Web App 用户故事与验收标准（ATDD）
 
-> as_of：2026-10-21（2026-07-16 首版；2026-10-21 US-WEB-004 增补两场景：确认页科室来源标注与预灌映射预览，F-WEB-047，MCP2-09 / DEF-005）  
+> as_of：2026-10-21（2026-07-16 首版；2026-10-21 US-WEB-004 增补两场景：确认页科室来源标注与预灌映射预览，F-WEB-047，MCP2-09 / DEF-005；同日 US-WEB-004 再增补四场景：确认页科室为将入库科室（信号专科中文名）只读、mismatch 勾选闸门、无信号阻断引导重查、保存后映射与入库一致，F-WEB-047 增补，MCP2-10 / DEF-006，D2）  
 > 依据：[`app-function-spec.md`](./app-function-spec.md)（F-WEB-*）  
 > 角色默认：**药企 HCP 互动负责人**（代表 / MSL / 医学事务等，下文称「用户」）  
 > 验收样例 HCP：复旦大学附属中山医院 **朱同玉** 教授（手工填写或 mock fixture；**新增录入页不预填**）  
@@ -170,7 +170,7 @@ Feature: 分身工作台 · HCP资料与维护
 **I want to** 用姓名、医院、科室查询公开身份，从候选中确认后保存数字分身  
 **So that** 我不会把同名医生建错，并能在列表与详情中继续管理该身份  
 
-**覆盖**：F-WEB-010、F-WEB-011、F-WEB-012、F-WEB-013；构建进度 F-WEB-014 见详情「构建情报」（MVP-1）；知识按需 F-WEB-039 与科室来源标注/映射预览 F-WEB-047 属 MVP-3（MCP2-09 / DEF-005）  
+**覆盖**：F-WEB-010、F-WEB-011、F-WEB-012、F-WEB-013；构建进度 F-WEB-014 见详情「构建情报」（MVP-1）；知识按需 F-WEB-039 与科室来源标注/映射预览 F-WEB-047 属 MVP-3（MCP2-09 / DEF-005；入库科室与闸门规则 MCP2-10 / DEF-006，D2）  
 
 ### 验收标准
 
@@ -229,13 +229,39 @@ Feature: 新增数字分身（查询与确认）
     When 用户浏览候选
     Then 候选科室旁展示来源标注（不当作已核实身份展示）
     And 数据源信号与输入归一化不一致时展示 mismatch 提示与两侧专科键，供用户对照判断
-    And mismatch 不阻塞用户选择与确认
+    And mismatch 不阻塞用户选择；确认页以「已人工核对科室」勾选闸门承接（见 MCP2-10 增补场景）
 
   Scenario: 确认页展示科室到预灌专科映射（F-WEB-047）
     Given 用户确认保存带科室信息的分身
     When 确认保存完成
     Then 页面展示「科室 → 将预灌专科」映射结果（specialty_preview，与实际预灌同源一致）
     And 科室映射不到受控专科时展示跳过提示，不静默空白
+
+  Scenario: 确认页科室为将入库科室且只读（MCP2-10 / DEF-006，D2）
+    Given 用户选中一位带 department_signal 的候选进入确认
+    When 确认页展示
+    Then 科室字段恒显示将入库科室（选中记录信号专科的标准中文名，如 nephrology → 肾内科）
+    And 科室字段只读，页面无科室编辑入口（查询表单科室仅作检索提示）
+
+  Scenario: mismatch 候选须勾选人工核对闸门才可保存（MCP2-10 / DEF-006，D2）
+    Given 用户选中的候选带 department_mismatch
+    When 用户未勾选「已人工核对科室」即提交保存
+    Then 提交返回 department_confirmation_required，页面保持候选与勾选项不丢失
+    And 库中未新增记录
+    When 用户勾选后重新提交
+    Then 保存成功且入库科室为信号专科中文名（确认放行仍取信号侧）
+
+  Scenario: 无信号候选阻断保存并引导重查（MCP2-10 / DEF-006，D2）
+    Given 用户选中的候选无 department_signal.specialty
+    When 用户提交保存
+    Then 页面展示阻断提示（DEPARTMENT_SIGNAL_MISSING）并引导换检索条件重新查询或人工核实
+    And 库中未新增记录、候选选择不丢失
+
+  Scenario: 保存后映射与入库科室一致（MCP2-10 / DEF-006，D2）
+    Given 用户确认保存一位信号专科为 nephrology 的候选
+    When 保存完成
+    Then 列表/详情中该分身的科室为「肾内科」
+    And specialty_preview 的 department 行 input 为「肾内科」且 matched 为 true（入库与预灌同源一致）
 ```
 
 ---

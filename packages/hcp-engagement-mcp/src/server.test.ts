@@ -22,9 +22,11 @@ import {
   type GetInsightsFn,
   type EnsureDoingNowFn,
   type RetrieveAcademicFn,
+  type RetrieveComplianceFn,
   type TriggerIngestFn,
 } from "./server.js";
 import type {
+  ConfirmAndSaveInput,
   ConfirmAndSaveResult,
   TwinListItem,
 } from "@hca/db";
@@ -61,7 +63,25 @@ type Deps = {
   getInsights?: GetInsightsFn;
   ensureDoingNow?: EnsureDoingNowFn;
   retrieveAcademic?: RetrieveAcademicFn;
+  retrieveCompliance?: RetrieveComplianceFn;
   triggerIngest?: TriggerIngestFn;
+  /** MCP2-08（ADR-014 决策 3）：feature-08 测试注入 */
+  ingestOnDemand?: (input: {
+    specialty: string;
+    themes?: string[];
+  }) => Promise<{ jobId: string; knowledge_status: "ready" | "sparse" | "pending" }>;
+  getIngestStatus?: (input: {
+    job_id?: string;
+    specialty?: string;
+  }) => Promise<{
+    jobId: string;
+    specialty?: string;
+    status: string;
+    knowledge_status: string;
+    progress?: number;
+    error?: unknown;
+    chunk_count?: number;
+  }>;
 };
 
 async function connect(deps?: Deps) {
@@ -98,6 +118,8 @@ function candidatePayload(): CandidatePayload {
     hospital: "北京协和医院",
     department: "肝胆外科",
     author_ids: { openalex: "A5016669077" },
+    /** feature-12（MCP2-10 / DEF-006，D2）：入库科室取信号专科，缺信号即阻断 */
+    department_signal: { topics: ["Kidney Transplant"], specialty: "kidney_transplant" },
   };
 }
 
@@ -196,6 +218,10 @@ describe("hcp-engagement-mcp Sprint 1 骨架", () => {
     const body = result.structuredContent as { count?: number; items?: unknown[] };
     expect(body.count).toBe(1);
     expect(body.items).toHaveLength(1);
+    const content = result.content as { type: string; text?: string }[] | undefined;
+    const textBlock = content?.find((c) => c.type === "text");
+    expect(textBlock?.text).toContain("【库内已保存】1 条");
+    expect(textBlock?.text).not.toMatch(/^\{"count"/);
     await client.close();
   });
 
@@ -1147,8 +1173,13 @@ describe("feature-07 知识覆盖对齐（ADR-014）", () => {
   });
 
   it("should_skip_prefill_when_no_controlled_specialty_resolves", async () => {
+    // feature-12 后入库科室恒可归一化；无专科解析仅见于科室为空且无其它专科输入
     const { addHcp, triggerIngest, store } = makePrefillDeps({
-      twin: sampleTwin(),
+      twin: (() => {
+        const twin = sampleTwin();
+        twin.profile.department = "";
+        return twin;
+      })(),
     });
     const deps: Deps = { candidateStore: store, addHcp, triggerIngest };
     const { result } = await callAddHcp(deps);
@@ -1254,14 +1285,18 @@ describe("feature-07 知识覆盖对齐（ADR-014）", () => {
   });
 
   it("should_show_unmatched_preview_row_with_hint_and_still_succeed", async () => {
-    // twin 科室「科室」映射不到任何受控专科
+    // feature-12 后科室行以入库科室为输入恒 matched；unmatched 行仅见于非科室行（专长）
     const { addHcp, triggerIngest, store } = makePrefillDeps({
-      twin: sampleTwin("hcp_liver"),
+      twin: (() => {
+        const twin = sampleTwin("hcp_liver");
+        twin.profile.department = "肾内科";
+        twin.profile.specialties = ["肝胆外科"];
+        return twin;
+      })(),
     });
     const deps: Deps = { candidateStore: store, addHcp, triggerIngest };
     const { result } = await callAddHcp(deps);
     expect(result.isError).not.toBe(true);
-    expect(triggerIngest).not.toHaveBeenCalled();
     const body = result.structuredContent as {
       hcp_id?: string;
       specialty_preview?: {
@@ -1273,10 +1308,12 @@ describe("feature-07 知识覆盖对齐（ADR-014）", () => {
       knowledge_jobs?: unknown;
     };
     expect(body.hcp_id).toBe("hcp_liver");
-    expect(body.knowledge_jobs).toBeUndefined();
-    const row = body.specialty_preview?.[0]!;
-    expect(row.matched).toBe(false);
-    expect(row.hint).toBeTruthy();
+    // 肾内科（入库科室行）恒 matched；肝胆外科（非科室行）unmatched 附 hint
+    const deptRow = body.specialty_preview?.find((r) => r.input === "肾内科");
+    expect(deptRow).toEqual({ input: "肾内科", specialty: "nephrology", matched: true });
+    const row = body.specialty_preview?.find((r) => r.input === "肝胆外科");
+    expect(row?.matched).toBe(false);
+    expect(row?.hint).toBeTruthy();
   });
 
   it("should_omit_specialty_preview_when_department_empty", async () => {
@@ -1332,7 +1369,7 @@ describe("feature-07 知识覆盖对齐（ADR-014）", () => {
       repair_hint?: string;
     };
     expect(structured.coverage?.status).toBe("sparse");
-    expect(structured.repair_hint ?? "").toContain("补种");
+    expect(structured.repair_hint ?? "").toContain("ingest_academic");
   });
 
   it("should_not_suggest_prefill_when_coverage_ready", async () => {
@@ -1378,5 +1415,592 @@ describe("feature-07 知识覆盖对齐（ADR-014）", () => {
     expect(structured.chunks).toHaveLength(1);
     expect(structured.coverage).toBeUndefined();
     expect(structured.repair_hint).toBeUndefined();
+  });
+});
+
+// —— feature-12（MCP2-10 / DEF-006，D2）：入库科室以选中记录信号专科为准与确认闸门 ——
+
+describe("feature-12 入库科室以选中记录信号专科为准（MCP2-10 / DEF-006，D2）", () => {
+  /** 信号专科 → 入库科室中文名，回显进 saved twin（模拟 db 落库行为） */
+  function twinEchoingDepartment(department: string): VirtualTwin {
+    const twin = sampleTwin("hcp_f12");
+    twin.profile.department = department;
+    twin.identity = {
+      name_zh: "侯凡凡",
+      hospital: "南方医科大学南方医院",
+      department,
+    };
+    return twin;
+  }
+
+  function f12Deps(payload: CandidatePayload, extraArgs?: {
+    twinDepartment?: string;
+  }) {
+    const addHcp = vi.fn(
+      async (input: ConfirmAndSaveInput): Promise<ConfirmAndSaveResult> => ({
+        status: "saved",
+        twin: twinEchoingDepartment(
+          extraArgs?.twinDepartment ?? input.department ?? "科室",
+        ),
+        hcp_id: input.hcp_id,
+      }),
+    );
+    const store = new CandidateStore();
+    const token = store.issue(payload);
+    const triggerIngest = vi.fn(async () => []) as unknown as TriggerIngestFn;
+    const deps: Deps = { candidateStore: store, addHcp, triggerIngest };
+    return { deps, addHcp, store, token };
+  }
+
+  async function callAdd(deps: Deps, token: string, args?: Record<string, unknown>) {
+    const client = await connect(deps);
+    const result = await client.callTool({
+      name: "add_hcp",
+      arguments: { candidate_id: token, ...args },
+    });
+    await client.close();
+    return result;
+  }
+
+  function f12Payload(overrides?: Partial<CandidatePayload>): CandidatePayload {
+    return {
+      hcp_id: "hcp_f12",
+      name_zh: "侯凡凡",
+      hospital: "南方医科大学南方医院",
+      department: "神内科",
+      author_ids: { openalex: "A5087290651" },
+      department_signal: { topics: ["Nephrology"], specialty: "nephrology" },
+      ...overrides,
+    };
+  }
+
+  it("should_save_signal_side_chinese_department_instead_of_caller_input", async () => {
+    const { deps, addHcp, token } = f12Deps(f12Payload());
+    const result = await callAdd(deps, token);
+    expect(result.isError).not.toBe(true);
+    // 入库科室 = 信号专科标准中文名（nephrology → 肾内科），不存「神内科」原文
+    expect(addHcp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        department: "肾内科",
+        extra_evidence_refs: ["department_signal"],
+      }),
+    );
+    const body = result.structuredContent as {
+      twin?: { identity?: { department?: string }; profile?: { department?: string } };
+      specialty_preview?: { input?: string; specialty?: string | null; matched?: boolean }[];
+    };
+    expect(body.twin?.identity?.department).toBe("肾内科");
+    expect(body.twin?.profile?.department).toBe("肾内科");
+    // 预灌专科与入库科室同源一致：department 行 input「肾内科」恒 matched
+    const deptRow = body.specialty_preview?.find((r) => r.input === "肾内科");
+    expect(deptRow).toEqual({ input: "肾内科", specialty: "nephrology", matched: true });
+    const wrongRow = body.specialty_preview?.find((r) => r.input === "神内科");
+    expect(wrongRow).toBeUndefined();
+  });
+
+  it("should_require_confirm_department_checked_when_mismatch_and_still_take_signal_side", async () => {
+    const payload = f12Payload({
+      department: "神经科",
+      department_signal: { topics: ["Psychiatry"], specialty: "psychiatry" },
+      department_mismatch: { input_side: "neurology", signal_side: "psychiatry" },
+    });
+    const { deps, addHcp, store, token } = f12Deps(payload);
+    // 第一步：未带 confirm_department_checked → 非错误信封，不写库、令牌不作废
+    const first = await callAdd(deps, token);
+    expect(first.isError).not.toBe(true);
+    const firstBody = first.structuredContent as {
+      status?: string;
+      department_mismatch?: { input_side?: string; signal_side?: string };
+      repair_hint?: string;
+    };
+    expect(firstBody.status).toBe("department_confirmation_required");
+    expect(firstBody.department_mismatch).toEqual({
+      input_side: "neurology",
+      signal_side: "psychiatry",
+    });
+    expect(firstBody.repair_hint).toBeTruthy();
+    expect(addHcp).not.toHaveBeenCalled();
+    // 令牌未作废：同 token 重试仍命中（非 NOT_FOUND）
+    // 第二步：带 confirm_department_checked 重试 → 放行且科室取信号侧
+    const second = await callAdd(deps, token, { confirm_department_checked: true });
+    expect(second.isError).not.toBe(true);
+    expect(addHcp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        department: "精神科",
+        extra_evidence_refs: ["department_signal", "department_checked"],
+      }),
+    );
+    const secondBody = second.structuredContent as {
+      twin?: { identity?: { department?: string } };
+      department_checked?: boolean;
+    };
+    expect(secondBody.twin?.identity?.department).toBe("精神科");
+    expect(store.get(token)).toBeNull(); // 写入成功后令牌作废（既有口径）
+  });
+
+  it("should_block_with_DEPARTMENT_SIGNAL_MISSING_when_signal_absent_and_keep_token", async () => {
+    const payload = f12Payload({
+      department_signal: { topics: ["Medicine", "Immunology"] }, // 无 specialty
+    });
+    const { deps, addHcp, token } = f12Deps(payload);
+    const blocked = await callAdd(deps, token, { confirm_department_checked: true });
+    expect(blocked.isError).toBe(true);
+    const error = (blocked.structuredContent as { error?: { code?: string; details?: { code?: string }; repair_hint?: string } }).error;
+    expect(error?.code).toBe("VALIDATION_ERROR");
+    expect(error?.details?.code).toBe("DEPARTMENT_SIGNAL_MISSING");
+    expect(error?.repair_hint).toBeTruthy();
+    expect(addHcp).not.toHaveBeenCalled();
+    // 令牌不作废：同 token 重试仍返回阻断（非 NOT_FOUND）
+    const retry = await callAdd(deps, token);
+    expect(retry.isError).toBe(true);
+    const retryError = (retry.structuredContent as { error?: { code?: string; details?: { code?: string } } }).error;
+    expect(retryError?.details?.code).toBe("DEPARTMENT_SIGNAL_MISSING");
+  });
+});
+
+describe("feature-04 retrieve_compliance（ADR-012 / MKB2-03）", () => {
+  function sampleComplianceChunk(overrides?: Partial<RagChunk>): RagChunk {
+    return {
+      id: "comp_1",
+      text: "RDPAC 行业准则：学术推广活动须留痕……",
+      score: 0.91,
+      source: "RDPAC Code of Practice",
+      clause_id: "RDPAC-4.1",
+      authority: "rdpac",
+      version: "2024-01",
+      jurisdiction: "CN",
+      as_of: "2026-07-17",
+      index: "compliance",
+      ...overrides,
+    };
+  }
+
+  type ComplianceDeps = {
+    getTwin?: GetTwinFn;
+    retrieveCompliance?: RetrieveComplianceFn;
+  };
+
+  function makeComplianceDeps(overrides?: ComplianceDeps) {
+    const getTwin = vi.fn(overrides?.getTwin ?? (async () => sampleTwin()));
+    const retrieveCompliance = vi.fn(
+      overrides?.retrieveCompliance ??
+        (async (): Promise<{ chunks: RagChunk[] }> => ({
+          chunks: [sampleComplianceChunk()],
+        })),
+    );
+    return { getTwin, retrieveCompliance };
+  }
+
+  async function callCompliance(
+    deps: Deps,
+    args: Record<string, unknown>,
+  ) {
+    const client = await connect(deps);
+    const result = await client.callTool({
+      name: "retrieve_compliance",
+      arguments: args,
+    });
+    await client.close();
+    return result;
+  }
+
+  it("should_expose_tool_with_annotations_and_required_hcp_id_when_listed", async () => {
+    const client = await connect();
+    const { tools } = await client.listTools();
+    const tool = tools.find((t) => t.name === "retrieve_compliance");
+    expect(tool).toBeDefined();
+    expect(tool!.annotations?.readOnlyHint).toBe(true);
+    expect(tool!.annotations?.openWorldHint).toBe(false);
+    expect(tool!.inputSchema.required).toEqual(["hcp_id"]);
+    await client.close();
+  });
+
+  it("should_omit_tenant_and_jurisdiction_from_schema_properties", async () => {
+    const client = await connect();
+    const { tools } = await client.listTools();
+    const tool = tools.find((t) => t.name === "retrieve_compliance");
+    const props = Object.keys(tool!.inputSchema.properties ?? {});
+    expect(props).toContain("hcp_id");
+    expect(props).not.toContain("tenant_id");
+    expect(props).not.toContain("jurisdiction");
+    await client.close();
+  });
+
+  it("should_declare_not_precheck_and_not_mlr_replacement_in_description", async () => {
+    const client = await connect();
+    const { tools } = await client.listTools();
+    const tool = tools.find((t) => t.name === "retrieve_compliance");
+    expect(tool!.description).toContain("不是预审判定");
+    expect(tool!.description).toContain("不替代正式 MLR");
+    await client.close();
+  });
+
+  it("should_pass_caller_query_and_interaction_type_through_when_provided", async () => {
+    const deps = makeComplianceDeps();
+    const result = await callCompliance(deps, {
+      hcp_id: "hcp_test",
+      query: "科室会 合规",
+      interaction_type: "department_meeting",
+    });
+    expect(result.isError).not.toBe(true);
+    expect(deps.retrieveCompliance).toHaveBeenCalledWith({
+      query: "科室会 合规",
+      interaction_type: "department_meeting",
+    });
+  });
+
+  it("should_use_default_compliance_query_and_drop_tenant_when_only_hcp_id_given", async () => {
+    const deps = makeComplianceDeps();
+    const result = await callCompliance(deps, { hcp_id: "hcp_test" });
+    expect(result.isError).not.toBe(true);
+    expect(deps.retrieveCompliance).toHaveBeenCalledWith({
+      query: "医药代表 学术推广 机构同意 备案 科室会 RDPAC 合规",
+      interaction_type: undefined,
+    });
+  });
+
+  it("should_return_chunks_unchanged_when_retrieval_succeeds", async () => {
+    const deps = makeComplianceDeps();
+    const result = await callCompliance(deps, { hcp_id: "hcp_test" });
+    const body = result.structuredContent as { chunks: RagChunk[] };
+    expect(body.chunks).toHaveLength(1);
+    const chunk = body.chunks[0]!;
+    expect(chunk.clause_id).toBe("RDPAC-4.1");
+    expect(chunk.authority).toBe("rdpac");
+    expect(chunk.version).toBe("2024-01");
+    expect(body).not.toHaveProperty("coverage");
+  });
+
+  it("should_surface_sparse_coverage_with_repair_hint_when_coverage_sparse", async () => {
+    const deps = makeComplianceDeps({
+      retrieveCompliance: async () => ({
+        chunks: [],
+        coverage: { authorities: [], status: "sparse" },
+        repair_hint: "建议运维 seed_compliance 灌种后重试",
+      }),
+    });
+    const result = await callCompliance(deps, { hcp_id: "hcp_test" });
+    expect(result.isError).not.toBe(true);
+    const body = result.structuredContent as {
+      coverage?: { status: string };
+      repair_hint?: string;
+    };
+    expect(body.coverage?.status).toBe("sparse");
+    expect(body.repair_hint).toContain("seed_compliance");
+  });
+
+  it("should_not_suggest_reseed_when_coverage_ready", async () => {
+    const deps = makeComplianceDeps({
+      retrieveCompliance: async () => ({
+        chunks: [sampleComplianceChunk()],
+        coverage: {
+          authorities: [
+            { authority: "rdpac", version: "2024-01", chunk_count: 15, as_of: "2026-07-17" },
+          ],
+          status: "ready",
+        },
+      }),
+    });
+    const result = await callCompliance(deps, { hcp_id: "hcp_test" });
+    const body = result.structuredContent as {
+      coverage?: { status: string };
+      repair_hint?: string;
+    };
+    expect(body.coverage?.status).toBe("ready");
+    expect(body.repair_hint).toBeUndefined();
+  });
+
+  it("should_return_without_coverage_key_when_coverage_absent", async () => {
+    const deps = makeComplianceDeps({
+      retrieveCompliance: async () => ({ chunks: [sampleComplianceChunk()] }),
+    });
+    const result = await callCompliance(deps, { hcp_id: "hcp_test" });
+    const body = result.structuredContent as Record<string, unknown>;
+    expect(body).not.toHaveProperty("coverage");
+    expect(body).not.toHaveProperty("repair_hint");
+  });
+
+  it("should_return_not_found_when_twin_missing", async () => {
+    const deps = makeComplianceDeps({ getTwin: async () => null });
+    const result = await callCompliance(deps, { hcp_id: "hcp_missing" });
+    expect(result.isError).toBe(true);
+    const error = (result.structuredContent as { error?: { code?: string } }).error;
+    expect(error?.code).toBe("NOT_FOUND");
+    expect(deps.retrieveCompliance).not.toHaveBeenCalled();
+  });
+
+  it("should_return_not_found_when_twin_is_agent_general", async () => {
+    const deps = makeComplianceDeps({
+      getTwin: async () => sampleTwin(AGENT_GENERAL_HCP_ID),
+    });
+    const result = await callCompliance(deps, { hcp_id: AGENT_GENERAL_HCP_ID });
+    expect(result.isError).toBe(true);
+    const error = (result.structuredContent as { error?: { code?: string } }).error;
+    expect(error?.code).toBe("NOT_FOUND");
+  });
+
+  it("should_reject_missing_hcp_id_at_schema_layer_without_error_envelope", async () => {
+    const deps = makeComplianceDeps();
+    const result = await callCompliance(deps, {});
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    expect(deps.retrieveCompliance).not.toHaveBeenCalled();
+  });
+
+  it("should_return_internal_error_without_stack_or_connection_string_when_rag_throws", async () => {
+    const deps = makeComplianceDeps({
+      retrieveCompliance: async () => {
+        throw new Error("connect ECONNREFUSED 127.0.0.1:6333");
+      },
+    });
+    const result = await callCompliance(deps, { hcp_id: "hcp_test" });
+    expect(result.isError).toBe(true);
+    const error = (result.structuredContent as {
+      error?: { code?: string; message?: string; repair_hint?: string };
+    }).error;
+    expect(error?.code).toBe("INTERNAL_ERROR");
+    expect(error?.message).not.toContain("ECONNREFUSED");
+    expect(JSON.stringify(error)).not.toContain("DATABASE_URL");
+    expect(error?.repair_hint).toBeTruthy();
+  });
+});
+describe("feature-08 ingest_academic / get_ingest_status（MCP2-08，ADR-014）", () => {
+  function ragErrorLike(
+    code: string,
+    message: string,
+    extra?: { repair_hint?: string; details?: Record<string, unknown>; retryable?: boolean },
+  ) {
+    return Object.assign(new Error(message), { code, ...extra });
+  }
+
+  type IngestStatusBody = {
+    job_id?: string;
+    specialty?: string;
+    status?: string;
+    knowledge_status?: string;
+    progress?: number;
+    error?: unknown;
+    chunk_count?: number;
+  };
+
+  function errorOf(result: unknown) {
+    return (
+      (result as {
+        structuredContent?: {
+          error?: { code?: string; message?: string; repair_hint?: string; details?: Record<string, unknown> };
+        };
+      })?.structuredContent?.error
+    );
+  }
+
+  it("should_expose_both_tools_with_annotations_when_listed", async () => {
+    const client = await connect();
+    const { tools } = await client.listTools();
+    const ingest = tools.find((t) => t.name === "ingest_academic");
+    const status = tools.find((t) => t.name === "get_ingest_status");
+    expect(ingest).toBeDefined();
+    expect(status).toBeDefined();
+    expect(ingest!.annotations?.readOnlyHint).toBe(false);
+    expect(ingest!.annotations?.openWorldHint).toBe(true);
+    expect(status!.annotations?.readOnlyHint).toBe(true);
+    expect(status!.annotations?.openWorldHint).toBe(false);
+    await client.close();
+  });
+
+  it("should_start_job_and_return_pending_immediately_when_specialty_controlled", async () => {
+    const ingestOnDemand = vi.fn(
+      async (): Promise<{ jobId: string; knowledge_status: "pending" }> => ({
+        jobId: "job_123",
+        knowledge_status: "pending",
+      }),
+    );
+    const client = await connect({ ingestOnDemand });
+    const result = await client.callTool({
+      name: "ingest_academic",
+      arguments: { specialty: "kidney_transplant", themes: ["BK病毒"] },
+    });
+    await client.close();
+    expect(result.isError).not.toBe(true);
+    expect(ingestOnDemand).toHaveBeenCalledWith({
+      specialty: "kidney_transplant",
+      themes: ["BK病毒"],
+    });
+    const body = result.structuredContent as { job_id?: string; knowledge_status?: string };
+    expect(body.job_id).toBe("job_123");
+    expect(body.knowledge_status).toBe("pending");
+  });
+
+  it("should_normalize_chinese_alias_to_controlled_key_before_calling_ingest", async () => {
+    const ingestOnDemand = vi.fn(
+      async (): Promise<{ jobId: string; knowledge_status: "pending" }> => ({
+        jobId: "job_456",
+        knowledge_status: "pending",
+      }),
+    );
+    const client = await connect({ ingestOnDemand });
+    const result = await client.callTool({
+      name: "ingest_academic",
+      arguments: { specialty: "肾内科" },
+    });
+    await client.close();
+    expect(result.isError).not.toBe(true);
+    expect(ingestOnDemand).toHaveBeenCalledWith({ specialty: "nephrology", themes: undefined });
+  });
+
+  it("should_skip_idempotently_when_coverage_ready", async () => {
+    const ingestOnDemand = vi.fn(
+      async (): Promise<{ jobId: string; knowledge_status: "ready" }> => ({
+        jobId: "job_ready",
+        knowledge_status: "ready",
+      }),
+    );
+    const client = await connect({ ingestOnDemand });
+    const result = await client.callTool({
+      name: "ingest_academic",
+      arguments: { specialty: "kidney_transplant" },
+    });
+    await client.close();
+    expect(result.isError).not.toBe(true);
+    const body = result.structuredContent as { job_id?: string; knowledge_status?: string };
+    expect(body.knowledge_status).toBe("ready");
+    expect(body.job_id).toBe("job_ready");
+  });
+
+  it("should_map_in_progress_to_error_envelope_with_snake_case_details", async () => {
+    const ingestOnDemand = vi.fn(() => {
+      throw ragErrorLike("INGEST_IN_PROGRESS", "专科 kidney_transplant 已有进行中的 ingest", {
+        details: { jobId: "job_running" },
+        retryable: true,
+      });
+    });
+    const client = await connect({ ingestOnDemand });
+    const result = await client.callTool({
+      name: "ingest_academic",
+      arguments: { specialty: "kidney_transplant" },
+    });
+    await client.close();
+    expect(result.isError).toBe(true);
+    const error = errorOf(result);
+    expect(error?.code).toBe("INGEST_IN_PROGRESS");
+    expect(error?.details?.job_id).toBe("job_running");
+    expect(error?.repair_hint ?? "").toContain("get_ingest_status");
+  });
+
+  it("should_return_validation_error_when_specialty_unresolvable", async () => {
+    const ingestOnDemand = vi.fn(() => {
+      throw ragErrorLike("SPECIALTY_UNRESOLVED", "无法归一化专科: 不存在的科");
+    });
+    const client = await connect({ ingestOnDemand });
+    const result = await client.callTool({
+      name: "ingest_academic",
+      arguments: { specialty: "不存在的科" },
+    });
+    await client.close();
+    expect(result.isError).toBe(true);
+    expect(errorOf(result)?.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("should_reject_missing_specialty_at_schema_layer", async () => {
+    const ingestOnDemand = vi.fn();
+    const client = await connect({ ingestOnDemand });
+    const result = await client.callTool({
+      name: "ingest_academic",
+      arguments: {},
+    });
+    await client.close();
+    expect(result.isError).toBe(true);
+    const structured = result.structuredContent as { error?: unknown } | undefined;
+    expect(structured?.error).toBeUndefined();
+    expect(ingestOnDemand).not.toHaveBeenCalled();
+  });
+
+  it("should_return_job_status_by_job_id_and_by_specialty", async () => {
+    const getIngestStatus = vi.fn(
+      async (): Promise<{
+        jobId: string;
+        specialty: string;
+        status: string;
+        knowledge_status: string;
+        progress?: number;
+      }> => ({
+        jobId: "job_789",
+        specialty: "nephrology",
+        status: "pending",
+        knowledge_status: "pending",
+        progress: 40,
+      }),
+    );
+    const client = await connect({ getIngestStatus });
+    const byId = await client.callTool({
+      name: "get_ingest_status",
+      arguments: { job_id: "job_789" },
+    });
+    expect(byId.isError).not.toBe(true);
+    expect(getIngestStatus).toHaveBeenLastCalledWith({ job_id: "job_789" });
+    const body = byId.structuredContent as IngestStatusBody;
+    expect(body.job_id).toBe("job_789");
+    expect(body.knowledge_status).toBe("pending");
+    expect(body.progress).toBe(40);
+
+    const bySpecialty = await client.callTool({
+      name: "get_ingest_status",
+      arguments: { specialty: "肾内科" },
+    });
+    expect(bySpecialty.isError).not.toBe(true);
+    expect(getIngestStatus).toHaveBeenLastCalledWith({ specialty: "nephrology" });
+    await client.close();
+  });
+
+  it("should_return_not_found_when_no_job_exists", async () => {
+    const getIngestStatus = vi.fn(() => {
+      throw ragErrorLike("VALIDATION_ERROR", "未找到 ingest job", {
+        repair_hint: "提供有效 jobId 或 specialty",
+      });
+    });
+    const client = await connect({ getIngestStatus });
+    const result = await client.callTool({
+      name: "get_ingest_status",
+      arguments: { job_id: "job_missing" },
+    });
+    await client.close();
+    expect(result.isError).toBe(true);
+    const error = errorOf(result);
+    expect(error?.code).toBe("NOT_FOUND");
+    expect(error?.repair_hint ?? "").toContain("ingest_academic");
+  });
+
+  it("should_return_validation_error_when_both_params_missing", async () => {
+    const getIngestStatus = vi.fn();
+    const client = await connect({ getIngestStatus });
+    const result = await client.callTool({
+      name: "get_ingest_status",
+      arguments: {},
+    });
+    await client.close();
+    expect(result.isError).toBe(true);
+    expect(errorOf(result)?.code).toBe("VALIDATION_ERROR");
+    expect(getIngestStatus).not.toHaveBeenCalled();
+  });
+
+  it("should_not_touch_twin_or_build_when_ingesting_or_polling", async () => {
+    const ingestOnDemand = vi.fn(
+      async (): Promise<{ jobId: string; knowledge_status: "pending" }> => ({
+        jobId: "job_x",
+        knowledge_status: "pending",
+      }),
+    );
+    const getIngestStatus = vi.fn(
+      async (): Promise<{ jobId: string; status: string; knowledge_status: string }> => ({
+        jobId: "job_x",
+        status: "pending",
+        knowledge_status: "pending",
+      }),
+    );
+    const getTwin = vi.fn();
+    const client = await connect({ ingestOnDemand, getIngestStatus, getTwin });
+    await client.callTool({ name: "ingest_academic", arguments: { specialty: "nephrology" } });
+    await client.callTool({ name: "get_ingest_status", arguments: { job_id: "job_x" } });
+    await client.close();
+    expect(getTwin).not.toHaveBeenCalled();
   });
 });

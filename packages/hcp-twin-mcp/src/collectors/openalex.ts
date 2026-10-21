@@ -218,6 +218,46 @@ export async function fetchOpenAlexWorks(
   return data.results ?? [];
 }
 
+/**
+ * feature-12 跟进（DEF-006 / MCP2-09，B+ 设计）：拉取作者论文级概念名。
+ * 只取 concepts 字段（select=concepts，载荷小、无排序开销）；按「专科级（level≥1）
+ * 优先、出现次数降序」聚合，返回前 8 个概念名。resolve 在作者级主题词推不出
+ * 受控科室时懒调用本函数补信号。
+ */
+export async function fetchOpenAlexWorkConcepts(
+  http: HttpClient,
+  openalexId: string,
+  perPage = 25,
+): Promise<string[]> {
+  const id = openAlexId(openalexId);
+  if (!id) return [];
+  const data = await http.getJson<{ results?: OpenAlexWork[] }>(
+    `https://api.openalex.org/works?filter=author.id:${id}&per_page=${perPage}&select=concepts`,
+  );
+  const stats = new Map<string, { count: number; specialtyLevel: boolean }>();
+  for (const w of data.results ?? []) {
+    for (const c of w.concepts ?? []) {
+      if (!c.display_name) continue;
+      const prev = stats.get(c.display_name) ?? {
+        count: 0,
+        specialtyLevel: false,
+      };
+      prev.count += 1;
+      if ((c.level ?? 0) >= 1) prev.specialtyLevel = true;
+      stats.set(c.display_name, prev);
+    }
+  }
+  return [...stats.entries()]
+    .sort((a, b) => {
+      const sa = a[1].specialtyLevel ? 1 : 0;
+      const sb = b[1].specialtyLevel ? 1 : 0;
+      if (sa !== sb) return sb - sa;
+      return b[1].count - a[1].count;
+    })
+    .map(([name]) => name)
+    .slice(0, 8);
+}
+
 export function authorIdsFromOpenAlex(author: OpenAlexAuthor): Partial<AuthorIds> {
   return {
     openalex: openAlexId(author.id),

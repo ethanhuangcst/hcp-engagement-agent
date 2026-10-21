@@ -1,6 +1,6 @@
 # hcp-twin-mcp — 测试策略与计划
 
-> as_of：2026-10-21（2026-10-20 首版：TWIN2-01 定时刷新与洞察回填，ADR-013；2026-10-21 新增 §5 feature-11 增量：resolve 科室来源标注与数据源对照，MCP2-09 / DEF-005）  
+> as_of：2026-10-21（2026-10-20 首版：TWIN2-01 定时刷新与洞察回填，ADR-013；2026-10-21 新增 §5 feature-11 增量：resolve 科室来源标注与数据源对照，MCP2-09 / DEF-005；同日 §5 增补：论文级概念懒加载补信号、OpenAlex 概念映射表与输入口语缩写归一化的单元行，B+ 设计）  
 
 **Area:** 对内 Twin MCP（采集、构建、定时刷新）
 **Stories:** [mcp-stories.md](./mcp-stories.md) · **Design:** [mcp-design.md](./mcp-design.md)
@@ -52,6 +52,19 @@
 | 信号归一化 | OpenAlex 主题可归一化时候选附 `department_signal`（主题词原文 + 受控专科键） |
 | mismatch | 输入侧键与信号侧键均非空且不同 → `department_mismatch` 为真并附两侧键值；`department` 不被改写 |
 | 降级 | 信号缺失或不可归一化 → 仅来源标注，无 signal / mismatch 字段，不报错 |
+| 论文级懒加载补信号（B+） | 作者级主题词推不出受控专科键 → 懒拉论文级概念合并再推：侯凡凡用例（作者级 Medicine/Chemistry/Immunology + 论文级 Hemodialysis/Dialysis/Kidney disease）信号侧 nephrology、`topics` 为合并后列表、输入「神内科」归一 neurology 出 mismatch |
+| 懒加载跳过 | 作者级主题词已归一出专科键 → 不调论文级接口（省外网调用） |
+| 懒加载失败降级 | 论文级接口失败 → 仅作者级信号，resolve 不报错不阻塞 |
+| 不编造信号 | 两级主题词均推不出受控科室 → 无 specialty、无 mismatch；保存仍被 MCP2-10 无信号阻断拦截 |
+
+### 单元（medical-kb 概念表与输入归一化）
+
+| 用例 | 断言 |
+|------|------|
+| 概念映射表 | Hemodialysis / Dialysis / Kidney disease / Nephropathy / Chronic renal failure / Nephrology → nephrology；Medicine / Internal medicine / Immunology / Computer science / Chemistry 返回 null（泛化词不入表） |
+| 概念表受控校验 | `OPENALEX_CONCEPT_SPECIALTY_KEYS` 每个值都是受控专科键（`CONTROLLED_KEYS` 兜底） |
+| 输入口语缩写 | DEPARTMENT_PATTERNS：神内科 / 神内 → neurology，肾内 → nephrology |
+| 论文概念聚合 | `fetchOpenAlexWorkConcepts`：level≥1 专科概念排在宽泛高计数概念之前；URL 带 `select=concepts` 轻载荷；返回上限 8 个 |
 
 ### 集成（live 用例）
 

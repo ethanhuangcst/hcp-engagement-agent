@@ -40,6 +40,8 @@ export type ConfirmAndSaveInput = {
   author_ids?: AuthorIdsInput;
   /** 确认疑似同人确非重复后强制写入；hcp_id 精确查重不受影响 */
   confirm_not_duplicate?: boolean;
+  /** MCP2-10（DEF-006，D2）：科室来源留痕追加项（如 department_signal / department_checked），落 tags.evidence_refs */
+  extra_evidence_refs?: string[];
 };
 
 export type ConfirmAndSaveResult =
@@ -114,7 +116,11 @@ function identityTwin(input: ConfirmAndSaveInput, authorIds: AuthorIds | undefin
     tag_confidence: "low",
     tag_as_of: asOf,
     tag_method: "rule",
-    evidence_refs: ["confirm_identity"],
+    /** MCP2-10（DEF-006，D2）：confirm_identity 之后按来源追加（department_signal / department_checked 等） */
+    evidence_refs: [
+      "confirm_identity",
+      ...(input.extra_evidence_refs ?? []),
+    ],
   };
   return {
     meta: {

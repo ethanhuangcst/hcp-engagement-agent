@@ -26,4 +26,12 @@ export const zhCN: Messages = {
   "newtwin.dept.preview.title": "科室 → 将预灌专科",
   "newtwin.dept.preview.ok": "{input} → {specialty}",
   "newtwin.dept.preview.skipped": "{input}：无法映射到受控专科，预灌将跳过",
+  "newtwin.dept.incoming":
+    "将入库科室：{department}（来自选中记录的数据源信号，不可编辑）",
+  "newtwin.dept.gate.checkbox":
+    "已人工核对科室，确认按数据源信号侧入库",
+  "newtwin.dept.gate.required":
+    "输入科室与数据源信号不一致：须勾选「已人工核对科室」后才能保存",
+  "newtwin.dept.missing.block":
+    "选中记录无科室信号，无法确定入库科室：请换检索条件重新查询，或人工核实后再试",
 };

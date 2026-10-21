@@ -5,6 +5,7 @@ import {
   RetrieveComplianceInputSchema,
   ragError,
   type RagChunk,
+  type RagComplianceCoverage,
   type RagCoverage,
 } from "@hca/medical-kb";
 
@@ -22,7 +23,11 @@ export async function retrieveAcademicForAgent(
 
 export async function retrieveComplianceForAgent(
   raw: unknown,
-): Promise<{ chunks: RagChunk[] }> {
+): Promise<{
+  chunks: RagChunk[];
+  coverage?: RagComplianceCoverage;
+  repair_hint?: string;
+}> {
   const parsed = RetrieveComplianceInputSchema.safeParse(raw);
   if (!parsed.success) {
     throw ragError("VALIDATION_ERROR", "retrieve_compliance 入参无效", {

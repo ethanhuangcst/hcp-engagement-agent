@@ -1,6 +1,6 @@
 # hcp-engagement-agent 功能规格
 
-> as_of：2026-07-16 · 包名建议 `@hca/hcp-engagement-agent`  
+> as_of：2026-10-21 · 包名建议 `@hca/hcp-engagement-agent`（初版 2026-07-16；2026-10-21 feature-04 开工准备批次：I-AGT-008 返回增补 `coverage?` / `repair_hint?`，[MKB2-03](../product-backlog.md#pb-13)）  
 > 依据：[`1.product-definition.md`](../1.product-definition.md)、[`3.architecture.md`](../3.architecture.md) §5.4、[`4.install-dependencies.md`](../4.install-dependencies.md) §8、[`../app/app-function-spec.md`](../app/app-function-spec.md)、[`../../knowledge/agent-hcp-engagement/design-direction.md`](../../knowledge/agent-hcp-engagement/design-direction.md)、**agent-builder**、cn-hcp-pro / cn-hcp-compliance  
 > 设计：[`agent-design.md`](./agent-design.md)  
 > 范围：`packages/hcp-engagement-agent` — 决策与对话层（**LlmClient 默认 Qwen** + 一句话洞察 + 5 Capabilities + 薄 LangGraph + **open_chat / revise_options**）。**不是**爬虫、不是向量库；学术/合规检索经 `medical-kb`，Twin 事实经香港 Postgres。
@@ -183,7 +183,7 @@ Agent 业务（loop / LangGraph / synthesize）
 |------|----------|------|----------|----------|----------|--------|------|----------|
 | 6 | I-AGT-006 | Tool | `get_twin_insights` | `{ hcpId }` | Insights（含 `doing_now`） | 无 | 是 | MVP-4 |
 | 7 | I-AGT-007 | Tool | `retrieve_academic` | `{ hcpId, query?, specialty?, themes? }` | `{ chunks[] }` + citations | 无 | 是 | MVP-4 |
-| 8 | I-AGT-008 | Tool | `retrieve_compliance` | `{ hcpId, tenantId?, interaction_type? }` | `{ chunks[] }`；**propose 路径必调** | 无 | 是 | MVP-4 |
+| 8 | I-AGT-008 | Tool | `retrieve_compliance` | `{ hcpId, tenantId?, interaction_type? }` | `{ chunks[], coverage?, repair_hint? }`（coverage / repair_hint 为 [MKB2-03](../product-backlog.md#pb-13) 增补透传；propose 路径只用 chunks）；**propose 路径必调** | 无 | 是 | MVP-4 |
 | 9 | I-AGT-009 | Tool | `propose_engagement_options` | `{ hcpId, academic_refs?, compliance_refs? }` | `{ runId, options[3..5] }` | 写 options/ | 否 | MVP-4 |
 | 10 | I-AGT-010 | Tool | `revise_engagement` | `{ sessionId, hcpId, feedback, optionRunId? }` | 修订后 options + 助手回复 | 写 session / options | 否 | MVP-4 |
 

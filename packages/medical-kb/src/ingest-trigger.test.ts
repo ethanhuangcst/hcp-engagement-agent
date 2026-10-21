@@ -147,6 +147,19 @@ describe("DEPARTMENT_PATTERNS（feature-09 MKB2-02 数据驱动科室正则）",
     }
   });
 
+  it("should_normalize_colloquial_department_abbreviations（feature-12 跟进：神内科 case）", () => {
+    // 用户实测输入「神内科」：归到 neurology 后 mismatch 机制才能端到端工作
+    const cases: [string, string][] = [
+      ["神内科", "neurology"],
+      ["神内", "neurology"],
+      ["肾内", "nephrology"],
+    ];
+    for (const [dept, key] of cases) {
+      const keys = resolveSpecialtiesForIngest({ department: dept });
+      expect(keys, `department=${dept}`).toContain(key);
+    }
+  });
+
   it("should_map_neurosurgery_before_neurology_for_neurosurgery_dept", () => {
     const keys = resolveSpecialtiesForIngest({ department: "神经外科" });
     expect(keys).toEqual(["neurosurgery"]);

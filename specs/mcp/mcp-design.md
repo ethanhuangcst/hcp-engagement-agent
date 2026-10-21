@@ -1,6 +1,6 @@
 # hcp-twin-mcp 设计：文献矩阵
 
-> as_of：2026-10-21（2026-07-17 首版；2026-10-21 新增 MCP2-09 科室来源标注与数据源对照节，DEF-005）  
+> as_of：2026-10-21（2026-07-17 首版；2026-10-21 新增 MCP2-09 科室来源标注与数据源对照节，DEF-005；同日 MCP2-09 范围外补记：入库科室规则见 MCP2-10 / mcp2-design §13.6，DEF-006，D2，本节 resolve 契约不变；同日 MCP2-09 归一化与判定增补：论文级概念懒加载补信号与 OpenAlex 概念映射表、输入侧口语缩写归一化，B+ 设计）  
 > 准入源见 [`literature-sources.md`](../../knowledge/mcp-hcp-virtual-twin/literature-sources.md)（6 站；已删 ChiCTR）  
 > 详版 / 验证：knowledge `hcp-literature-matrix-tech.md`、`zhu-tongyu-matrix-probe.md`
 
@@ -120,13 +120,15 @@ Stories：[mcp-stories.md](./mcp-stories.md) US-MCP-007 · Tests：[mcp-tests.md
 
 ### 归一化与判定
 
-- 归一化主权在 medical-kb（28 受控专科键）：输入科室走既有 department 正则；OpenAlex 主题词走英文主题到受控专科键的归一化。`hcp-twin-mcp` 以 workspace 依赖导入，不复制映射表（`triggerKnowledgeIngest` 入包同款先例，ADR-014）。
+- 归一化主权在 medical-kb（28 受控专科键）：输入科室走既有 department 正则（2026-10-21 补口语缩写：`神内` → neurology、`肾内` → nephrology，mismatch 机制对口语输入端到端可用）；OpenAlex 主题词先走受控别名表，再走 OpenAlex 概念映射表（`openAlexConceptSpecialty`：Hemodialysis / Dialysis / Kidney disease / Nephropathy / Chronic renal failure 等领域概念 → nephrology；泛化词 Medicine / Internal medicine / Computer science 不入表）。`hcp-twin-mcp` 以 workspace 依赖导入，不复制映射表（`triggerKnowledgeIngest` 入包同款先例，ADR-014）。
+- **论文级懒加载补信号（2026-10-21，B+ 设计）**：作者级主题词（search 端点 top-5 x_concepts）推不出受控专科键的候选，resolve 懒拉其论文级概念（works 端点 `select=concepts`，level≥1 专科概念优先、按出现次数降序、取前 8），合并进主题词再推一次；`department_signal.topics` 反映合并后的实际依据。论文源失败降级为仅作者级信号，不阻塞整次 resolve；两级都推不出受控科室时不编造信号，保存仍被 MCP2-10 无信号阻断拦截。
 - mismatch 判定：输入侧与信号侧均归一出非空专科键且两键不同才提示；任一侧不可归一化则降级为仅来源标注，不报错、不阻塞。
-- 数据源信号缺失（OpenAlex 空 concepts 且机构元数据无信号）同降级口径。
+- 数据源信号缺失（作者级与论文级均无可用信号）同降级口径。
 
 ### 范围外
 
 - 不自动纠正科室（OpenAlex 无可靠中文科室字段）；不新增对外工具。确认返回的映射预览归对外 MCP：[mcp2-design §13](../mcp2.0/mcp2-design.md)；Web 展示归 [app-stories US-WEB-004](../app/app-stories.md)。
+- 本节 resolve 契约不变（`department` 原样回显输入、`origin: caller_input`）；入库科室规则、mismatch 强闸门与无信号阻断见 [MCP2-10 / mcp2-design §13.6](../mcp2.0/mcp2-design.md)（DEF-006，D2）：改写只发生在 `add_hcp` 入库一步，不回改本节字段。
 
 ### Tests
 

@@ -8,6 +8,32 @@
 
 ## 2026-10-21
 
+### feature-13 Done：合规知识覆盖信号与条款版本治理（MKB2-03）
+
+**原因**：合规检索缺 coverage 信号、种子稀疏、同 authority 多版本并存；用户 close confirm feature-13 可用。
+
+**变更内容**：
+- `@hca/medical-kb`：`complianceCoverage()`（F-RAG-030）；`retrieveCompliance` 返回 `coverage` / sparse 时 `repair_hint`；`seedCompliance` 灌新版本后按 manifest 删除旧版本点（F-RAG-031）；rdpac 15 条、cn_med_rep_measures 8 条种子（F-RAG-032）。
+- `@hca/hcp-engagement-agent`：`retrieveComplianceForAgent` 透传 coverage / repair_hint。
+- 规格：`mcp2-design.md` §11、`mcp2-stories.md` US-MCP2-003、`mcp2-test.md` §12 补 coverage 契约。
+- 知识：[tsx-live-verify-from-workspace-root.md](knowledge/ops/tsx-live-verify-from-workspace-root.md)。
+
+**验收**：medical-kb 97/97（含 compliance.test.ts 13 例）、agent 27/27；live coverage `ready`（rdpac 15、cn_med_rep_measures 8）；gov_e2e 版本治理 E2E；清理 Qdrant 孤儿点 `tenant-demo@2026-01`。
+
+---
+
+### Sprint 2 批量收口：feature-02 / 07 / 09 / 10 / 11 / 12 Done，DEF-003–006 关闭
+
+**原因**：六条 SBI 实现与验收完成，用户一次性 close confirm 十项（六 SBI、四缺陷、OGT-1）可用。
+
+**变更内容**：
+- feature-12 附加 B+ 信号补全：`query_hcp` 卡片列主题词与「科室判断 / 是否按 X 入库」问句；resolve 论文级概念懒加载（`fetchOpenAlexWorkConcepts`）；`medical-kb` 增 OpenAlex 概念映射表（`openAlexConceptSpecialty`）与口语缩写归一（神内 / 肾内）。
+- 知识笔记：[openalex-department-signal-works-concepts.md](knowledge/data/openalex-department-signal-works-concepts.md)。
+
+**验收**：全仓 typecheck 0 错、7 包测试全绿（domain 40 / db 12 / agent 27 / engagement-mcp 73 / twin-mcp 55 / medical-kb 84 / web 13）；侯凡凡 live 三点验收（卡片标 mismatch 与肾内科、列 5 条、问询入库）+ 确认后按肾内科入库 + 令牌作废；叶定伟 live 入库后 urology `coverage: ready` 检索 5 条；用户确认 1–10 全部关闭。
+
+---
+
 ### feature-01 Done：get_hcp_insights 对外工具（MCP2-03）
 
 **原因**：Sprint 2 需集成方经对外 MCP 读取 HCP 洞察；ADR-013 的按需合成入口已在 feature-05 落地，本故事完成 MCP 接线与契约验收。

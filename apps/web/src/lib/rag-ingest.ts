@@ -2,6 +2,7 @@
 export {
   resolveSpecialtiesForIngest,
   resolveSpecialtyPreview,
+  specialtyDisplayName,
   triggerKnowledgeIngest,
   type KnowledgeJobRef,
   type SpecialtyPreviewRow,

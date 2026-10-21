@@ -73,6 +73,8 @@ export const EngagementOptionsRunSchema = z.object({
       academic_hit_count: z.number().int().nonnegative().optional(),
       compliance_hit_count: z.number().int().nonnegative().optional(),
       product_context: z.string().optional(),
+      retrieval_degraded: z.boolean().optional(),
+      retrieval_degraded_reason: z.string().optional(),
     })
     .optional(),
 });

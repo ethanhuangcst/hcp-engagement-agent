@@ -164,6 +164,31 @@ describe("MVP-1 MCP tool contracts (TWIN_MODE=mock)", () => {
     expect(body.profile.hospital).toContain("中山");
   });
 
+  it("confirm merges extra_evidence_refs into tags（MCP2-10 / DEF-006）", async () => {
+    const saved = await confirmAndSaveTwin(store, {
+      hcpId: "hcp_extra_refs",
+      name_zh: "测试外源",
+      hospital: "北京协和医院",
+      department: "肾内科",
+      extra_evidence_refs: ["department_signal", "department_checked"],
+    });
+    expect(saved.ok).toBe(true);
+    if (!saved.ok) return;
+    const twin = await getTwinTool(store, { hcpId: "hcp_extra_refs" });
+    expect(twin.ok).toBe(true);
+    if (!twin.ok) return;
+    const body = twin.data as {
+      identity?: { department?: string };
+      profile?: { tags?: { evidence_refs?: string[] } };
+    };
+    expect(body.identity?.department).toBe("肾内科");
+    expect(body.profile?.tags?.evidence_refs).toEqual([
+      "confirm_identity",
+      "department_signal",
+      "department_checked",
+    ]);
+  });
+
   it("get_insights / tag validation errors", async () => {
     const badInsights = await getInsightsTool(store, {});
     expect(badInsights.ok).toBe(false);

@@ -179,6 +179,8 @@ export function createMcpServer(store: TwinStore): McpServer {
             role_tags: z.array(RoleTagSchema).optional(),
           })
           .optional(),
+        /** MCP2-10（DEF-006，D2）：科室来源留痕追加项（BFF 传 department_signal / department_checked） */
+        extra_evidence_refs: z.array(z.string().min(1)).optional(),
       },
     },
     async (args) => {

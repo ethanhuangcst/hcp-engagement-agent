@@ -41,6 +41,8 @@ type PersonCandidate = {
   department_provenance?: DepartmentProvenance;
   department_signal?: DepartmentSignal;
   department_mismatch?: DepartmentMismatch;
+  /** feature-12（MCP2-10 / DEF-006，D2）：将入库科室（信号专科标准中文名），由 BFF 服务端算好下发 */
+  department_ingest?: string;
   hcpId?: string;
   author_ids_draft?: Record<string, string | null | undefined>;
   tags_draft?: Partial<HcpTags> & {
@@ -113,6 +115,8 @@ export default function NewTwinPage() {
     SpecialtyPreviewRow[] | null
   >(null);
   const [savedHcpId, setSavedHcpId] = useState<string | null>(null);
+  /** feature-12（MCP2-10 / DEF-006，D2）：mismatch 勾选「已人工核对科室」闸门状态 */
+  const [deptChecked, setDeptChecked] = useState(false);
 
   useEffect(() => {
     setSelected(null);
@@ -171,9 +175,26 @@ export default function NewTwinPage() {
                 role_tags: selected.tags_draft.role_tags,
               }
             : undefined,
+          // feature-12（MCP2-10 / DEF-006，D2）：科室信号与闸门参数随保存提交
+          department_signal: selected.department_signal,
+          department_mismatch: selected.department_mismatch,
+          confirm_department_checked: deptChecked || undefined,
         }),
       });
       const data = await res.json();
+      // mismatch 未勾选人工核对：非错误信封，页面态与勾选项不丢失（US-WEB-004 增补）
+      if (res.ok && data?.status === "department_confirmation_required") {
+        setError(t(locale, "newtwin.dept.gate.required"));
+        return;
+      }
+      // 无信号阻断兜底（正常入口在确认页已被禁用并展示阻断提示）
+      if (
+        !res.ok &&
+        data?.error?.details?.code === "DEPARTMENT_SIGNAL_MISSING"
+      ) {
+        setError(t(locale, "newtwin.dept.missing.block"));
+        return;
+      }
       if (!res.ok) {
         setError(data?.error?.message ?? "保存失败");
         return;
@@ -338,6 +359,8 @@ export default function NewTwinPage() {
                     className="hca-btn-primary mt-3"
                     onClick={() => {
                       setSelectedCandidate(c);
+                      setDeptChecked(false);
+                      setError(null);
                       setStep("confirm");
                     }}
                   >
@@ -413,6 +436,10 @@ export default function NewTwinPage() {
   }
 
   if (step === "confirm" && selected) {
+    /** feature-12（MCP2-10 / DEF-006，D2）：将入库科室（信号专科标准中文名）；无信号则阻断保存 */
+    const ingestDept = selected.department_ingest;
+    const mismatch = Boolean(selected.department_mismatch);
+    const noSignal = !ingestDept;
     return (
       <div className="space-y-6">
         <BackNavBar
@@ -421,7 +448,7 @@ export default function NewTwinPage() {
           actions={
             <button
               type="button"
-              disabled={saving || !selected.hcpId}
+              disabled={saving || !selected.hcpId || noSignal}
               className="hca-btn-primary"
               onClick={() => void onConfirm()}
             >
@@ -452,18 +479,48 @@ export default function NewTwinPage() {
             }
           />
           <p className="text-[13px] text-[var(--hca-ink-muted)]">
-            {selected.hospital} · {selected.department}
+            {selected.hospital} ·{" "}
+            {ingestDept ?? selected.department}
             {selected.title ? ` · ${selected.title}` : ""}
           </p>
+          {ingestDept ? (
+            <p className="text-xs text-[var(--hca-ink-muted)]">
+              {t(locale, "newtwin.dept.incoming", { department: ingestDept })}
+            </p>
+          ) : null}
+          {noSignal ? (
+            <p className="text-sm text-[var(--hca-danger)]" role="alert">
+              {t(locale, "newtwin.dept.missing.block")}
+            </p>
+          ) : null}
           <p className="font-[family-name:var(--font-mono)] text-[11px] text-[var(--hca-ink-muted)]">
             hcp:{selected.hcpId ?? "—"}
           </p>
         </div>
+        {mismatch ? (
+          <div className="space-y-1.5">
+            <p className="text-xs text-[var(--hca-danger)]" role="note">
+              {t(locale, "newtwin.dept.mismatch", {
+                input_side: selected.department_mismatch!.input_side,
+                signal_side: selected.department_mismatch!.signal_side,
+              })}
+            </p>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={deptChecked}
+                onChange={(e) => setDeptChecked(e.target.checked)}
+              />
+              <span>{t(locale, "newtwin.dept.gate.checkbox")}</span>
+            </label>
+          </div>
+        ) : null}
         <AuthorIdsTable ids={selected.author_ids_draft} />
         <div className="flex gap-2">
           <button
             type="button"
-            disabled={saving || !selected.hcpId}
+            disabled={saving || !selected.hcpId || noSignal}
             className="hca-btn-primary"
             onClick={() => void onConfirm()}
           >

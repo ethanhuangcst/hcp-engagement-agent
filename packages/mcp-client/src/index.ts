@@ -113,6 +113,8 @@ export class HcpMcpClient {
           city?: string;
           author_ids_draft?: Record<string, string | null | undefined>;
           tags_draft?: { hcp_tier?: string; role_tags?: string[] };
+          /** MCP2-10（DEF-006，D2）：科室来源留痕追加项 */
+          extra_evidence_refs?: string[];
         },
   ) {
     const args =

@@ -30,4 +30,12 @@ export const en: Messages = {
   "newtwin.dept.preview.ok": "{input} → {specialty}",
   "newtwin.dept.preview.skipped":
     "{input}: no controlled specialty match, prefill will skip it",
+  "newtwin.dept.incoming":
+    "Department to save: {department} (from the data-source signal of the selected record; not editable)",
+  "newtwin.dept.gate.checkbox":
+    "I have manually verified the department; save with the data-source signal side",
+  "newtwin.dept.gate.required":
+    "Your input department differs from the data-source signal: check “I have manually verified the department” to save",
+  "newtwin.dept.missing.block":
+    "The selected record has no department signal, so the department to save cannot be determined: retry with different search terms, or verify the department manually",
 };

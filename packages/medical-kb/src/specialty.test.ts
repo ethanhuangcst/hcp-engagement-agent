@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   CONTROLLED_SPECIALTY_KEYS,
+  CONTROLLED_KEYS,
   normalizeSpecialty,
+  OPENALEX_CONCEPT_SPECIALTY_KEYS,
+  openAlexConceptSpecialty,
+  specialtyDisplayName,
   tryNormalizeSpecialty,
 } from "./specialty.js";
 
@@ -22,6 +26,66 @@ describe("normalizeSpecialty", () => {
     );
   });
 });
+
+/** feature-12（MCP2-10 / DEF-006，D2）：受控专科键 → 标准中文名反查（入库科室来源） */
+describe("specialtyDisplayName（MCP2-10 / DEF-006）", () => {
+  it("should_return_standard_chinese_name_for_known_keys", () => {
+    expect(specialtyDisplayName("nephrology")).toBe("肾内科");
+    expect(specialtyDisplayName("psychiatry")).toBe("精神科");
+    expect(specialtyDisplayName("kidney_transplant")).toBe("肾移植");
+  });
+
+  it("should_return_non_empty_name_for_every_controlled_key", () => {
+    for (const key of CONTROLLED_SPECIALTY_KEYS) {
+      const name = specialtyDisplayName(key);
+      expect(typeof name).toBe("string");
+      expect(name?.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("should_return_undefined_when_key_unknown", () => {
+    expect(specialtyDisplayName("hepatobiliary_surgery")).toBeUndefined();
+    expect(specialtyDisplayName("")).toBeUndefined();
+    expect(specialtyDisplayName("Nephrology")).toBeUndefined();
+  });
+});
+
+/** feature-12 跟进（DEF-006 / MCP2-09，B+ 设计）：OpenAlex 概念名 → 受控专科键 */
+describe("openAlexConceptSpecialty（B+ 论文级科室信号）", () => {
+  it("should_map_verified_nephrology_concepts_to_nephrology", () => {
+    // 侯凡凡 case 经 OpenAlex 论文概念核验的词表
+    const concepts = [
+      "Hemodialysis",
+      "Dialysis",
+      "Kidney disease",
+      "Nephropathy",
+      "Chronic renal failure",
+      "Nephrology",
+    ];
+    for (const concept of concepts) {
+      expect(openAlexConceptSpecialty(concept)).toBe("nephrology");
+    }
+  });
+
+  it("should_return_null_for_broad_or_unmapped_concepts", () => {
+    for (const concept of [
+      "Medicine",
+      "Internal medicine",
+      "Immunology",
+      "Computer science",
+      "Chemistry",
+    ]) {
+      expect(openAlexConceptSpecialty(concept)).toBeNull();
+    }
+  });
+
+  it("should_only_map_to_controlled_specialty_keys", () => {
+    for (const [, key] of OPENALEX_CONCEPT_SPECIALTY_KEYS) {
+      expect(CONTROLLED_KEYS.has(key)).toBe(true);
+    }
+  });
+});
+
 
 describe("CONTROLLED_SPECIALTY_KEYS（feature-09 MKB2-02 目录扩充）", () => {
   it("should_contain_28_controlled_keys_after_expansion", () => {

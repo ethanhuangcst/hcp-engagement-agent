@@ -9,10 +9,15 @@ import {
   COMPLIANCE_COLLECTION,
   type ComplianceSeedChunk,
   type RagChunk,
+  type RagComplianceCoverage,
   ragError,
   RetrieveComplianceInputSchema,
   SeedComplianceInputSchema,
 } from "./types.js";
+import {
+  complianceCoverage,
+  findOutdatedComplianceVersions,
+} from "./compliance-coverage.js";
 import {
   assertVectorBackendLocal,
   getComplianceCorpusRoot,
@@ -210,6 +215,51 @@ export async function seedCompliance(raw: unknown = {}): Promise<{
     });
   }
 
+  /** F-RAG-031（MKB2-03）版本治理：同 authority 灌入新版本后，manifest 中登记的旧版本条款下线（删除 point）。
+   *  重跑同版本时待删集合为空，等价 no-op；删除失败抛 INGEST_FAILED，不写半状态。 */
+  const seededVersions = new Map<string, Set<string>>();
+  for (const c of allChunks) {
+    const set = seededVersions.get(c.authority) ?? new Set<string>();
+    set.add(c.version);
+    seededVersions.set(c.authority, set);
+  }
+  for (const [authority, versions] of seededVersions) {
+    const outdated = await findOutdatedComplianceVersions(authority, versions);
+    for (const oldVersion of outdated) {
+      try {
+        await q.delete(COMPLIANCE_COLLECTION, {
+          wait: true,
+          filter: {
+            must: [
+              { key: "authority", match: { value: authority } },
+              { key: "version", match: { value: oldVersion } },
+            ],
+          },
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(
+          JSON.stringify({
+            code: "INGEST_FAILED",
+            event: "compliance_version_offline_failed",
+            authority,
+            version: oldVersion,
+            message,
+          }),
+        );
+        throw ragError(
+          "INGEST_FAILED",
+          `旧版本条款下线失败: ${authority}@${oldVersion}`,
+          {
+            repair_hint: "失败可重跑 seed_compliance（幂等），先检查 Qdrant 连通性",
+            retryable: true,
+            details: { authority, version: oldVersion },
+          },
+        );
+      }
+    }
+  }
+
   const byDoc = new Map<string, ComplianceSeedChunk[]>();
   for (const c of allChunks) {
     const key = `${c.authority}:${c.version}`;
@@ -281,7 +331,11 @@ async function ensureBm25(): Promise<
 
 export async function retrieveCompliance(
   raw: unknown,
-): Promise<{ chunks: RagChunk[] }> {
+): Promise<{
+  chunks: RagChunk[];
+  coverage?: RagComplianceCoverage;
+  repair_hint?: string;
+}> {
   const parsed = RetrieveComplianceInputSchema.safeParse(raw);
   if (!parsed.success) {
     throw ragError("VALIDATION_ERROR", "retrieve_compliance 入参无效", {
@@ -374,7 +428,25 @@ export async function retrieveCompliance(
     authority: c.payload.authority ? String(c.payload.authority) : undefined,
   }));
 
-  return { chunks };
+  let coverage: RagComplianceCoverage | undefined;
+  try {
+    coverage = await complianceCoverage();
+  } catch {
+    /** manifest 读取失败：降级省略 coverage，检索照常返回 chunks */
+    coverage = undefined;
+  }
+
+  return {
+    chunks,
+    /** F-RAG-030（MKB2-03）：coverage 只读旁路；manifest 读取失败降级省略，检索不报错（同 ADR-014 学术侧语义） */
+    ...(coverage ? { coverage } : {}),
+    ...(coverage?.status === "sparse"
+      ? {
+          repair_hint:
+            "合规知识库尚未灌种（manifest 无 authority 行），建议运维执行 seed_compliance 灌种后重试",
+        }
+      : {}),
+  };
 }
 
 export type HealthProbeResult = { ok: boolean; error?: unknown };

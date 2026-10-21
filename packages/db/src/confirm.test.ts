@@ -130,6 +130,25 @@ describe("confirmAndSaveTwin（ADR-009 / ADR-010）", () => {
     expect(insights.interest_directions).toEqual([]);
   });
 
+  it("should_merge_extra_evidence_refs_into_tags_when_provided（MCP2-10 / DEF-006）", async () => {
+    query.mockResolvedValueOnce([[]]); // getTwin：编号不存在
+    query.mockResolvedValueOnce([[storedRow({ name_zh: "完全无关" })]]); // 查重扫描
+    const r = await confirmAndSaveTwin(
+      baseInput({
+        department: "肾内科",
+        extra_evidence_refs: ["department_signal", "department_checked"],
+      }),
+    );
+    expect(r.status).toBe("saved");
+    if (r.status !== "saved") return;
+    expect(r.twin.identity?.department).toBe("肾内科");
+    expect(r.twin.profile.tags?.evidence_refs).toEqual([
+      "confirm_identity",
+      "department_signal",
+      "department_checked",
+    ]);
+  });
+
   it("should_return_confirmation_required_sorted_by_org_match", async () => {
     const sameHospDept = storedRow({
       hcp_id: "hcp_dup1",

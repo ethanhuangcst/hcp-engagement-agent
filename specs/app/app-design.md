@@ -50,14 +50,19 @@
 | 职业轨迹展示 | `apps/web/src/components/CareerTimeline.tsx` + `apps/web/src/i18n/` |
 | 洞察 / 一人一策 | `apps/web/src/app/twins/[hcpId]/insights` · `options` |
 
-## 6. 确认页科室来源标注与预灌映射预览（MCP2-09 / DEF-005）
+## 6. 确认页科室来源标注、预灌映射预览与入库科室闸门（MCP2-09 / DEF-005；MCP2-10 / DEF-006，D2）
 
 | 元素 | 规范 |
 |------|------|
 | 候选卡片科室 | 科室旁展示来源标注（「来自调用方输入提示，未经数据源核实」，数据来自 `department_provenance`）；不当作已核实身份强调展示 |
-| mismatch 对照 | 候选带 `department_mismatch` 时展示两侧专科键（输入侧 / 数据源侧），供确认者对照判断；不阻塞选择与确认 |
+| mismatch 对照 | 候选带 `department_mismatch` 时展示两侧专科键（输入侧 / 数据源侧），供确认者对照判断；不阻塞选择；确认侧由勾选闸门承接（下行） |
 | 映射预览 | 确认保存响应含 `specialty_preview` 时展示「科室 → 将预灌专科」映射列表；与实际预灌同源（`add_hcp` 返回体） |
-| 跳过提示 | `matched: false` 行展示「无法映射到受控专科，预灌将跳过」；不静默空白 |
-| 文案 | 全部走 i18n message catalog（§3、F-WEB-046），禁止组件硬编码 |
+| 跳过提示 | `matched: false` 行展示「无法映射到受控专科，预灌将跳过」；不静默空白（MCP2-10 后科室行以入库科室为输入恒 matched，此形态仅见于非科室行） |
+| 将入库科室（只读） | 确认页科室字段恒显示将入库科室：选中记录 `department_signal.specialty` 的标准中文名（如 nephrology → 肾内科）；字段只读，页面无科室编辑入口；查询表单科室仅作检索提示 |
+| mismatch 勾选闸门 | 候选带 `department_mismatch` 时保存前须勾选「已人工核对科室」；未勾选提交返回 `department_confirmation_required`，页面态与勾选项不丢失、库不写；勾选后 BFF 带 `confirm_department_checked` 重提，放行仍取信号侧 |
+| 无信号阻断 | 候选无 `department_signal.specialty` 时保存被 `DEPARTMENT_SIGNAL_MISSING` 阻断；页面展示阻断提示并引导换检索条件重查或人工核实；不提供「跳过科室继续保存」入口 |
+| 文案 | 全部走 i18n message catalog（§3、F-WEB-046），禁止组件硬编码；闸门与阻断提示新增键随 feature-12 一并入库（en / zh-CN） |
 
-实现落点：确认向导组件（`apps/web/src/app/twins` 新增/确认流程）与 BFF `/api/twins/confirm` 响应透传；规格见 [app-function-spec F-WEB-047](./app-function-spec.md)、故事见 [app-stories US-WEB-004 后两场景](./app-stories.md)、上游契约见 [mcp2-design §13](../mcp2.0/mcp2-design.md)。
+**科室不可编辑为硬规则**：查询表单科室只影响检索召回，不进入确认页可编辑区，也不随保存提交；入库科室唯一来源是选中记录的信号专科（[mcp2-design §13.6](../mcp2.0/mcp2-design.md)）。
+
+实现落点：确认向导组件（`apps/web/src/app/twins` 新增/确认流程）与 BFF `/api/twins/confirm` 响应透传；规格见 [app-function-spec F-WEB-047](./app-function-spec.md)、故事见 [app-stories US-WEB-004 增补场景](./app-stories.md)、上游契约见 [mcp2-design §13](../mcp2.0/mcp2-design.md) 与 [§13.6](../mcp2.0/mcp2-design.md)。

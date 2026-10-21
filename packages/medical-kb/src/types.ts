@@ -82,6 +82,21 @@ export const RagCoverageSchema = z.object({
 export type RagChunk = z.infer<typeof RagChunkSchema>;
 export type RagCoverage = z.infer<typeof RagCoverageSchema>;
 
+/** 合规库覆盖信号（MKB2-03 / F-RAG-030；权威以 ingest_manifest 为准，不扫 Qdrant、不写 Twin） */
+export const RagComplianceCoverageSchema = z.object({
+  authorities: z.array(
+    z.object({
+      authority: z.string(),
+      version: z.string(),
+      chunk_count: z.number().int().nonnegative(),
+      as_of: z.string(),
+    }),
+  ),
+  status: z.enum(["ready", "sparse"]),
+});
+
+export type RagComplianceCoverage = z.infer<typeof RagComplianceCoverageSchema>;
+
 export const ComplianceSeedChunkSchema = z.object({
   clause_id: z.string().min(1),
   text: z.string().min(1),

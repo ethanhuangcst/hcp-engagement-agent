@@ -1,6 +1,6 @@
 # 对外 MCP 2.0 测试说明
 
-> as_of：2026-10-21（新增 §8 feature-02 list_hcp 检查；新增 §9 feature-03 add_hcp 检查，含写前查重 ADR-009；OGT-1 增补：§6 库外检索与令牌缓存、§9 改为候选令牌入参，ADR-010；医院/科室过滤包含匹配，ADR-011；ADR-012 数据面口径：§3 Sprint 门禁 2/3 改 `retrieve_academic` / `retrieve_compliance`；2026-10-20 ADR-013 + Sprint 3 并入：§3 门禁合并为 Sprint 2、§9 增异步刷新触发检查；2026-10-21 新增 §10 feature-01 get_hcp_insights 检查；新增 §11 feature-02 retrieve_academic 检查与 §12 feature-04 retrieve_compliance 检查；补记 §13 feature-07 知识覆盖对齐检查，ADR-014；新增 §14 feature-11 科室来源标注与预灌映射预览检查，MCP2-09 / DEF-005）  
+> as_of：2026-10-21（新增 §8 feature-02 list_hcp 检查；新增 §9 feature-03 add_hcp 检查，含写前查重 ADR-009；OGT-1 增补：§6 库外检索与令牌缓存、§9 改为候选令牌入参，ADR-010；医院/科室过滤包含匹配，ADR-011；ADR-012 数据面口径：§3 Sprint 门禁 2/3 改 `retrieve_academic` / `retrieve_compliance`；2026-10-20 ADR-013 + Sprint 3 并入：§3 门禁合并为 Sprint 2、§9 增异步刷新触发检查；2026-10-21 新增 §10 feature-01 get_hcp_insights 检查；新增 §11 feature-02 retrieve_academic 检查与 §12 feature-04 retrieve_compliance 检查；补记 §13 feature-07 知识覆盖对齐检查，ADR-014；新增 §14 feature-11 科室来源标注与预灌映射预览检查，MCP2-09 / DEF-005；2026-10-21 新增 §15 feature-12 入库科室以选中记录信号专科为准检查并修订 §14 降级措辞，MCP2-10 / DEF-006，D2；同日 §14 增补 B+ 卡片文案契约行，B+ 设计；同日 §12 增补 coverage 契约断言行，MKB2-03；同日 feature-08 开工准备批次：新增 §16 `ingest_academic` / `get_ingest_status` 检查（MCP2-08，ADR-014），§1 契约行改为全部对外工具）  
 > 基线：项目 [7.test-strategy.md](../spec1.0/7.test-strategy.md)（common-test-strategy 更严者胜）  
 > 故事：[mcp2-stories.md](./mcp2-stories.md)
 
@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | 单元 | tool handler 入参校验、错误码映射 | 无网络 |
 | 集成 | handler → `@hca/db` / Agent（fixture DB、mock LLM） | 默认 CI |
-| 契约 | 六 tool 的 JSON Schema 与 product-backlog 一致 | 快照或 schema 测试 |
+| 契约 | 全部对外工具的 JSON Schema 与 product-backlog 一致 | 快照或 schema 测试 |
 | E2E（可选） | 真实 MCP Client 经 Streamable HTTP 调 tool | 本地或 nightly |
 
 **非范围**：对内 `hcp-twin-mcp` Playwright 采集；浏览器 E2E（仍走 Web ATDD）。
@@ -180,7 +180,7 @@ npm run test -w @hca/hcp-engagement-agent
 
 | 层 | 用例 | 通过 | 失败或空 |
 | --- | --- | --- | --- |
-| 契约 | Vitest + MCP `Client` / `InMemoryTransport`，注入 `GetTwinFn` / `RetrieveComplianceFn` | tools/list 含 `retrieve_compliance`，`readOnlyHint: true`、`openWorldHint: false`；`hcp_id` 必填 schema 且 properties 不含 `tenant_id`、`jurisdiction` 键；description 含「不是预审判定」「不替代正式 MLR」；只传 `hcp_id` → 注入项收到默认合规 query 且未收到 `tenant_id`；调用方传 `query` / `interaction_type` → 原样透传；注入返回 chunks → 原样返回 | 注入 `getTwin` 返回 null 或 `_agent_general` → `NOT_FOUND`；缺 `hcp_id` → SDK schema 层拦截；注入抛 RAG 错误 → `INTERNAL_ERROR` 且正文无 `stack`、无连接串 |
+| 契约 | Vitest + MCP `Client` / `InMemoryTransport`，注入 `GetTwinFn` / `RetrieveComplianceFn` | tools/list 含 `retrieve_compliance`，`readOnlyHint: true`、`openWorldHint: false`；`hcp_id` 必填 schema 且 properties 不含 `tenant_id`、`jurisdiction` 键；description 含「不是预审判定」「不替代正式 MLR」；只传 `hcp_id` → 注入项收到默认合规 query 且未收到 `tenant_id`；调用方传 `query` / `interaction_type` → 原样透传；注入返回 chunks → 原样返回；MKB2-03 增补：注入返回 `coverage.status: "sparse"` → 返回体 `coverage` 原样透出且附建议灌种的 `repair_hint`；注入返回 `ready` → 无补种提示；注入返回无 `coverage` → 返回体无 `coverage` 键 | 注入 `getTwin` 返回 null 或 `_agent_general` → `NOT_FOUND`；缺 `hcp_id` → SDK schema 层拦截；注入抛 RAG 错误 → `INTERNAL_ERROR` 且正文无 `stack`、无连接串 |
 | 集成（可选） | 真实 MCP Client，本地 `http://localhost:3300/mcp` + 合规全局种子 | 朱同玉 fixture 只传 `hcp_id`：返回 chunks 每条含 `clause_id` / `authority` / `version` 且 `tenant_id` 均为空 | 不进默认 CI；禁止对生产环境跑本项 |
 
 命令：
@@ -222,8 +222,9 @@ npm run typecheck -w apps/web 2>/dev/null || npm run typecheck
 | 层 | 用例 | 通过 | 失败或空 |
 | --- | --- | --- | --- |
 | 契约（候选透传） | Vitest + MCP `Client` / `InMemoryTransport`，注入库外检索返回带新字段的候选 | `query_hcp` include_external 候选含 `department_provenance` / `department_signal` / `department_mismatch` 三字段；candidate-store 缓存保存新字段 | 注入候选无新字段 → 透传不报错、旧字段照常返回（向后兼容） |
-| 契约（映射预览） | 注入 `AddHcpFn` / `TriggerIngestFn`，候选科室可归一化 | `add_hcp` 返回体含 `specialty_preview[]`（input / specialty / matched）；预览与 `knowledge_jobs` 预灌专科同源一致（同一 `resolveSpecialtiesForIngest` 结果） | 候选科室映射不到受控专科 → 该行 `matched: false` 附跳过提示；不触发预灌、`add_hcp` 仍成功返回 |
-| 契约（降级） | 注入候选无 `department_signal` | `query_hcp` 与 `add_hcp` 均不报错；确认流程不阻塞 | 无 signal 时无 mismatch 字段（不误报） |
+| 契约（映射预览） | 注入 `AddHcpFn` / `TriggerIngestFn`，候选科室可归一化 | `add_hcp` 返回体含 `specialty_preview[]`（input / specialty / matched）；预览与 `knowledge_jobs` 预灌专科同源一致（同一 `resolveSpecialtiesForIngest` 结果） | 候选科室映射不到受控专科 → 该行 `matched: false` 附跳过提示；不触发预灌（MCP2-10 增补后此形态仅见于非科室行；科室行以入库科室为输入，见 §15） |
+| 契约（降级） | 注入候选无 `department_signal` | `query_hcp` 不报错、透传不阻塞 | 无 signal 时无 mismatch 字段（不误报）；确认侧被 `DEPARTMENT_SIGNAL_MISSING` 阻断（见 §15），不降级为原样入库 |
+| 契约（B+ 卡片文案） | Vitest，注入带 `department_signal.topics` 与 mismatch 的候选 | `query_hcp` 文本卡片逐条列出主题词（前 8，作者级+论文级合并去重）与「科室判断」：不一致时输出「公开数据指向 X，与你输入的 Y 不一致」及问句「是否按 X 入库？确认后在 add_hcp 传 confirm_department_checked: true」；一致时输出「与输入一致；保存后档案科室为 X」 | 无信号候选仍输出「推不出标准科室，保存会被拒绝」 |
 | 集成（live 用例） | 真实 MCP Client，本地 `:3300`；twin-mcp `:3200` live 模式 | 陆林输入「神经科」（归一化 neurology，数据源信号 psychiatry）→ 候选带 mismatch 提示；确认可继续、`specialty_preview` 如实展示映射 | 不进默认 CI；禁止对生产环境跑本项 |
 
 命令：
@@ -231,4 +232,50 @@ npm run typecheck -w apps/web 2>/dev/null || npm run typecheck
 ```bash
 npm run test -w @hca/hcp-engagement-mcp
 npm run test -w @hca/hcp-twin-mcp
+```
+
+## 15. feature-12 检查（入库科室以选中记录信号专科为准，MCP2-10 / DEF-006，D2）
+
+对应 [mcp2-stories.md](./mcp2-stories.md) US-MCP2-007 增补场景、[mcp2-design.md](./mcp2-design.md) §13.6、[DEF-006](../issues-log.md)。金字塔约 70 / 20 / 10；无浏览器层（Web 展示归 app 模块故事验收）。
+
+行为断言归属：受控专科键 → 标准中文名映射的单元归 `@hca/medical-kb`（`specialtyDisplayName`）；三分支闸门与入库科室改写归 `packages/hcp-engagement-mcp` 对外 handler 契约；Web 确认页归 app 模块故事验收（[US-WEB-004 增补](../app/app-stories.md)、[app-design §6](../app/app-design.md)）。
+
+| 层 | 用例 | 通过 | 失败或空 |
+| --- | --- | --- | --- |
+| 单元（中文名映射） | Vitest，`packages/medical-kb` `specialty.test.ts` 扩展 | `specialtyDisplayName("nephrology")` 为「肾内科」、`specialtyDisplayName("psychiatry")` 为「精神科」；28 受控专科键全覆盖非空 | 未知键 → 返回 undefined（不猜测、不回退英文键原文） |
+| 契约（记录侧入库） | Vitest + MCP `Client` / `InMemoryTransport`，注入候选 `department_signal.specialty` 为 nephrology、输入科室「神内科」 | `add_hcp` 写库 `twin.identity.department` 为「肾内科」（信号专科中文名，不存输入原文）；`tags.evidence_refs` 含 `department_signal`；`specialty_preview` department 行 input 为「肾内科」且 `matched: true` | — |
+| 契约（mismatch 闸门） | 注入 mismatch 候选（输入 neurology、信号 psychiatry） | 未传 `confirm_department_checked` → 非错误信封 `status: "department_confirmation_required"` 附 mismatch 与 repair_hint，不写库、令牌不作废；补传 `true` 重试 → 成功，科室「精神科」（信号侧），`evidence_refs` 含 `department_signal` 与 `department_checked` | 闸门分支不触发 build、不预灌 |
+| 契约（无信号阻断） | 注入候选无 `department_signal.specialty` | `VALIDATION_ERROR` 且 `code: "DEPARTMENT_SIGNAL_MISSING"`，repair_hint 提示重查或人工核实；不写库、令牌不作废 | 传 `confirm_department_checked: true` 也阻断（无信号非 mismatch，人工确认不适用） |
+| 集成（live 用例） | 真实 MCP Client，本地 `:3300`；twin-mcp `:3200` live 模式 | 侯凡凡「神内科」（OpenAlex 概念无 nephrology 信号）→ 确认被 `DEPARTMENT_SIGNAL_MISSING` 阻断；王拥军「神经病」mismatch → 闸门先拦、补参后入库科室为信号侧中文名 | 不进默认 CI；禁止对生产环境跑本项 |
+
+命令：
+
+```bash
+npm run test -w @hca/medical-kb
+npm run test -w @hca/hcp-engagement-mcp
+```
+
+## 16. feature-08 检查（`ingest_academic` / `get_ingest_status`，MCP2-08，ADR-014）
+
+对应 [mcp2-stories.md](./mcp2-stories.md) US-MCP2-008、[mcp2-design.md](./mcp2-design.md) §14、[pb-11](../product-backlog.md#pb-11)。金字塔约 70 / 20 / 10；无浏览器层（MCP-only，不动 Web）。
+
+行为断言归属：`ingestOnDemand` / `getIngestStatus` / `normalizeSpecialty` / coverage 门控与 job 状态机的单元归 `@hca/medical-kb`（[rag 测试计划](../rag/rag-tests.md) 既有覆盖）；本层只测对外 handler 契约（归一化映射、错误信封、注入项接线、注记、sparse 建议语收口）。
+
+| 层 | 用例 | 通过 | 失败或空 |
+| --- | --- | --- | --- |
+| 契约（触发） | Vitest + MCP `Client` / `InMemoryTransport`，注入 `IngestOnDemandFn` 返回 pending job | `ingest_academic` 传受控专科 → `{ job_id, knowledge_status: "pending" }`，立即返回不等待异步完成；`themes` 原样透传注入函数 | — |
+| 契约（别名归一化） | 注入 `IngestOnDemandFn`，传中文别名「肾内科」 | 注入函数收到归一化后的受控键 `nephrology`；返回与 `get_ingest_status` 均以归一化后专科为准 | — |
+| 契约（幂等跳过） | 注入返回 `{ jobId, knowledge_status: "ready" }`（coverage ready） | 工具结果为成功 `knowledge_status: "ready"`，不重复起 job | — |
+| 契约（互斥错误） | 注入抛 `INGEST_IN_PROGRESS`（`details.jobId`） | 错误信封 `code: INGEST_IN_PROGRESS`，`details` 以 snake_case 附 `job_id` 与 `specialty`，`repair_hint` 指向 `get_ingest_status` | — |
+| 契约（校验） | 传无法归一化的 specialty；缺 specialty；`get_ingest_status` 两参皆缺 | 均 `VALIDATION_ERROR`，未创建 job，响应无堆栈 | — |
+| 契约（状态查询） | 注入 `GetIngestStatusFn` | 按 `job_id` 与按 `specialty` 两路径均返回 `status` / `knowledge_status` / 可选 `progress` / `error`；job 不存在或专科无 job 记录 → `NOT_FOUND` 附 repair_hint | — |
+| 契约（注记与不写 Twin） | tools/list 快照 + handler 断言 | `ingest_academic` `readOnlyHint: false`、`openWorldHint: true`；`get_ingest_status` `readOnlyHint: true`、`openWorldHint: false`；两工具不写 `hcp_twins`、不触发 build | — |
+| 契约（sparse 建议语收口） | `retrieve_academic` sparse 用例复验（§11 既有） | sparse 时 `repair_hint` 点名 `ingest_academic`（§12 分界收口，归本 SBI） | — |
+| 集成（live 用例） | 真实 MCP Client，本地 `:3300` + Qdrant + MySQL 测试库 | 对 ready 专科（如 kidney_transplant）调 `ingest_academic` → 幂等跳过返回 ready；对清库后或未覆盖受控专科触发 → job 经 `get_ingest_status` 查到终态 → `retrieve_academic` 该专科 `coverage.status` 转 `ready` | 不进默认 CI；禁止对生产环境跑本项 |
+
+命令：
+
+```bash
+npm run test -w @hca/hcp-engagement-mcp
+npm run test -w @hca/medical-kb
 ```

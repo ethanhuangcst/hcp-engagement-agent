@@ -18,15 +18,33 @@ import { mcpError, type HcpInsights, type VirtualTwin } from "@hca/domain";
 import {
   ensureDoingNow as defaultEnsureDoingNow,
   retrieveAcademicForAgent as defaultRetrieveAcademic,
+  retrieveComplianceForAgent as defaultRetrieveCompliance,
   triggerKnowledgeIngest as defaultTriggerKnowledgeIngest,
+  ingestOnDemand as defaultIngestOnDemand,
+  getIngestStatus as defaultGetIngestStatus,
   resolveSpecialtiesForIngest,
   resolveSpecialtyPreview,
+  specialtyDisplayName,
+  tryNormalizeSpecialty,
   AGENT_GENERAL_HCP_ID,
   type EnsureDoingNowResult,
   type KnowledgeJobRef,
   type RagChunk,
   type RagCoverage,
+  type RagComplianceCoverage,
 } from "@hca/hcp-engagement-agent";
+import {
+  formatAddHcpSavedForDisplay,
+  formatDepartmentConfirmationForDisplay,
+  formatDuplicateConfirmationForDisplay,
+  formatListHcpForDisplay,
+  formatMcpErrorForDisplay,
+} from "./mcp-display.js";
+import {
+  formatQueryHcpForDisplay,
+  type QueryHcpExternalItem,
+  type QueryHcpResultBody,
+} from "./query-hcp-format.js";
 import {
   CandidateStore,
   type CandidatePayload,
@@ -94,6 +112,16 @@ export type RetrieveAcademicFn = (input: {
   themes?: string[];
 }) => Promise<{ chunks: RagChunk[]; coverage?: RagCoverage }>;
 
+/** ADR-012 / MKB2-03：retrieve_compliance 合规检索（缺省 @hca/hcp-engagement-agent retrieveComplianceForAgent） */
+export type RetrieveComplianceFn = (input: {
+  query: string;
+  interaction_type?: string;
+}) => Promise<{
+  chunks: RagChunk[];
+  coverage?: RagComplianceCoverage;
+  repair_hint?: string;
+}>;
+
 /** ADR-014：add_hcp 预灌触发（缺省 @hca/hcp-engagement-agent triggerKnowledgeIngest） */
 export type TriggerIngestFn = (input: {
   specialties?: string[];
@@ -101,6 +129,29 @@ export type TriggerIngestFn = (input: {
   department?: string;
   hcpId?: string;
 }) => Promise<KnowledgeJobRef[]>;
+
+/** MCP2-08（ADR-014 决策 3）：ingest_academic 按受控专科显式灌注（缺省 @hca/hcp-engagement-agent ingestOnDemand） */
+export type IngestAcademicFn = (input: {
+  specialty: string;
+  themes?: string[];
+}) => Promise<{
+  jobId: string;
+  knowledge_status: "ready" | "sparse" | "pending";
+}>;
+
+/** MCP2-08：get_ingest_status 按 job_id 或 specialty 查进度（缺省 @hca/hcp-engagement-agent getIngestStatus） */
+export type GetIngestStatusFn = (input: {
+  job_id?: string;
+  specialty?: string;
+}) => Promise<{
+  jobId: string;
+  specialty?: string;
+  status: string;
+  knowledge_status: string;
+  progress?: number;
+  error?: unknown;
+  chunk_count?: number;
+}>;
 
 function stubNotImplemented(tool: string, feature: string) {
   const error = mcpError(
@@ -114,7 +165,7 @@ function stubNotImplemented(tool: string, feature: string) {
   );
   return {
     isError: true as const,
-    content: [{ type: "text" as const, text: JSON.stringify({ error }) }],
+    content: [{ type: "text" as const, text: formatMcpErrorForDisplay(error) }],
     structuredContent: { error },
   };
 }
@@ -122,14 +173,19 @@ function stubNotImplemented(tool: string, feature: string) {
 function mcpErrorResult(error: ReturnType<typeof mcpError>) {
   return {
     isError: true as const,
-    content: [{ type: "text" as const, text: JSON.stringify({ error }) }],
+    content: [{ type: "text" as const, text: formatMcpErrorForDisplay(error) }],
     structuredContent: { error },
   };
 }
 
-function textResult(body: Record<string, unknown>) {
+function textResult(body: Record<string, unknown>, displayText?: string) {
   return {
-    content: [{ type: "text" as const, text: JSON.stringify(body) }],
+    content: [
+      {
+        type: "text" as const,
+        text: displayText ?? JSON.stringify(body),
+      },
+    ],
     structuredContent: body,
   };
 }
@@ -233,8 +289,14 @@ export type CreateMcpServerOptions = {
   ensureDoingNow?: EnsureDoingNowFn;
   /** ADR-012：测试注入；缺省走 @hca/hcp-engagement-agent retrieveAcademicForAgent */
   retrieveAcademic?: RetrieveAcademicFn;
+  /** ADR-012 / MKB2-03：测试注入；缺省走 @hca/hcp-engagement-agent retrieveComplianceForAgent */
+  retrieveCompliance?: RetrieveComplianceFn;
   /** ADR-014：测试注入；缺省走 @hca/hcp-engagement-agent triggerKnowledgeIngest */
   triggerIngest?: TriggerIngestFn;
+  /** MCP2-08（ADR-014 决策 3）：测试注入；缺省走 @hca/hcp-engagement-agent ingestOnDemand */
+  ingestOnDemand?: IngestAcademicFn;
+  /** MCP2-08：测试注入；缺省走 @hca/hcp-engagement-agent getIngestStatus */
+  getIngestStatus?: GetIngestStatusFn;
 };
 
 function candidatePayloadOf(c: ResolveCandidateInput): CandidatePayload {
@@ -266,20 +328,27 @@ export function createMcpServer(options?: CreateMcpServerOptions): McpServer {
     options?.ensureDoingNow ?? ((hcpId) => defaultEnsureDoingNow({ hcpId }));
   const runRetrieveAcademic: RetrieveAcademicFn =
     options?.retrieveAcademic ?? ((input) => defaultRetrieveAcademic(input));
+  const runRetrieveCompliance: RetrieveComplianceFn =
+    options?.retrieveCompliance ?? ((input) => defaultRetrieveCompliance(input));
   const runTriggerIngest: TriggerIngestFn =
     options?.triggerIngest ?? ((input) => defaultTriggerKnowledgeIngest(input));
+  const runIngestAcademic: IngestAcademicFn =
+    options?.ingestOnDemand ?? ((input) => defaultIngestOnDemand(input));
+  const runGetIngestStatus: GetIngestStatusFn =
+    options?.getIngestStatus ??
+    ((input) => defaultGetIngestStatus({ jobId: input.job_id, specialty: input.specialty }));
   const tokens = options?.candidateStore ?? new CandidateStore();
 
   const server = new McpServer(
     { name: "hcp-engagement-mcp", version: "0.1.0" },
-    { instructions: "HCP engagement 对外 MCP 2.0。提供 list_hcp、query_hcp、add_hcp、get_hcp_insights、retrieve_academic 五个工具。" },
+    { instructions: "HCP engagement 对外 MCP 2.0。提供 list_hcp、query_hcp、add_hcp、get_hcp_insights、retrieve_academic、retrieve_compliance、ingest_academic、get_ingest_status 八个工具。" },
   );
 
   server.registerTool(
     "list_hcp",
     {
       description:
-        "列出库内全部 HCP（不含 _agent_general），无分页。返回 {count, items}。",
+        "列出库内全部 HCP（不含 _agent_general），无分页。返回：content[0].text 为编号列表摘要（姓名 · 医院 · 科室 · 编号）；structuredContent 为完整 JSON {count, items}。",
       inputSchema: {},
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
@@ -287,7 +356,7 @@ export function createMcpServer(options?: CreateMcpServerOptions): McpServer {
       try {
         const items = await runList();
         const body = { count: items.length, items };
-        return textResult(body);
+        return textResult(body, formatListHcpForDisplay(body));
       } catch {
         return mcpErrorResult(
           mcpError("INTERNAL_ERROR", "list_hcp 读取列表失败", {
@@ -303,7 +372,7 @@ export function createMcpServer(options?: CreateMcpServerOptions): McpServer {
     "query_hcp",
     {
       description:
-        "按 hcp_id 或 name 查询单个 HCP（至少传其一），可用 hospital/department/city 消歧。include_external 为 true 时同步检索库外候选并签发 candidate_id（约 30 分钟有效，仅用于 add_hcp）。",
+        "按 hcp_id 或 name 查询 HCP（至少传其一），可用 hospital/department/city 消歧。include_external 为 true 时一并检索库外候选并签发 candidate_id（约 30 分钟有效，供 add_hcp）。返回：content[0].text 为编号列表摘要（库内/库外分开展示）；structuredContent 为完整 JSON（含 VirtualTwin 与 candidate 字段）。",
       inputSchema: {
         hcp_id: z.string().optional().describe("HCP 主键 ID"),
         name: z
@@ -349,15 +418,10 @@ export function createMcpServer(options?: CreateMcpServerOptions): McpServer {
             }),
           );
         }
-        const body: {
-          count: number;
-          items: VirtualTwin[];
-          external?: {
-            count: number;
-            items: unknown[];
-            notice?: string;
-          };
-        } = { count: result.items.length, items: result.items };
+        const body: QueryHcpResultBody = {
+          count: result.items.length,
+          items: result.items,
+        };
 
         if (args.include_external) {
           const canResolve =
@@ -428,7 +492,10 @@ export function createMcpServer(options?: CreateMcpServerOptions): McpServer {
                     : undefined,
                 };
               });
-              body.external = { count: externalItems.length, items: externalItems };
+              body.external = {
+                count: externalItems.length,
+                items: externalItems as QueryHcpExternalItem[],
+              };
             } catch {
               body.external = {
                 count: 0,
@@ -438,7 +505,7 @@ export function createMcpServer(options?: CreateMcpServerOptions): McpServer {
             }
           }
         }
-        return textResult(body);
+        return textResult(body, formatQueryHcpForDisplay(body));
       } catch {
         return mcpErrorResult(
           mcpError("INTERNAL_ERROR", "query_hcp 查询失败", {
@@ -454,7 +521,7 @@ export function createMcpServer(options?: CreateMcpServerOptions): McpServer {
     "add_hcp",
     {
       description:
-        "新增 HCP 档案（写库、非幂等；写库成功后异步触发 incremental build）。仅接受 query_hcp 检出、经人选认的库外候选：传 candidate_id（必填，约 30 分钟有效，写入成功即作废）；可选 confirm_not_duplicate 确认疑似同人确非重复。身份字段由候选载荷生成，不接受直传。写库成功时返回 refresh.run_id 与 specialty_preview（科室 → 将预灌专科映射预览，与实际预灌同源；matched 为 false 的科室附 hint 且预灌跳过），可用 Web 构建进度页或对内 get_twin_status 查询进度；触发失败不影响新增结果（返回体不含 refresh / knowledge_jobs 键）。",
+        "新增 HCP 档案（写库、非幂等；写库成功后异步触发 incremental build）。仅接受 query_hcp 检出、经人选认的库外候选：传 candidate_id（必填，约 30 分钟有效，写入成功即作废）；可选 confirm_not_duplicate 确认疑似同人确非重复。身份字段由候选载荷生成，不接受直传；入库科室取选中记录信号专科（department_signal.specialty）的标准中文名，不存调用方输入原文：信号与输入不一致时候选带 department_mismatch，须传 confirm_department_checked: true 人工确认后放行（未传时返回 status: department_confirmation_required，不写库、令牌不作废；放行后仍取信号侧）；记录无信号专科时返回 DEPARTMENT_SIGNAL_MISSING 阻断保存（换检索条件重查或人工核实）。写库成功时返回 refresh.run_id 与 specialty_preview（科室 → 将预灌专科映射预览，与实际预灌同源、与入库科室一致；matched 为 false 的非科室行附 hint 且预灌跳过），可用 Web 构建进度页或对内 get_twin_status 查询进度；触发失败不影响新增结果（返回体不含 refresh / knowledge_jobs 键）。返回：content[0].text 为结果摘要（已保存的档案信息，或未保存的原因与下一步）；structuredContent 为完整 JSON。",
       inputSchema: {
         candidate_id: z
           .string()
@@ -465,6 +532,12 @@ export function createMcpServer(options?: CreateMcpServerOptions): McpServer {
           .optional()
           .describe(
             "上一次返回 confirmation_required 且人工确认非重复时置 true 强制写入",
+          ),
+        confirm_department_checked: z
+          .boolean()
+          .optional()
+          .describe(
+            "候选带 department_mismatch（输入与数据源信号不一致）且人工已核对科室时置 true 放行；入库科室仍取信号侧",
           ),
       },
       annotations: { readOnlyHint: false, openWorldHint: false },
@@ -479,17 +552,55 @@ export function createMcpServer(options?: CreateMcpServerOptions): McpServer {
           }),
         );
       }
+      /**
+       * feature-12（MCP2-10 / DEF-006，D2）三分支闸门（mcp2-design §13.6）：
+       * ① 无信号专科 → VALIDATION_ERROR / DEPARTMENT_SIGNAL_MISSING，不写库、令牌不作废；
+       * ② mismatch 且未 confirm_department_checked → 非错误信封 department_confirmation_required；
+       * ③ 放行 → 入库科室 = 信号专科标准中文名，来源留痕落 evidence_refs。
+       */
+      const signalKey = payload.department_signal?.specialty?.trim();
+      const ingestDepartment = signalKey ? specialtyDisplayName(signalKey) : undefined;
+      if (!ingestDepartment) {
+        return mcpErrorResult(
+          mcpError(
+            "VALIDATION_ERROR",
+            "选中记录无信号专科（department_signal.specialty 缺失或无法归一化），阻断保存",
+            {
+              repair_hint:
+                "换检索条件重新 query_hcp（include_external: true）检出带科室信号的候选，或人工核实该医生科室后再试",
+              details: { code: "DEPARTMENT_SIGNAL_MISSING" },
+              retryable: false,
+            },
+          ),
+        );
+      }
+      if (payload.department_mismatch && !args.confirm_department_checked) {
+        const confirmationBody = {
+          status: "department_confirmation_required",
+          department_mismatch: payload.department_mismatch,
+          repair_hint:
+            "输入科室与数据源信号不一致；人工核对后重试并传 confirm_department_checked: true（入库科室将取数据源信号侧）",
+        } as const;
+        return textResult(
+          confirmationBody,
+          formatDepartmentConfirmationForDisplay(confirmationBody),
+        );
+      }
       try {
         const result = await runAdd({
           hcp_id: payload.hcp_id,
           name_zh: payload.name_zh,
           name_en: payload.name_en ?? null,
           hospital: payload.hospital,
-          department: payload.department,
+          department: ingestDepartment,
           title: payload.title ?? null,
           city: payload.city,
           author_ids: payload.author_ids,
           confirm_not_duplicate: args.confirm_not_duplicate,
+          extra_evidence_refs: [
+            "department_signal",
+            ...(payload.department_mismatch ? ["department_checked"] : []),
+          ],
         });
         if (result.status === "invalid") {
           return mcpErrorResult(
@@ -500,11 +611,15 @@ export function createMcpServer(options?: CreateMcpServerOptions): McpServer {
           );
         }
         if (result.status === "confirmation_required") {
-          return textResult({
+          const duplicateBody = {
             status: result.status,
             possible_duplicates: result.possible_duplicates,
             truncated: result.truncated,
-          });
+          };
+          return textResult(
+            duplicateBody,
+            formatDuplicateConfirmationForDisplay(duplicateBody),
+          );
         }
         tokens.invalidate(args.candidate_id);
         /** ADR-013：写库成功后异步触发对内 build；触发失败不影响新增结果 */
@@ -559,7 +674,7 @@ export function createMcpServer(options?: CreateMcpServerOptions): McpServer {
             ? {}
             : { hint: "无法映射到受控专科，知识预灌将跳过该科室" }),
         }));
-        return textResult({
+        const savedBody = {
           twin: result.twin,
           hcp_id: result.hcp_id,
           ...(refresh ? { refresh } : {}),
@@ -567,7 +682,11 @@ export function createMcpServer(options?: CreateMcpServerOptions): McpServer {
             ? { knowledge_jobs: knowledgeJobs }
             : {}),
           ...(previewRows.length > 0 ? { specialty_preview: previewRows } : {}),
-        });
+        };
+        return textResult(
+          savedBody,
+          formatAddHcpSavedForDisplay(savedBody),
+        );
       } catch {
         return mcpErrorResult(
           mcpError("INTERNAL_ERROR", "add_hcp 写库失败", {
@@ -698,8 +817,7 @@ export function createMcpServer(options?: CreateMcpServerOptions): McpServer {
           ...(coverage ? { coverage } : {}),
           ...(sparse
             ? {
-                repair_hint:
-                  "知识库该专科覆盖不足，建议补种后重试（Web 确认保存或 MCP2-08 ingest_academic）",
+                repair_hint: "知识库该专科覆盖不足，调用 ingest_academic 补种后重试",
               }
             : {}),
         });
@@ -715,6 +833,251 @@ export function createMcpServer(options?: CreateMcpServerOptions): McpServer {
         return mcpErrorResult(
           mcpError("INTERNAL_ERROR", "retrieve_academic 检索失败", {
             repair_hint: "检查知识库连通性（Qdrant 与嵌入服务）后重试",
+            retryable: true,
+          }),
+        );
+      }
+    },
+  );
+
+  server.registerTool(
+    "retrieve_compliance",
+    {
+      description:
+        "按 HCP 检索合规知识库条款引用（返回 { chunks, coverage? }，每条含 clause_id、authority、version 等引用字段）。query、interaction_type 可选：只传 hcp_id 时按默认合规检索词组装。本工具只返回条款引用，不是预审判定、不替代正式 MLR。hcp_id 不存在或为通用智能体编号时返回 NOT_FOUND；知识库不可用时返回 INTERNAL_ERROR。",
+      inputSchema: {
+        hcp_id: z.string().min(1).describe("HCP 主键 ID"),
+        query: z.string().optional().describe("检索词；缺省用默认合规检索词"),
+        interaction_type: z
+          .string()
+          .optional()
+          .describe("互动类型，透传底层检索"),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async (args) => {
+      try {
+        const twin = await runGetTwin(args.hcp_id);
+        if (!twin || twin.meta.hcp_id === AGENT_GENERAL_HCP_ID) {
+          return mcpErrorResult(
+            mcpError("NOT_FOUND", "未找到该编号的 HCP", {
+              repair_hint: "先用 query_hcp 按 name 或 hcp_id 确认编号后重试",
+              retryable: false,
+            }),
+          );
+        }
+        /** query 组装（§11）：调用方优先，否则默认合规检索词（与 propose.ts 一致） */
+        const query =
+          args.query?.trim() ||
+          "医药代表 学术推广 机构同意 备案 科室会 RDPAC 合规";
+        /** ADR-012：tenant_id 不入参不透传，底层缺省仅返回全局种子 */
+        const result = await runRetrieveCompliance({
+          query,
+          interaction_type: args.interaction_type,
+        });
+        /** MKB2-03：coverage 透传；sparse 附 repair_hint 建议灌种（不写库、不内联补种） */
+        const coverage = result.coverage;
+        const sparse = coverage?.status === "sparse";
+        return textResult({
+          chunks: result.chunks,
+          ...(coverage ? { coverage } : {}),
+          ...(sparse || result.repair_hint
+            ? {
+                repair_hint:
+                  result.repair_hint ??
+                  "合规知识库覆盖不足，建议运维 seed_compliance 灌种后重试",
+              }
+            : {}),
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(
+          JSON.stringify({
+            event: "retrieve_compliance_failed",
+            hcp_id: args.hcp_id,
+            message,
+          }),
+        );
+        return mcpErrorResult(
+          mcpError("INTERNAL_ERROR", "retrieve_compliance 检索失败", {
+            repair_hint: "检查知识库连通性（Qdrant 与嵌入服务）后重试",
+            retryable: true,
+          }),
+        );
+      }
+    },
+  );
+
+  server.registerTool(
+    "ingest_academic",
+    {
+      description:
+        "按受控专科显式触发学术知识灌注（ADR-014）。specialty 必填，接受受控专科键或中英文别名（服务端归一化，如 肾内科 → nephrology）；themes 可选，透传底层用于聚焦拉取。覆盖已 ready 时幂等跳过（返回 knowledge_status: ready，不重复拉取）；同专科已有进行中 job 时返回 INGEST_IN_PROGRESS（details 附进行中 job_id）。成功立即返回 { job_id, knowledge_status }（pending 或 ready），不等待公开源拉取完成；进度用 get_ingest_status 查询。本工具写知识库语料与 job 记录，不写任何 HCP 分身。specialty 无法归一化或缺失时返回 VALIDATION_ERROR。",
+      inputSchema: {
+        specialty: z
+          .string()
+          .min(1)
+          .describe("受控专科键或其中英文别名，如 kidney_transplant / 肾移植 / 肾内科"),
+        themes: z
+          .array(z.string())
+          .optional()
+          .describe("主题过滤，透传底层灌注聚焦拉取"),
+      },
+      annotations: { readOnlyHint: false, openWorldHint: true },
+    },
+    async (args) => {
+      const specialty = tryNormalizeSpecialty(args.specialty);
+      if (!specialty) {
+        return mcpErrorResult(
+          mcpError("VALIDATION_ERROR", "specialty 无法归一化到受控专科", {
+            repair_hint:
+              "传入受控专科键或已知别名（如 kidney_transplant / 肾移植 / 肾内科）后重试",
+            retryable: false,
+          }),
+        );
+      }
+      try {
+        const result = await runIngestAcademic({
+          specialty,
+          themes: args.themes,
+        });
+        return textResult(
+          { job_id: result.jobId, knowledge_status: result.knowledge_status },
+          result.knowledge_status === "ready"
+            ? `该专科覆盖已 ready，幂等跳过（最近 job：${result.jobId}），无需重复灌注`
+            : `已接受灌注请求：job ${result.jobId}（knowledge_status: ${result.knowledge_status}）；用 get_ingest_status 查进度`,
+        );
+      } catch (err) {
+        const code = (err as { code?: string }).code;
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(
+          JSON.stringify({
+            event: "ingest_academic_failed",
+            specialty: args.specialty,
+            message,
+          }),
+        );
+        if (code === "INGEST_IN_PROGRESS") {
+          const runningJobId = (err as { details?: { jobId?: unknown } }).details?.jobId;
+          return mcpErrorResult(
+            mcpError("INGEST_IN_PROGRESS", message, {
+              repair_hint: "用 get_ingest_status 查询进行中 job 的进度，或稍后重试",
+              details: { job_id: runningJobId, specialty: args.specialty },
+              retryable: true,
+            }),
+          );
+        }
+        if (code === "VALIDATION_ERROR" || code === "SPECIALTY_UNRESOLVED") {
+          return mcpErrorResult(
+            mcpError("VALIDATION_ERROR", "specialty 无法归一化到受控专科", {
+              repair_hint:
+                "传入受控专科键或已知别名（如 kidney_transplant / 肾移植 / 肾内科）后重试",
+              retryable: false,
+            }),
+          );
+        }
+        return mcpErrorResult(
+          mcpError("INTERNAL_ERROR", "ingest_academic 灌注失败", {
+            repair_hint: "检查知识库连通性（Qdrant 与嵌入服务）后重试",
+            retryable: true,
+          }),
+        );
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_ingest_status",
+    {
+      description:
+        "查询学术知识灌注进度（MCP2-08）。job_id 或 specialty 至少传一：按 job_id 精确查，按 specialty 查最近一次 job。返回 { job_id, specialty?, status, knowledge_status, progress?, error?, chunk_count? }。查询对象不存在（job 不存在、该专科无灌注记录或无法归一化）时返回 NOT_FOUND，repair_hint 建议先调 ingest_academic 取得 job 引用。只读工具，不写库。",
+      inputSchema: {
+        job_id: z.string().optional().describe("灌注 job 主键；与 specialty 至少传一"),
+        specialty: z
+          .string()
+          .optional()
+          .describe("受控专科键或别名；与 job_id 至少传一，查该专科最近一次 job"),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async (args) => {
+      const job_id = args.job_id?.trim() || undefined;
+      const specialtyInput = args.specialty?.trim() || undefined;
+      if (!job_id && !specialtyInput) {
+        return mcpErrorResult(
+          mcpError("VALIDATION_ERROR", "job_id 与 specialty 至少传一", {
+            repair_hint: "传入 ingest_academic 返回的 job_id，或目标受控专科",
+            retryable: false,
+          }),
+        );
+      }
+      const specialty = specialtyInput ? (tryNormalizeSpecialty(specialtyInput) ?? undefined) : undefined;
+      if (specialtyInput && !specialty) {
+        /** 无法归一化的专科不可能有任何 job 记录：对外按 NOT_FOUND 口径 */
+        return mcpErrorResult(
+          mcpError("NOT_FOUND", "该专科无法归一化，没有任何灌注记录", {
+            repair_hint: "先调 ingest_academic 触发灌注取得 job 引用，再查进度",
+            retryable: false,
+          }),
+        );
+      }
+      try {
+        const result = await runGetIngestStatus({
+          job_id,
+          specialty,
+        });
+        if (!result.jobId) {
+          /** 底层 specialty 路径无 job 记录时的合成行：对外按 NOT_FOUND 口径 */
+          return mcpErrorResult(
+            mcpError("NOT_FOUND", "该专科没有灌注 job 记录", {
+              repair_hint: "先调 ingest_academic 触发灌注取得 job 引用，再查进度",
+              retryable: false,
+            }),
+          );
+        }
+        return textResult(
+          {
+            job_id: result.jobId,
+            ...(result.specialty ? { specialty: result.specialty } : {}),
+            status: result.status,
+            knowledge_status: result.knowledge_status,
+            ...(result.progress === undefined ? {} : { progress: result.progress }),
+            ...(result.error === undefined ? {} : { error: result.error }),
+            ...(result.chunk_count === undefined ? {} : { chunk_count: result.chunk_count }),
+          },
+          `灌注 job ${result.jobId}：status ${result.status}（knowledge_status: ${result.knowledge_status}）`,
+        );
+      } catch (err) {
+        const code = (err as { code?: string }).code;
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(
+          JSON.stringify({
+            event: "get_ingest_status_failed",
+            job_id: args.job_id,
+            specialty: args.specialty,
+            message,
+          }),
+        );
+        if (code === "SPECIALTY_UNRESOLVED") {
+          return mcpErrorResult(
+            mcpError("NOT_FOUND", "该专科无法归一化，没有任何灌注记录", {
+              repair_hint: "先调 ingest_academic 触发灌注取得 job 引用，再查进度",
+              retryable: false,
+            }),
+          );
+        }
+        if (code === "VALIDATION_ERROR") {
+          /** 底层「未找到 ingest job」等查询落空：对外为 NOT_FOUND */
+          return mcpErrorResult(
+            mcpError("NOT_FOUND", "未找到该编号的灌注 job", {
+              repair_hint: "先调 ingest_academic 触发灌注取得 job 引用，再查进度",
+              retryable: false,
+            }),
+          );
+        }
+        return mcpErrorResult(
+          mcpError("INTERNAL_ERROR", "get_ingest_status 查询失败", {
+            repair_hint: "检查知识库连通性（MySQL 与 Qdrant）后重试",
             retryable: true,
           }),
         );
