@@ -15,6 +15,16 @@ export {
   retrieveAcademicForAgent,
   retrieveComplianceForAgent,
 } from "./retrieve.js";
+export {
+  resolveSpecialtiesForIngest,
+  resolveSpecialtyPreview,
+  tryNormalizeSpecialty,
+  triggerKnowledgeIngest,
+  DEPARTMENT_PATTERNS,
+  type KnowledgeJobRef,
+  type SpecialtyPreviewRow,
+} from "@hca/medical-kb";
+export type { RagChunk, RagCoverage } from "@hca/medical-kb";
 export { getTwinInsights, slimInsightsForPrompt } from "./insights.js";
 export { proposeOptions, type ProposeOptionsResult } from "./propose.js";
 export { ruleProposeOptions } from "./rule-options.js";

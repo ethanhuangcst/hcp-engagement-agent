@@ -1,6 +1,6 @@
 # hcp-twin-mcp 设计：文献矩阵
 
-> as_of：2026-07-17  
+> as_of：2026-10-21（2026-07-17 首版；2026-10-21 新增 MCP2-09 科室来源标注与数据源对照节，DEF-005）  
 > 准入源见 [`literature-sources.md`](../../knowledge/mcp-hcp-virtual-twin/literature-sources.md)（6 站；已删 ChiCTR）  
 > 详版 / 验证：knowledge `hcp-literature-matrix-tech.md`、`zhu-tongyu-matrix-probe.md`
 
@@ -107,3 +107,27 @@ Stories：[mcp-stories.md](./mcp-stories.md) US-MCP-007 · Tests：[mcp-tests.md
 ### Tests
 
 见 [mcp-tests.md](./mcp-tests.md)；基线 **common-test-strategy** 与 [spec1.0/7.test-strategy.md](../spec1.0/7.test-strategy.md)（更严者胜）。
+
+## MCP2-09 科室来源标注与数据源对照（DEF-005）
+
+> 故事：[US-MCP-002 后三场景](./mcp-stories.md) · 功能：[F-MCP-012 增补](./mcp-function-spec.md) · 测试：[mcp-tests §5](./mcp-tests.md) · 动因：[DEF-005](../issues-log.md)
+
+### 字段
+
+- `ResolveCandidate` 新增 `department_provenance: { origin: "caller_input" | "fixture", verified: false }`；`department` 继续回显调用方输入，不当作已核实身份。live 与 mock 回显路径 `origin` 为 `caller_input`；朱同玉 fixture 路径 `origin` 为 `fixture`（诚实标注样例数据，CI 可断言）。
+- OpenAlex 作者的医学主题词与机构元数据可用时，新增 `department_signal`：主题词原文与归一化后的受控专科键。
+- 两侧专科键不一致时新增 `department_mismatch`：附两侧键值，供确认者对照；不自动改写 `department`。
+
+### 归一化与判定
+
+- 归一化主权在 medical-kb（28 受控专科键）：输入科室走既有 department 正则；OpenAlex 主题词走英文主题到受控专科键的归一化。`hcp-twin-mcp` 以 workspace 依赖导入，不复制映射表（`triggerKnowledgeIngest` 入包同款先例，ADR-014）。
+- mismatch 判定：输入侧与信号侧均归一出非空专科键且两键不同才提示；任一侧不可归一化则降级为仅来源标注，不报错、不阻塞。
+- 数据源信号缺失（OpenAlex 空 concepts 且机构元数据无信号）同降级口径。
+
+### 范围外
+
+- 不自动纠正科室（OpenAlex 无可靠中文科室字段）；不新增对外工具。确认返回的映射预览归对外 MCP：[mcp2-design §13](../mcp2.0/mcp2-design.md)；Web 展示归 [app-stories US-WEB-004](../app/app-stories.md)。
+
+### Tests
+
+见 [mcp-tests.md §5](./mcp-tests.md)。

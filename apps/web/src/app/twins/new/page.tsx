@@ -7,9 +7,25 @@ import { AuthorIdsTable } from "@/components/AuthorIdsTable";
 import { BackNavBar } from "@/components/BackNavBar";
 import { TagBadges } from "@/components/TagBadges";
 import { useHcpContext } from "@/store/hcp-context";
+import { t } from "@/i18n";
 import type { HcpTags } from "@hca/domain";
 
 type Evidence = { kind: string; url?: string };
+
+type DepartmentProvenance = {
+  origin: "caller_input" | "fixture";
+  verified: false;
+};
+
+type DepartmentSignal = {
+  topics: string[];
+  specialty?: string;
+};
+
+type DepartmentMismatch = {
+  input_side: string;
+  signal_side: string;
+};
 
 type PersonCandidate = {
   candidate_id: string;
@@ -22,12 +38,22 @@ type PersonCandidate = {
   confidence: "high" | "medium" | "low" | string;
   match_note: string;
   evidence: Evidence[];
+  department_provenance?: DepartmentProvenance;
+  department_signal?: DepartmentSignal;
+  department_mismatch?: DepartmentMismatch;
   hcpId?: string;
   author_ids_draft?: Record<string, string | null | undefined>;
   tags_draft?: Partial<HcpTags> & {
     hcp_tier?: string;
     role_tags?: string[];
   };
+};
+
+type SpecialtyPreviewRow = {
+  input: string;
+  specialty: string | null;
+  matched: boolean;
+  hint?: string;
 };
 
 type ResolveData = {
@@ -67,6 +93,7 @@ function linkedIdLabels(
 export default function NewTwinPage() {
   const router = useRouter();
   const { setSelected } = useHcpContext();
+  const locale = useHcpContext((s) => s.locale);
   const [name, setName] = useState("");
   const [hospital, setHospital] = useState("");
   const [dept, setDept] = useState("");
@@ -82,6 +109,9 @@ export default function NewTwinPage() {
   const [knowledgeJobs, setKnowledgeJobs] = useState<KnowledgeJob[] | null>(
     null,
   );
+  const [specialtyPreview, setSpecialtyPreview] = useState<
+    SpecialtyPreviewRow[] | null
+  >(null);
   const [savedHcpId, setSavedHcpId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -154,9 +184,14 @@ export default function NewTwinPage() {
       const jobs = Array.isArray(data?.knowledge_jobs)
         ? (data.knowledge_jobs as KnowledgeJob[])
         : [];
-      if (jobs.length > 0) {
+      const preview = Array.isArray(data?.specialty_preview)
+        ? (data.specialty_preview as SpecialtyPreviewRow[])
+        : [];
+      // 有预灌 job 或存在未映射科室（跳过提示）时都留在保存完成页展示（US-WEB-004 F-WEB-047）
+      if (jobs.length > 0 || preview.length > 0) {
         setSavedHcpId(savedId);
-        setKnowledgeJobs(jobs);
+        setKnowledgeJobs(jobs.length > 0 ? jobs : null);
+        setSpecialtyPreview(preview.length > 0 ? preview : null);
         setStep("saved");
         return;
       }
@@ -237,6 +272,27 @@ export default function NewTwinPage() {
                     {c.department}
                     {c.title ? ` · ${c.title}` : ""}
                   </p>
+                  {c.department_provenance ? (
+                    <p className="mt-1 text-xs text-[var(--hca-ink-muted)]">
+                      {t(
+                        locale,
+                        c.department_provenance.origin === "fixture"
+                          ? "newtwin.dept.provenance.fixture"
+                          : "newtwin.dept.provenance.caller_input",
+                      )}
+                    </p>
+                  ) : null}
+                  {c.department_mismatch ? (
+                    <p
+                      className="mt-1 text-xs text-[var(--hca-danger)]"
+                      role="note"
+                    >
+                      {t(locale, "newtwin.dept.mismatch", {
+                        input_side: c.department_mismatch.input_side,
+                        signal_side: c.department_mismatch.signal_side,
+                      })}
+                    </p>
+                  ) : null}
                   {c.tags_draft ? (
                     <div className="mt-2">
                       <TagBadges
@@ -312,6 +368,34 @@ export default function NewTwinPage() {
     return (
       <div className="space-y-4">
         <p className="text-sm text-[var(--hca-accent)]">分身已保存。</p>
+        {specialtyPreview && specialtyPreview.length > 0 ? (
+          <div className="space-y-1.5">
+            <p className="text-[13px] font-medium">
+              {t(locale, "newtwin.dept.preview.title")}
+            </p>
+            <ul className="space-y-1">
+              {specialtyPreview.map((row, i) => (
+                <li
+                  key={`preview-${i}`}
+                  className={`text-[13px] ${
+                    row.matched
+                      ? "text-[var(--hca-ink-muted)]"
+                      : "text-[var(--hca-danger)]"
+                  }`}
+                >
+                  {row.matched
+                    ? t(locale, "newtwin.dept.preview.ok", {
+                        input: row.input,
+                        specialty: row.specialty ?? "",
+                      })
+                    : t(locale, "newtwin.dept.preview.skipped", {
+                        input: row.input,
+                      })}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         {statusLine ? (
           <p className="text-[13px] text-[var(--hca-ink-muted)]">{statusLine}</p>
         ) : null}

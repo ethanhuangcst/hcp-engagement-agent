@@ -1,6 +1,6 @@
 # medical-knowledge-base（RAG）功能规格
 
-> as_of：2026-07-16 · 包名建议 `@hca/medical-kb`  
+> as_of：2026-10-21（新增 F-RAG-028/029：受控学科目录扩充与学术索引批量种子，MKB2-02 / feature-09；F-RAG-030–032：合规覆盖信号与条款版本治理，MKB2-03；F-RAG-023/029 改写、新增 F-RAG-033/034：学术索引写入与恢复健壮性，DEF-003 / DEF-004 修复，US-RAG-009） · 包名 `@hca/medical-kb`  
 > 依据：[`1.product-definition.md`](../1.product-definition.md)、[`3.architecture.md`](../3.architecture.md) §5.3、[`4.install-dependencies.md`](../4.install-dependencies.md) §6、[`../agent/agent-function-spec.md`](../agent/agent-function-spec.md)、[`../app/app-function-spec.md`](../app/app-function-spec.md)、[`../../knowledge/rag-medical-knowledge-base/rag-architecture.md`](../../knowledge/rag-medical-knowledge-base/rag-architecture.md)、[`../../knowledge/rag-medical-knowledge-base/on-demand-ingest.md`](../../knowledge/rag-medical-knowledge-base/on-demand-ingest.md)、[`../../knowledge/rag-medical-knowledge-base/content-acquisition.md`](../../knowledge/rag-medical-knowledge-base/content-acquisition.md)、[`../../knowledge/rag-medical-knowledge-base/ingest-feasibility-and-ops.md`](../../knowledge/rag-medical-knowledge-base/ingest-feasibility-and-ops.md)、**rag-implementation**  
 > 范围：`packages/medical-kb` — 双索引 RAG（ingest + Hybrid 检索 + citation）。**不是** Twin 采集、不是 Engagement 决策生成；供 Agent / BFF 调用。
 
@@ -10,8 +10,8 @@
 |------|------|
 | 双索引 | `academic_index` ‖ `compliance_index`；**禁止混库**；过滤/切块/失败策略分离 |
 | 检索 | Dense（MVP-3 默认进程内小模型，如 Xenova `bge-small-zh`）+ Sparse（BM25）→ RRF（~0.7/0.3）→ rerank（默认进程内小模型）→ top-5；更大模型见后置升级 |
-| 学术 ingest | Twin `specialty/themes` **按需**灌注；不做全科 / 全 PubMed 预灌 |
-| 合规 ingest | P0 种子库（RDPAC 等）策展；客户 SOP 上传 + `tenant_id`；**不按病种自动爬** |
+| 学术 ingest | Twin `specialty/themes` **按需**灌注；不做持续全科 / 全 PubMed 预灌；**一次性冷启动批量种子**（临床一级学科全集）见 [MKB2-02](../product-backlog.md#pb-12) 与 F-RAG-028/029 |
+| 合规 ingest | P0 种子库（RDPAC 等）策展；客户 SOP 上传 + `tenant_id`；**不按病种自动爬**；同 `authority` 新版本灌入后旧版本条款下线（[MKB2-03](../product-backlog.md#pb-13)） |
 | Citation | 每条 chunk 含 source / version / as_of；Agent 生成须带 `academic_refs` + `compliance_refs` |
 | **数据驻留与安全** | 业务元数据（manifest）在 **MySQL 主库（ADR-005）**；语料源文件可暂存 `HCA_DATA_DIR/rag/corpus`；向量在内网 Qdrant；默认**不**用公有云向量 SaaS；Qdrant **不对公网暴露**；浏览器禁止直连 |
 | 批次 | 功能与对外接口「实现批次」填 **MVP-1…MVP-4**（见 [`../1.product-definition.md`](../1.product-definition.md)） |
@@ -136,11 +136,18 @@ data/
 | 24 | F-RAG-020 | 获取与版权底线 | MVP-3：**摘要 / OA / fixture 优先**；闭源不存全文；第三方仅作拉取源。完整 NCBI 配额限速管线见 [`ToDo.md`](../ToDo.md)，**LOW PRIORITY**，不挡本批验收 | MVP-3 · LOW PRIORITY（NCBI 管线） |
 | 25 | F-RAG-021 | 租户 SOP 入库 | 文件进 `corpus/tenants/{id}/sop/`；写入**同一** `compliance_index`，payload 强制 `tenant_id`；跨租户检索拒绝；**不分租户 collection**。**LOW PRIORITY** | 后置 · LOW PRIORITY |
 | 26 | F-RAG-022 | Parent-Document（P2） | 小块召回、生成时可拉 parent 段落；**非 P0**；**LOW PRIORITY** | 后置 · LOW PRIORITY |
-| 27 | F-RAG-023 | 健康检查 | Qdrant 可达、双 collection、绑定地址安全摘要（是否 loopback/internal） | MVP-3 |
+| 27 | F-RAG-023 | 健康检查 | Qdrant 可达、双 collection、绑定地址安全摘要（是否 loopback/internal）；双 collection 各执行一次带 filter 的 1 点探测读（坏 shard 在 listCollections 不可见，探测读才触发 panic）；探测 500 / panic 时 `ok: false` 并附错误细节 | MVP-3 |
 | 28 | F-RAG-024 | 环境变量 | `DATABASE_URL`、`QDRANT_URL`（默认 localhost）、`EMBEDDING_MODEL`、`EMBEDDING_BASE_URL?`、`RERANK_MODEL?`、`RERANK_BASE_URL?`、`HCA_DATA_DIR?`、`NCBI_API_KEY?`、`VECTOR_BACKEND=qdrant-local`、`QDRANT_ALLOW_NON_LOCAL?`（默认 false） | MVP-3 |
 | 29 | F-RAG-025 | Eval 回归 | `data/rag/eval-set.json`；不含真实客户 SOP 明文。**LOW PRIORITY** | 后置 · LOW PRIORITY |
 | 30 | F-RAG-026 | 契约与安全测试 | Vitest：双索引不串库、tenant 隔离；断言默认 URL 非公网；gitignore 覆盖 corpus/qdrant | MVP-3 |
 | 31 | F-RAG-027 | 朱同玉/专科验收 | 本地库可命中；合规可引用；新专科 on-demand 写入本地目录 | MVP-3 |
+| 32 | F-RAG-028 | 受控学科目录扩充 | `ALIAS_MAP` 扩到临床一级学科全集（键 + 中英文别名）；`resolveSpecialtiesForIngest` 科室正则同步补；归一化行为与既有三专科一致（未收录别名仍 `SPECIALTY_UNRESOLVED` / 静默跳过） | MVP-3 扩充（MKB2-02） |
+| 33 | F-RAG-029 | 学术索引批量种子 | 一次性批量脚本循环受控键调 `ingest_on_demand`：PubMed / OpenAlex 拉取为主，不可用时 fixture 兜底；单学科失败不阻塞其他学科；可重跑；跑完每学科 `coverageCheck` 为 ready；写入窗口优雅退出（SIGTERM / SIGINT 陷阱，等待当前学科 job 终态再退出，无半状态）；损坏恢复 runbook 见 rag-design §20.2 | MVP-3 扩充（MKB2-02） |
+| 34 | F-RAG-030 | 合规覆盖信号 | `retrieve_compliance` 返回体附 `coverage`：以 `ingest_manifest` 为权威聚合各 `authority` 清单（chunk 数、版本、`as_of`）；缺源附 `repair_hint`；获取失败降级省略，检索不报错 | MVP-3 扩充（MKB2-03） |
+| 35 | F-RAG-031 | 合规条款版本治理 | `seed_compliance` 灌入 `authority` 新版本时按 (authority, 旧 version) 下线旧条款；检索默认只返回现行版本；重跑幂等 | MVP-3 扩充（MKB2-03） |
+| 36 | F-RAG-032 | P0 合规种子扩充 | 手动策展：`rdpac` 2024-01 不少于 15 条、`cn_med_rep_measures` 2026-08 不少于 8 条；每条含 `clause_id` / `version` / `effective_date`；不自动爬 | MVP-3 扩充（MKB2-03） |
+| 37 | F-RAG-033 | 学术 point ID 唯一性 | `academicPointId` 键含 specialty（`${specialty}:pmid:${pmid}` / `${specialty}:doi:${doi}`；fixture fallback 不变）；同 PMID 跨学科各自成点，双方 coverage 不减；迁移 = 清 `academic_index` 全量重灌（防旧 ID 孤儿点污染 BM25） | MVP-3 缺陷修复（DEF-003 / US-RAG-009） |
+| 38 | F-RAG-034 | scroll ID 游标翻页 | `countQdrantSpecialtyChunks`、`loadAcademicPayloadsForBm25`、`loadCompliancePayloadsForBm25` 三处读路径以上一页最后 point id 作游标，消除对 Qdrant 内部 sequential offset 的依赖 | MVP-3 缺陷修复（DEF-004 稳健化 / US-RAG-009） |
 
 ---
 
@@ -151,10 +158,10 @@ Agent / BFF 经包 API 调用；浏览器**禁止**直连 Qdrant。
 | 序号 | 接口编号 | 类型 | 接口名称 | 输入摘要 | 输出摘要 | 副作用 | 幂等 | 实现批次 |
 |------|----------|------|----------|----------|----------|--------|------|----------|
 | 1 | I-RAG-001 | API | `retrieve_academic` | `{ query, specialty?, themes?, year_from?, language?, top_k? }` | `{ chunks[] }`（含 citation 字段） | 无 | 是 | MVP-3 |
-| 2 | I-RAG-002 | API | `retrieve_compliance` | `{ query, jurisdiction?, tenant_id?, interaction_type?, top_k? }` | `{ chunks[] }`；可空（由 Agent gate 处理） | 无 | 是 | MVP-3 |
+| 2 | I-RAG-002 | API | `retrieve_compliance` | `{ query, jurisdiction?, tenant_id?, interaction_type?, top_k? }` | `{ chunks[], coverage? }`；可空（由 Agent gate 处理）；coverage manifest 驱动、降级可省略 | 无 | 是 | MVP-3 · MVP-3 扩充（MKB2-03 coverage） |
 | 3 | I-RAG-003 | API | `ingest_on_demand` | `{ specialty, themes?, hcpId?, force? }` | `{ jobId, knowledge_status }`（立即） | 异步写 Qdrant + manifest | 否（force 可重跑） | MVP-3 |
 | 4 | I-RAG-004 | API | `get_ingest_status` | `{ jobId }` 或 `{ specialty }` | `{ status, progress?, error? }` | 无 | 是 | MVP-3 |
-| 5 | I-RAG-005 | API | `seed_compliance` | `{ corpus_id?, paths? }` | `{ upserted, manifest_rev }` | 写 compliance_index + manifest | 是（同版本） | MVP-3 |
+| 5 | I-RAG-005 | API | `seed_compliance` | `{ corpus_id?, paths? }` | `{ upserted, manifest_rev }` | 写 compliance_index + manifest；新版本灌入后旧版本条款下线 | 是（同版本） | MVP-3 · MVP-3 扩充（MKB2-03 版本治理） |
 | 6 | I-RAG-006 | API | `upsert_tenant_sop` | `{ tenant_id, docs[] }` | `{ upserted }` | 写 compliance + tenant 过滤字段 | 否 | 后置 |
 | 7 | I-RAG-007 | API | `health` | `{}` | `{ ok, qdrant, collections[], bind_safe?, embedding? }` | 无 | 是 | MVP-3 |
 

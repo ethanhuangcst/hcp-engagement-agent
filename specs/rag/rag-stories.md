@@ -1,6 +1,6 @@
 # medical-knowledge-base（RAG）用户故事与验收标准（ATDD）
 
-> as_of：2026-10-20（新增 US-RAG-006：DEF-002 元数据层 MySQL 方言修复）  
+> as_of：2026-10-21（新增 US-RAG-007：受控学科目录扩充与学术索引批量种子，MKB2-02 / feature-09；US-RAG-008：合规知识覆盖信号与条款版本治理，MKB2-03；US-RAG-009：学术索引写入与恢复健壮性修复，DEF-003 / DEF-004）  
 > 依据：[`rag-function-spec.md`](./rag-function-spec.md)（F-RAG-* / I-RAG-*）  
 > 角色默认：**Agent / BFF / 运维调用方**（下文称「调用方」）  
 > 验收锚点：合规种子命中含条款号；朱同玉相关专科可按需命中  
@@ -272,6 +272,181 @@ Feature: medical-kb 元数据层 MySQL 方言
 
 ---
 
+## US-RAG-007 受控学科目录扩充与学术索引批量种子（MKB2-02 / feature-09）
+
+**As a** Agent / MCP 调用方
+**I want to** 受控学科目录覆盖临床一级学科全集，且学术索引一次性批量种子到位
+**So that** 任何临床学科的 HCP 入库后预灌可命中、`retrieve_academic` 能返回真实学科证据与 coverage
+
+**覆盖**：F-RAG-028、029（消费 F-RAG-014–017、019 既有管线）· [MKB2-02](../product-backlog.md#pb-12) · [ADR-014](../../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md)
+**MVP**：MVP-3 扩充（Sprint 2 · feature-09）
+
+### 验收标准
+
+```gherkin
+Feature: 受控学科目录扩充与批量种子
+
+  Scenario: 新学科可归一化
+    Given 受控目录已扩充到临床一级学科全集
+    When 调用方以 neurology 或 神经内科 / 神经病学 归一化
+    Then 返回受控键 neurology
+    And 未收录别名仍返回专科未解析错误
+
+  Scenario: 科室正则补种预灌新学科
+    Given 分身科室为 神经病学 或 神经内科
+    When 调用 add_hcp 或 Web confirm 触发预灌
+    Then resolveSpecialtiesForIngest 解析出 neurology
+    And 预灌照常触发
+
+  Scenario: 批量种子后每学科覆盖就绪
+    Given 批量种子脚本已跑完
+    When 逐学科执行 coverageCheck
+    Then 每个受控学科状态为 ready（chunk ≥ 3）
+    And 脚本可重跑、重复执行结果稳定
+
+  Scenario: 王拥军神经内科检索命中真实证据
+    Given 王拥军（hcp_a5057449191）已入库且批量种子完成
+    When 调用方以神经内科查询 retrieve_academic
+    Then 返回真实神经内科语料切块（非低分近邻）
+    And coverage 为 { specialty: neurology, status: ready }
+
+  Scenario: 单学科拉取失败降级不阻塞
+    Given 某学科 PubMed / OpenAlex 拉取失败
+    When 批量脚本继续执行
+    Then 该学科降级 fixture 种子并记结构化日志
+    And 其余学科照常完成
+
+  Scenario: 全部源不可用可重跑
+    Given 某学科全部语料源不可用
+    When 批量脚本执行到该学科
+    Then 记结构化日志并跳过
+    And 修复源后重跑仅补该学科
+```
+
+### 规则清单
+
+- 学科清单为临床一级学科全集（内、外、妇、儿等约 20-30 个；neurology 为首个案例）。
+- 批量种子是一次性冷启动；之后新学科走既有链路（add_hcp 预灌或 MCP2-08 `ingest_academic`）。
+- 公开源限流、摘要 / OA 优先、闭源不存全文（F-RAG-020 底线不变）。
+- `knowledge_status` 权威仍在 `rag_ingest_jobs` / manifest，不写 Twin JSON。
+
+---
+
+## US-RAG-008 合规知识覆盖信号与条款版本治理（MKB2-03）
+
+**As a** Agent / 运维调用方
+**I want to** 合规检索带覆盖信号，条款新版本灌入后旧版本自动下线
+**So that** 合规稀疏可见、可补种，检索不会返回过时条款
+
+**覆盖**：F-RAG-030、031、032 · [MKB2-03](../product-backlog.md#pb-13)（未排期）
+**MVP**：MVP-3 扩充
+
+### 验收标准
+
+```gherkin
+Feature: 合规覆盖信号与条款版本治理
+
+  Scenario: 合规检索返回覆盖信号
+    Given rdpac 与 cn_med_rep_measures 全局种子已灌库
+    When 调用方执行 retrieve_compliance
+    Then chunks 每条含 clause_id / authority / version
+    And coverage 列出各 authority 的 chunk 数与最新 as_of，与 ingest_manifest 一致
+
+  Scenario: 覆盖信号获取失败降级省略
+    Given ingest_manifest 读取失败
+    When 调用方执行 retrieve_compliance
+    Then 检索照常返回 chunks，响应无 coverage 字段，不报错
+
+  Scenario: 稀疏时建议补种
+    Given 合规库 manifest 无任何 authority 行（未灌种）
+    When 调用方执行 retrieve_compliance
+    Then coverage.status 为 sparse 并附 repair_hint，建议运维灌种后重试
+
+  Scenario: 新版本灌入后旧版本下线
+    Given rdpac 2024-01 已灌库且检索可命中
+    When 运维灌入 rdpac 2026-01 新版本
+    Then 同 clause_id 的 2024-01 旧条款不再出现在检索结果
+    And manifest 指向新版本，重复执行结果稳定
+
+  Scenario: 未注册 authority 无词表门槛
+    Given 新建 corpus/compliance/nmpa/2025-12/chunks.jsonl 且每行合法
+    When 运维执行 seed_compliance
+    Then 照常灌入并写 manifest，无受控词表校验
+
+  Scenario: 种子扩充后抽检命中
+    Given rdpac 2024-01 扩到不少于 15 条、cn_med_rep_measures 2026-08 扩到不少于 8 条
+    When 调用方按条款关键词抽检检索
+    Then 命中条款含 clause_id / authority / version，无编造条款
+```
+
+### 规则清单
+
+- `coverage` 权威在 `ingest_manifest`，不写 Twin JSON。
+- 检索不内联补种：稀疏只给信号与 `repair_hint`，同 ADR-014 学术侧语义。
+- 合规知识保持手动策展，不按病种自动爬（F-RAG-013 口径不变）。
+- 租户 SOP（F-RAG-021）不在本故事，仍后置。
+- 不新增对外 MCP 工具；`retrieve_compliance` 返回体扩展除外。
+
+---
+
+## US-RAG-009 学术索引写入与恢复健壮性修复（DEF-003 / DEF-004）
+
+**As a** 运维 / 调用方
+**I want to** 学术 point ID 按学科唯一、健康探测能发现坏 shard、批量写入窗口可优雅退出、损坏可按 runbook 快速恢复
+**So that** 28 学科索引无静默覆盖，Qdrant 损坏可检测、可恢复，批量灌库不产生半状态
+
+**覆盖**：F-RAG-033、034（消费 023、029） · [DEF-003 / DEF-004](../issues-log.md) · [rag-design §20](./rag-design.md)
+**MVP**：MVP-3 缺陷修复
+
+### 验收标准
+
+```gherkin
+Feature: 学术索引写入与恢复健壮性
+
+  Scenario: 同 PMID 跨学科不互相覆盖
+    Given 两个学科的语料含同一 PMID
+    When 依序灌入 academic_index
+    Then 两个 point 的 ID 因含 specialty 而不同，payload 各自保留
+    And 双方 coverage 计数均不减
+
+  Scenario: 重灌后盘库一致
+    Given 28 个学科语料在 data/rag/corpus/academic/ 盘上
+    When 清 academic_index 后全量重灌
+    Then 28 学科盘-vs-库逐条相等（非仅 coverageCheck ≥ 3 阈值）
+    And 重跑批量脚本全部 skipped_ready（幂等）
+
+  Scenario: 王拥军锚点复验
+    Given 全量重灌完成
+    When 以神经内科调用 retrieve_academic（:3300 tools/call）
+    Then 返回 neurology 5 条真实证据且 coverage ready
+
+  Scenario: 健康探测发现坏 shard
+    Given academic_index 某 shard 磁盘损坏（listCollections 仍正常）
+    When 调用 health()
+    Then 带 filter 的 1 点探测读触发 panic / 500
+    And health 返回 ok: false 并附错误细节
+
+  Scenario: 批量写入窗口优雅退出
+    Given 批量种子正在灌某学科
+    When 进程收到 SIGTERM / SIGINT
+    Then CLI 等待当前学科 job 到终态再退出
+    And 无半状态写入窗口，已完学科保持 skipped_ready
+
+  Scenario: 损坏恢复 runbook
+    Given Qdrant 读路径 panic 不可恢复
+    When 按 runbook 停 Qdrant、删 academic_index、重启、重灌
+    Then 在 5 分钟内恢复 28/28 ready，compliance 同批灌入
+```
+
+### 规则清单
+
+- 迁移必须清 `academic_index` 全量重灌：新旧 point ID 不同，原地重跑留孤儿点污染 BM25。
+- 同 PMID 跨学科是 PubMed 按专科查询的常态，各自成点不是去重错误。
+- scroll 三处改 point-ID 游标为稳健化项（F-RAG-034），不是 DEF-004 根因修复。
+- 健康探测、信号陷阱、runbook 三者合为 DEF-004 修复口径，一次做完。
+
+---
+
 ## 故事与功能追溯矩阵
 
 | 用户故事 | F-RAG 覆盖 | 主要接口 | MVP |
@@ -282,12 +457,17 @@ Feature: medical-kb 元数据层 MySQL 方言
 | US-RAG-004 | 008、012、014–017、019–020、027 | I-RAG-001、003、004 | MVP-3 |
 | US-RAG-005 | 021–022、025 | I-RAG-006 | 后置 |
 | US-RAG-006 | 013、017、018 | （元数据层修复，DEF-002） | MVP-3 缺陷修复 |
+| US-RAG-007 | 028、029（消费 014–017、019） | （目录数据 + 批量脚本，MKB2-02） | MVP-3 扩充 |
+| US-RAG-008 | 030、031、032（消费 013、018） | I-RAG-002、005 | MVP-3 扩充（未排期） |
+| US-RAG-009 | 033、034（消费 023、029） | （缺陷修复，DEF-003 / DEF-004） | MVP-3 缺陷修复 |
 
 ## 建议验收顺序
 
-0. 缺陷修复：US-RAG-006（MVP-3 验收路径前置）  
+0. 缺陷修复：US-RAG-006（MVP-3 验收路径前置）；US-RAG-009（DEF-003 / DEF-004 修复，Sprint 2 feature-09 验收前置）  
 1. MVP-3：US-RAG-001 → 002 → 003 → 004  
-2. 后置：US-RAG-005  
+2. MVP-3 扩充：US-RAG-007（Sprint 2 · feature-09；依赖 US-RAG-004 管线已绿）  
+3. MVP-3 扩充（未排期）：US-RAG-008（MKB2-03，合规侧；排入 sprint 后执行）  
+4. 后置：US-RAG-005  
 
 ## 相关文档
 

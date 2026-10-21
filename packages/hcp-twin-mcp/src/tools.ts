@@ -19,6 +19,7 @@ import {
 import { applyTagOverride, ruleTagFromProfile, tagsFromTwin } from "./tagging.js";
 import { createHttpClient } from "./collectors/http.js";
 import { searchOpenAlexAuthors } from "./collectors/openalex.js";
+import { tryNormalizeSpecialty, DEPARTMENT_PATTERNS } from "@hca/hcp-engagement-agent";
 
 export const ResolveInputSchema = z.object({
   name: z.string().min(1),
@@ -101,6 +102,54 @@ export type ResolveEvidence = {
   url?: string;
 };
 
+/** MCP2-09（DEF-005）：候选科室来源标注——caller_input 为调用方输入原样回显，fixture 为样例数据，均未经数据源核实 */
+export type DepartmentProvenance = {
+  origin: "caller_input" | "fixture";
+  verified: false;
+};
+
+/** MCP2-09：数据源科室信号——OpenAlex 主题词原文与首个可归一化受控专科键 */
+export type DepartmentSignal = {
+  topics: string[];
+  specialty?: string;
+};
+
+/** MCP2-09：输入侧与信号侧归一化专科键不一致提示；任一侧不可归一化时不产生 */
+export type DepartmentMismatch = {
+  input_side: string;
+  signal_side: string;
+};
+
+/** MCP2-09：由数据源主题词推导信号与 mismatch；信号缺失或不可归一化时降级为仅来源标注 */
+export function departmentSignalOf(
+  deptInput: string,
+  concepts: string[] | undefined,
+): { signal?: DepartmentSignal; mismatch?: DepartmentMismatch } {
+  if (!concepts || concepts.length === 0) return {};
+  // 输入侧归一化：先查别名，再走既有 department 正则（如「神经科」→ neurology，F-RAG 同源）
+  const inputKey =
+    tryNormalizeSpecialty(deptInput) ??
+    DEPARTMENT_PATTERNS.filter(([pattern]) => pattern.test(deptInput))[0]?.[1] ??
+    null;
+  let signalSpecialty: string | undefined;
+  for (const topic of concepts) {
+    const key = tryNormalizeSpecialty(topic);
+    if (key) {
+      signalSpecialty = key;
+      break;
+    }
+  }
+  const signal: DepartmentSignal = {
+    topics: concepts,
+    ...(signalSpecialty ? { specialty: signalSpecialty } : {}),
+  };
+  const mismatch =
+    inputKey && signalSpecialty && inputKey !== signalSpecialty
+      ? { input_side: inputKey, signal_side: signalSpecialty }
+      : undefined;
+  return { signal, mismatch };
+}
+
 /** 人候选：姓名/机构为主标题材料；网页名只进 evidence */
 export type ResolveCandidate = {
   candidate_id: string;
@@ -113,6 +162,10 @@ export type ResolveCandidate = {
   confidence: "high" | "medium" | "low";
   match_note: string;
   evidence: ResolveEvidence[];
+  /** MCP2-09（DEF-005）：科室来源标注与数据源对照（可选，向后兼容旧调用方） */
+  department_provenance?: DepartmentProvenance;
+  department_signal?: DepartmentSignal;
+  department_mismatch?: DepartmentMismatch;
   hcpId?: string;
   author_ids_draft?: Record<string, string | string[] | null | undefined>;
   tags_draft?: typeof ZHU_TAGS;
@@ -170,12 +223,22 @@ export async function resolveHcpIdentity(
       });
       const candidates: ResolveCandidate[] = hits.slice(0, 5).map((h, i) => {
         const hcpId = `hcp_${h.id.toLowerCase()}`;
+        const { signal, mismatch } = departmentSignalOf(
+          dept.trim(),
+          h.concepts,
+        );
         return {
           candidate_id: `c-live-${h.id}`,
           name_zh: name.trim(),
           name_en: h.display_name,
           hospital: h.institution ?? hospital.trim(),
           department: dept.trim(),
+          department_provenance: {
+            origin: "caller_input",
+            verified: false,
+          },
+          ...(signal ? { department_signal: signal } : {}),
+          ...(mismatch ? { department_mismatch: mismatch } : {}),
           title: null,
           distinguish:
             h.institution
@@ -250,6 +313,7 @@ export async function resolveHcpIdentity(
             name_en: "Tongyu Zhu",
             hospital: "复旦大学附属中山医院",
             department: "肾脏移植科 / 泌尿外科",
+            department_provenance: { origin: "fixture", verified: false },
             title: "主任医师 / 教授",
             distinguish: "中山医院肾脏移植方向；与查询医院、科室一致",
             confidence: "high",
@@ -274,6 +338,7 @@ export async function resolveHcpIdentity(
             name_en: "Tongyu Zhu",
             hospital: "其他机构（同名待核）",
             department: "外科",
+            department_provenance: { origin: "fixture", verified: false },
             title: "副主任医师",
             distinguish: "仅姓名相近，医院与专科不符——勿与中山肾移植合并",
             confidence: "low",
@@ -322,6 +387,10 @@ export async function resolveHcpIdentity(
           name_en: null,
           hospital: hospital.trim(),
           department: dept.trim(),
+          department_provenance: {
+            origin: "caller_input",
+            verified: false,
+          },
           title: null,
           distinguish: `按你填写的姓名与机构生成的待核人选（mock；非朱同玉 fixture）`,
           confidence: "medium",

@@ -1,6 +1,6 @@
 # hcp-twin-mcp 用户故事与验收标准（ATDD）
 
-> as_of：2026-07-17  
+> as_of：2026-10-21（2026-07-17 首版；2026-10-21 US-MCP-002 增补三场景：候选科室来源标注与数据源对照，MCP2-09 / DEF-005）  
 > 依据：[`mcp-function-spec.md`](./mcp-function-spec.md)（F-MCP-* / I-MCP-*）  
 > 角色默认：**BFF / MCP Client 调用方**（下文称「调用方」）；业务结果以药企 HCP 互动场景可观测为准  
 > 验收样例 HCP：复旦大学附属中山医院 **朱同玉** 教授  
@@ -70,7 +70,7 @@ Feature: MCP 壳与健康检查
 **I want to** 用姓名、医院、科室消歧 HCP，并得到候选链接与文献号草稿  
 **So that** 用户确认人选前不必写入完整分身，且后续灌文献有可修复门槛  
 
-**覆盖**：F-MCP-008、009、011、012、013、014 · I-MCP-001  
+**覆盖**：F-MCP-008、009、011、012、013、014 · I-MCP-001；F-MCP-012 的科室来源标注增补（MCP2-09 / DEF-005）见下方后三场景  
 **MVP**：MVP-1  
 
 ### 验收标准
@@ -102,6 +102,28 @@ Feature: 身份消歧与 AuthorIds
     When 调用方或构建流水线尝试灌论文
     Then 返回未消歧类可修复错误
     And 不写入 recent 论文事实集
+
+  Scenario: 候选科室带来源标注（DEF-005）
+    Given 调用方输入科室「神经科」且数据源无可用科室信号
+    When 调用方执行消歧
+    Then 每条候选的科室字段回显调用方输入并附来源标注
+    And 标注为结构化字段（department_provenance：origin 为 caller_input、verified 为 false）
+    And 标注不改变候选的 confidence 与消歧状态
+
+  Scenario: 数据源信号与输入归一化一致时无提示
+    Given OpenAlex 命中作者的医学主题归一化为受控专科 psychiatry
+    And 调用方输入科室归一化到同一受控专科
+    When 调用方执行消歧
+    Then 候选附数据源信号（department_signal：主题词与归一化专科键）
+    And 不产生 mismatch 提示
+
+  Scenario: 数据源信号与输入归一化不一致时提示 mismatch
+    Given 调用方输入「神经科」归一化为 neurology
+    And OpenAlex 作者医学主题归一化为 psychiatry
+    When 调用方执行消歧
+    Then 候选附 mismatch 提示，含两侧专科键
+    And 候选科室字段不被自动改写（纠错由确认者判断）
+    And mismatch 不阻塞消歧与后续确认
 ```
 
 ### 规则清单

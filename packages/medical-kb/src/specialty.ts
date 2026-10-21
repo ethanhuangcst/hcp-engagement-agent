@@ -21,9 +21,93 @@ const ALIAS_MAP: Record<string, string> = {
   bk_virus: "kidney_transplant",
   "bk virus": "kidney_transplant",
   bkv: "kidney_transplant",
+  /** feature-09（MKB2-02）：临床一级学科全集扩充 */
+  neurology: "neurology",
+  神经内科: "neurology",
+  神经病学: "neurology",
+  cardiology: "cardiology",
+  心血管内科: "cardiology",
+  心内科: "cardiology",
+  respiratory_medicine: "respiratory_medicine",
+  "respiratory medicine": "respiratory_medicine",
+  呼吸内科: "respiratory_medicine",
+  呼吸科: "respiratory_medicine",
+  gastroenterology: "gastroenterology",
+  消化内科: "gastroenterology",
+  消化科: "gastroenterology",
+  endocrinology: "endocrinology",
+  内分泌科: "endocrinology",
+  nephrology: "nephrology",
+  肾内科: "nephrology",
+  hematology: "hematology",
+  血液科: "hematology",
+  血液内科: "hematology",
+  rheumatology: "rheumatology",
+  风湿免疫科: "rheumatology",
+  风湿科: "rheumatology",
+  infectious_disease: "infectious_disease",
+  "infectious disease": "infectious_disease",
+  感染科: "infectious_disease",
+  感染内科: "infectious_disease",
+  general_surgery: "general_surgery",
+  "general surgery": "general_surgery",
+  普外科: "general_surgery",
+  普通外科: "general_surgery",
+  orthopedics: "orthopedics",
+  骨科: "orthopedics",
+  neurosurgery: "neurosurgery",
+  神经外科: "neurosurgery",
+  cardiothoracic_surgery: "cardiothoracic_surgery",
+  "cardiothoracic surgery": "cardiothoracic_surgery",
+  胸外科: "cardiothoracic_surgery",
+  心胸外科: "cardiothoracic_surgery",
+  urology: "urology",
+  泌尿外科: "urology",
+  obstetrics_gynecology: "obstetrics_gynecology",
+  "obstetrics gynecology": "obstetrics_gynecology",
+  妇产科: "obstetrics_gynecology",
+  妇科: "obstetrics_gynecology",
+  产科: "obstetrics_gynecology",
+  pediatrics: "pediatrics",
+  儿科: "pediatrics",
+  oncology: "oncology",
+  肿瘤科: "oncology",
+  肿瘤内科: "oncology",
+  psychiatry: "psychiatry",
+  精神科: "psychiatry",
+  精神卫生科: "psychiatry",
+  dermatology: "dermatology",
+  皮肤科: "dermatology",
+  ophthalmology: "ophthalmology",
+  眼科: "ophthalmology",
+  otolaryngology: "otolaryngology",
+  耳鼻喉科: "otolaryngology",
+  耳鼻咽喉科: "otolaryngology",
+  anesthesiology: "anesthesiology",
+  麻醉科: "anesthesiology",
+  emergency_medicine: "emergency_medicine",
+  "emergency medicine": "emergency_medicine",
+  急诊科: "emergency_medicine",
+  急诊医学科: "emergency_medicine",
+  radiology: "radiology",
+  放射科: "radiology",
+  影像科: "radiology",
+  rehabilitation_medicine: "rehabilitation_medicine",
+  "rehabilitation medicine": "rehabilitation_medicine",
+  康复科: "rehabilitation_medicine",
+  康复医学科: "rehabilitation_medicine",
 };
 
 const CONTROLLED_KEYS = new Set(Object.values(ALIAS_MAP));
+
+/** feature-09：受控专科键全集（目录扩充后的权威清单，批量种子与测试共用） */
+export const CONTROLLED_SPECIALTY_KEYS: readonly string[] = [
+  ...new Set(
+    Object.entries(ALIAS_MAP)
+      .filter(([alias, key]) => alias === key)
+      .map(([, key]) => key),
+  ),
+].sort();
 
 function normalizeKey(raw: string): string {
   return raw.trim().toLowerCase().replace(/\s+/g, " ");
@@ -54,3 +138,5 @@ export function tryNormalizeSpecialty(raw: string): string | null {
     return null;
   }
 }
+
+export { CONTROLLED_KEYS };

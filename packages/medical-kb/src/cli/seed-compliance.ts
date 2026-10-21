@@ -16,6 +16,8 @@ async function main(): Promise<void> {
   const result = await seedCompliance({});
   console.log("seeded:", result);
   console.log("health after:", await health());
+  // @hca/db 连接池会挂住事件循环，显式退出
+  process.exit(0);
 }
 
 main().catch((err) => {

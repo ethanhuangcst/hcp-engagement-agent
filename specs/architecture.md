@@ -193,7 +193,7 @@ flowchart TB
 
 - `propose_engagement_options` 与 `precheck_compliance` **不注册为对外 MCP 工具**：调用方 prompt 可被注入，服务器无法验证其意图与 `product_context` 真实性；方案生成与合规闸门触发仅经服务器内嵌 agent + Web App（[ADR-012](../docs/adr/ADR-012-mcp2-data-plane-only.md)）。
 - Agent 包内部五 tool 与包级 API（`proposeOptions`、`runComplianceGate`）不变；`propose` 主路径「`retrieve_compliance` 不可跳过」不受影响；响应仍含固定 disclaimer、不替代正式 MLR。
-- 对外新增两个数据面检索工具：`retrieve_academic`（MCP2-04，Sprint 2）与 `retrieve_compliance`（MCP2-05，Sprint 3），对齐 Agent 内部 I-AGT-007 / I-AGT-008；`retrieve_compliance` 返回条款引用（`clause_id` / `authority` / `version`），`tenant_id` 来自服务端鉴权上下文、不作工具入参，租户鉴权未上线前仅返回全局种子。
+- 对外新增两个数据面检索工具：`retrieve_academic`（MCP2-04，Sprint 2）与 `retrieve_compliance`（MCP2-05，Sprint 2），对齐 Agent 内部 I-AGT-007 / I-AGT-008；`retrieve_compliance` 返回条款引用（`clause_id` / `authority` / `version`），`tenant_id` 来自服务端鉴权上下文、不作工具入参，租户鉴权未上线前仅返回全局种子。
 - 外部本地 agent 可基于数据面工具在本地生成方案草稿并做本地预审：方案含双引用、恒标 `mlr_status: draft_not_reviewed`；预审基于条款引用，标注不替代服务器闸门与正式 MLR；不触发服务器决策面副作用。
 - 远程提案若立项：独立 MCP（带鉴权与 tenant 作用域）或 Web App，不复用数据面 MCP。
 

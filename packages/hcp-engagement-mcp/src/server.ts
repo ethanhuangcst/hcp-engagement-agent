@@ -5,6 +5,8 @@ import {
   listTwins as defaultListTwinsFn,
   nameMatches,
   queryTwins as defaultQueryTwinsFn,
+  getTwin as defaultGetTwin,
+  getInsights as defaultGetInsights,
   type ConfirmAndSaveInput,
   type ConfirmAndSaveResult,
   type QueryTwinsResult,
@@ -12,10 +14,25 @@ import {
   type TwinListItem,
 } from "@hca/db";
 import { createMcpClient } from "@hca/mcp-client";
-import { mcpError, type VirtualTwin } from "@hca/domain";
+import { mcpError, type HcpInsights, type VirtualTwin } from "@hca/domain";
+import {
+  ensureDoingNow as defaultEnsureDoingNow,
+  retrieveAcademicForAgent as defaultRetrieveAcademic,
+  triggerKnowledgeIngest as defaultTriggerKnowledgeIngest,
+  resolveSpecialtiesForIngest,
+  resolveSpecialtyPreview,
+  AGENT_GENERAL_HCP_ID,
+  type EnsureDoingNowResult,
+  type KnowledgeJobRef,
+  type RagChunk,
+  type RagCoverage,
+} from "@hca/hcp-engagement-agent";
 import {
   CandidateStore,
   type CandidatePayload,
+  type DepartmentProvenance,
+  type DepartmentSignal,
+  type DepartmentMismatch,
 } from "./candidate-store.js";
 
 /** Sprint 1 注册的对外工具名（task-01 验收口径） */
@@ -36,6 +53,10 @@ export type ResolveCandidateInput = {
   distinguish?: string;
   match_note?: string;
   confidence?: string;
+  /** MCP2-09（DEF-005）：twin-mcp resolve 候选的科室来源标注与数据源对照（可选，向后兼容） */
+  department_provenance?: DepartmentProvenance;
+  department_signal?: DepartmentSignal;
+  department_mismatch?: DepartmentMismatch;
   hcpId?: string;
   author_ids_draft?: Record<string, string | null | undefined>;
 };
@@ -56,6 +77,30 @@ export type TriggerBuildFn = (input: {
   hcpId: string;
   mode: "incremental";
 }) => Promise<{ runId: string }>;
+
+/** ADR-013：get_hcp_insights 读 twin（缺省 @hca/db getTwin） */
+export type GetTwinFn = (hcpId: string) => Promise<VirtualTwin | null>;
+
+/** ADR-013：get_hcp_insights 读 insights（缺省 @hca/db getInsights） */
+export type GetInsightsFn = (hcpId: string) => Promise<HcpInsights | null>;
+
+/** ADR-013：get_hcp_insights 按需合成（缺省 @hca/hcp-engagement-agent ensureDoingNow） */
+export type EnsureDoingNowFn = (hcpId: string) => Promise<EnsureDoingNowResult>;
+
+/** ADR-012：retrieve_academic 学术检索（缺省 @hca/hcp-engagement-agent retrieveAcademicForAgent） */
+export type RetrieveAcademicFn = (input: {
+  query: string;
+  specialty?: string;
+  themes?: string[];
+}) => Promise<{ chunks: RagChunk[]; coverage?: RagCoverage }>;
+
+/** ADR-014：add_hcp 预灌触发（缺省 @hca/hcp-engagement-agent triggerKnowledgeIngest） */
+export type TriggerIngestFn = (input: {
+  specialties?: string[];
+  themes?: string[];
+  department?: string;
+  hcpId?: string;
+}) => Promise<KnowledgeJobRef[]>;
 
 function stubNotImplemented(tool: string, feature: string) {
   const error = mcpError(
@@ -180,6 +225,16 @@ export type CreateMcpServerOptions = {
   triggerBuild?: TriggerBuildFn;
   /** 测试注入；缺省进程内新建（ADR-010 令牌缓存） */
   candidateStore?: CandidateStore;
+  /** ADR-013：测试注入；缺省走 @hca/db getTwin */
+  getTwin?: GetTwinFn;
+  /** ADR-013：测试注入；缺省走 @hca/db getInsights */
+  getInsights?: GetInsightsFn;
+  /** ADR-013：测试注入；缺省走 @hca/hcp-engagement-agent ensureDoingNow */
+  ensureDoingNow?: EnsureDoingNowFn;
+  /** ADR-012：测试注入；缺省走 @hca/hcp-engagement-agent retrieveAcademicForAgent */
+  retrieveAcademic?: RetrieveAcademicFn;
+  /** ADR-014：测试注入；缺省走 @hca/hcp-engagement-agent triggerKnowledgeIngest */
+  triggerIngest?: TriggerIngestFn;
 };
 
 function candidatePayloadOf(c: ResolveCandidateInput): CandidatePayload {
@@ -193,6 +248,9 @@ function candidatePayloadOf(c: ResolveCandidateInput): CandidatePayload {
     title: c.title ?? undefined,
     author_ids: c.author_ids_draft,
     source_candidate_id: c.candidate_id,
+    department_provenance: c.department_provenance,
+    department_signal: c.department_signal,
+    department_mismatch: c.department_mismatch,
   };
 }
 
@@ -202,11 +260,19 @@ export function createMcpServer(options?: CreateMcpServerOptions): McpServer {
   const runResolve = options?.resolveIdentity ?? defaultResolveIdentity;
   const runAdd = options?.addHcp ?? defaultConfirmAndSave;
   const runTriggerBuild = options?.triggerBuild ?? defaultTriggerBuild;
+  const runGetTwin = options?.getTwin ?? defaultGetTwin;
+  const runGetInsights = options?.getInsights ?? defaultGetInsights;
+  const runEnsureDoingNow: EnsureDoingNowFn =
+    options?.ensureDoingNow ?? ((hcpId) => defaultEnsureDoingNow({ hcpId }));
+  const runRetrieveAcademic: RetrieveAcademicFn =
+    options?.retrieveAcademic ?? ((input) => defaultRetrieveAcademic(input));
+  const runTriggerIngest: TriggerIngestFn =
+    options?.triggerIngest ?? ((input) => defaultTriggerKnowledgeIngest(input));
   const tokens = options?.candidateStore ?? new CandidateStore();
 
   const server = new McpServer(
     { name: "hcp-engagement-mcp", version: "0.1.0" },
-    { instructions: "HCP engagement 对外 MCP 2.0。Sprint 1 提供三工具注册骨架。" },
+    { instructions: "HCP engagement 对外 MCP 2.0。提供 list_hcp、query_hcp、add_hcp、get_hcp_insights、retrieve_academic 五个工具。" },
   );
 
   server.registerTool(
@@ -343,6 +409,16 @@ export function createMcpServer(options?: CreateMcpServerOptions): McpServer {
                   confidence: c.confidence,
                   source: "hcp-twin-mcp",
                   source_candidate_id: c.candidate_id,
+                  // MCP2-09（DEF-005）：科室来源标注与数据源对照原样透传（旧候选无字段时不报错）
+                  ...(c.department_provenance
+                    ? { department_provenance: c.department_provenance }
+                    : {}),
+                  ...(c.department_signal
+                    ? { department_signal: c.department_signal }
+                    : {}),
+                  ...(c.department_mismatch
+                    ? { department_mismatch: c.department_mismatch }
+                    : {}),
                   source_ids: c.author_ids_draft
                     ? {
                         openalex: c.author_ids_draft.openalex ?? undefined,
@@ -378,7 +454,7 @@ export function createMcpServer(options?: CreateMcpServerOptions): McpServer {
     "add_hcp",
     {
       description:
-        "新增 HCP 档案（写库、非幂等；写库成功后异步触发 incremental build）。仅接受 query_hcp 检出、经人选认的库外候选：传 candidate_id（必填，约 30 分钟有效，写入成功即作废）；可选 confirm_not_duplicate 确认疑似同人确非重复。身份字段由候选载荷生成，不接受直传。写库成功时返回 refresh.run_id，可用 Web 构建进度页或对内 get_twin_status 查询进度；触发失败不影响新增结果（返回体不含 refresh 键）。",
+        "新增 HCP 档案（写库、非幂等；写库成功后异步触发 incremental build）。仅接受 query_hcp 检出、经人选认的库外候选：传 candidate_id（必填，约 30 分钟有效，写入成功即作废）；可选 confirm_not_duplicate 确认疑似同人确非重复。身份字段由候选载荷生成，不接受直传。写库成功时返回 refresh.run_id 与 specialty_preview（科室 → 将预灌专科映射预览，与实际预灌同源；matched 为 false 的科室附 hint 且预灌跳过），可用 Web 构建进度页或对内 get_twin_status 查询进度；触发失败不影响新增结果（返回体不含 refresh / knowledge_jobs 键）。",
       inputSchema: {
         candidate_id: z
           .string()
@@ -449,10 +525,48 @@ export function createMcpServer(options?: CreateMcpServerOptions): McpServer {
             }),
           );
         }
+        /** ADR-014：写库成功后按受控专科预灌知识库（与 Web confirm 同源）；失败不影响新增 */
+        let knowledgeJobs: KnowledgeJobRef[] | undefined;
+        const twin = result.twin;
+        const ingestInput = {
+          specialties: twin.profile?.specialties ?? [],
+          themes: twin.research?.themes ?? [],
+          department: twin.profile?.department ?? "",
+          hcpId: result.hcp_id,
+        };
+        const ingestKeys = resolveSpecialtiesForIngest(ingestInput);
+        try {
+          if (ingestKeys.length > 0) {
+            knowledgeJobs = await runTriggerIngest({
+              ...ingestInput,
+              specialties: ingestKeys,
+            });
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.error(
+            JSON.stringify({
+              event: "add_hcp_trigger_ingest_failed",
+              hcp_id: result.hcp_id,
+              message,
+            }),
+          );
+        }
+        /** MCP2-09（DEF-005）：科室 → 将预灌专科映射预览；与预灌同一 resolveSpecialtiesForIngest 同源结果，确认者当场发现科室错标 */
+        const previewRows = resolveSpecialtyPreview(ingestInput).map((row) => ({
+          ...row,
+          ...(row.matched
+            ? {}
+            : { hint: "无法映射到受控专科，知识预灌将跳过该科室" }),
+        }));
         return textResult({
           twin: result.twin,
           hcp_id: result.hcp_id,
           ...(refresh ? { refresh } : {}),
+          ...(knowledgeJobs && knowledgeJobs.length > 0
+            ? { knowledge_jobs: knowledgeJobs }
+            : {}),
+          ...(previewRows.length > 0 ? { specialty_preview: previewRows } : {}),
         });
       } catch {
         return mcpErrorResult(
@@ -465,5 +579,175 @@ export function createMcpServer(options?: CreateMcpServerOptions): McpServer {
     },
   );
 
+  server.registerTool(
+    "get_hcp_insights",
+    {
+      description:
+        "读取单个 HCP 的公开分身与洞察（返回 { twin, insights }）。doing_now 已存在时纯读返回；doing_now 为空且事实足够时按需合成一次并写回缓存（insights.synthesized: true，仅首次）；事实不足或 LLM 暂不可用时返回空模板 insights.pending: true 加 repair_hint，不是错误。hcp_id 不存在或为通用智能体编号时返回 NOT_FOUND。本工具可能写库（幂等缓存回填），非只读。",
+      inputSchema: {
+        hcp_id: z.string().min(1).describe("HCP 主键 ID"),
+      },
+      annotations: { readOnlyHint: false, openWorldHint: false },
+    },
+    async (args) => {
+      try {
+        const twin = await runGetTwin(args.hcp_id);
+        if (!twin || twin.meta.hcp_id === AGENT_GENERAL_HCP_ID) {
+          return mcpErrorResult(
+            mcpError("NOT_FOUND", "未找到该编号的 HCP", {
+              repair_hint: "先用 query_hcp 按 name 或 hcp_id 确认编号后重试",
+              retryable: false,
+            }),
+          );
+        }
+        const insights = await runGetInsights(args.hcp_id);
+        /** 纯读路径：doing_now 已存在，不调 LLM、不写库 */
+        if (insights?.doing_now?.summary?.trim()) {
+          return textResult({ twin, insights });
+        }
+        const ensured = await runEnsureDoingNow(args.hcp_id);
+        if (ensured.status === "ready") {
+          const fresh = await runGetInsights(args.hcp_id);
+          const body = fresh ?? emptyInsightsTemplate(twin, ensured.doing_now);
+          return textResult({ twin, insights: { ...body, synthesized: true } });
+        }
+        const template = insights ?? emptyInsightsTemplate(twin);
+        return textResult({
+          twin,
+          insights: {
+            ...template,
+            pending: true,
+            repair_hint: repairHintFor(ensured.reason),
+          },
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(
+          JSON.stringify({
+            event: "get_hcp_insights_failed",
+            hcp_id: args.hcp_id,
+            message,
+          }),
+        );
+        return mcpErrorResult(
+          mcpError("INTERNAL_ERROR", "get_hcp_insights 读取失败", {
+            repair_hint: "检查 DATABASE_URL 与数据库连通性后重试",
+            retryable: true,
+          }),
+        );
+      }
+    },
+  );
+
+  server.registerTool(
+    "retrieve_academic",
+    {
+      description:
+        "按 HCP 检索学术证据（返回 { chunks }，每条含 source、doi、pmid、year 等引用字段）。query、specialty、themes 可选：只传 hcp_id 时按分身研究主题自动组装检索词。纯读、不写库、不生成方案。hcp_id 不存在或为通用智能体编号时返回 NOT_FOUND；知识库不可用时返回 INTERNAL_ERROR。",
+      inputSchema: {
+        hcp_id: z.string().min(1).describe("HCP 主键 ID"),
+        query: z.string().optional().describe("检索词；缺省按分身研究主题组装"),
+        specialty: z
+          .string()
+          .optional()
+          .describe("专长过滤；缺省用分身第一个专长"),
+        themes: z
+          .array(z.string())
+          .optional()
+          .describe("主题过滤，透传底层检索"),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async (args) => {
+      try {
+        const twin = await runGetTwin(args.hcp_id);
+        if (!twin || twin.meta.hcp_id === AGENT_GENERAL_HCP_ID) {
+          return mcpErrorResult(
+            mcpError("NOT_FOUND", "未找到该编号的 HCP", {
+              repair_hint: "先用 query_hcp 按 name 或 hcp_id 确认编号后重试",
+              retryable: false,
+            }),
+          );
+        }
+        /** query 组装（§10）：调用方优先，否则 themes 前 3 拼接，姓名学术交流兜底 */
+        const callerQuery = args.query?.trim();
+        const derivedQuery =
+          (twin.research?.themes ?? []).slice(0, 3).map(String).join(" ") ||
+          `${twin.identity?.name_zh ?? twin.profile.name_zh} 学术交流`;
+        const query = callerQuery || derivedQuery;
+        if (!query.trim()) {
+          return mcpErrorResult(
+            mcpError("VALIDATION_ERROR", "无法组装检索词", {
+              repair_hint: "补充 query 或先完成分身研究主题刷新后重试",
+              retryable: false,
+            }),
+          );
+        }
+        const specialty =
+          args.specialty?.trim() || twin.profile.specialties?.[0] || undefined;
+        const result = await runRetrieveAcademic({
+          query,
+          specialty,
+          themes: args.themes,
+        });
+        /** ADR-014：coverage 信号透出；sparse 建议补种（不写库、不内联补种） */
+        const coverage = result.coverage;
+        const sparse = coverage?.status === "sparse";
+        return textResult({
+          chunks: result.chunks,
+          ...(coverage ? { coverage } : {}),
+          ...(sparse
+            ? {
+                repair_hint:
+                  "知识库该专科覆盖不足，建议补种后重试（Web 确认保存或 MCP2-08 ingest_academic）",
+              }
+            : {}),
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(
+          JSON.stringify({
+            event: "retrieve_academic_failed",
+            hcp_id: args.hcp_id,
+            message,
+          }),
+        );
+        return mcpErrorResult(
+          mcpError("INTERNAL_ERROR", "retrieve_academic 检索失败", {
+            repair_hint: "检查知识库连通性（Qdrant 与嵌入服务）后重试",
+            retryable: true,
+          }),
+        );
+      }
+    },
+  );
+
   return server;
+}
+
+/** 空模板 insights：无 insights 记录或 pending 降级时返回，不编造事实 */
+function emptyInsightsTemplate(
+  twin: VirtualTwin,
+  doingNow?: HcpInsights["doing_now"],
+): HcpInsights {
+  return {
+    hcp_id: twin.meta.hcp_id,
+    as_of: twin.meta.as_of,
+    doing_now: doingNow,
+    interest_directions: [],
+    opportunities: [],
+    evidence: [],
+  };
+}
+
+function repairHintFor(
+  reason: Extract<EnsureDoingNowResult, { status: "pending" }>["reason"],
+): string {
+  if (reason === "twin_missing") {
+    return "该 HCP 尚无公开分身：等待对内 TWIN2-01 定时刷新完成后重试";
+  }
+  if (reason === "insufficient_facts") {
+    return "公开事实不足：等待 TWIN2-01 刷新，或经 Web 编辑补充专长、研究主题、兴趣与机会后再试";
+  }
+  return "LLM 暂不可用（无 Key 或调用失败）：检查 LLM_API_KEY / DASHSCOPE_API_KEY 配置后重试";
 }

@@ -1,6 +1,6 @@
 # 对外 MCP 2.0 设计
 
-> as_of：2026-10-20（新增 §7 feature-02 list_hcp；新增 §8 feature-03 add_hcp，含写前查重 ADR-009；OGT-1 并入库外检索与候选令牌，ADR-010；医院/科室过滤包含匹配，ADR-011；ADR-012 对外仅数据面：MCP2-04/05 改 `retrieve_academic` / `retrieve_compliance`）  
+> as_of：2026-10-21（新增 §7 feature-02 list_hcp；新增 §8 feature-03 add_hcp，含写前查重 ADR-009；OGT-1 并入库外检索与候选令牌，ADR-010；医院/科室过滤包含匹配，ADR-011；ADR-012 对外仅数据面：MCP2-04/05 改 `retrieve_academic` / `retrieve_compliance`；2026-10-21 §9 精化：ensureDoingNow 已随 feature-05 落地，返回形状与 NOT_FOUND 预检定稿；新增 §10 feature-02 retrieve_academic 与 §11 feature-04 retrieve_compliance 技术设计：底层 medical-kb 检索已落地，外部工具只接线；2026-10-21 新增 §12 feature-07 知识覆盖对齐：add_hcp 预灌 + retrieve_academic coverage 信号，ADR-014，triggerKnowledgeIngest 提取入 medical-kb；新增 §13 feature-11 科室来源标注与预灌映射预览：MCP2-09 / DEF-005）  
 > 需求与工具契约：[product-backlog.md](../product-backlog.md#external-service)  
 > 对内采集 MCP：[mcp-design.md](../mcp/mcp-design.md) · [mcp-function-spec.md](../mcp/mcp-function-spec.md)  
 > 架构：[3.architecture.md](../spec1.0/3.architecture.md)
@@ -231,27 +231,192 @@ MCP Client
    │ get_hcp_insights
    ▼
 handler（packages/hcp-engagement-mcp）
-   │ getTwin + getInsights（@hca/db）
-   ├─ doing_now 已存在 → 直接返回（纯读路径）
-   └─ 空模板且事实足够 → ensureDoingNow(hcpId)（服务器内同步合成，复用 synthesizeDoingNow 的 reused 语义）
-        ├─ 成功 → 写回 hcp_insights 缓存，返回完整 insights
-        ├─ 进行中 run → 返回该 run 对应的当前状态（不重复起任务）
-        └─ LLM 失败 → 返回空模板 + pending: true，不报 INTERNAL_ERROR
+   │ getTwin 预检（@hca/db）：编号不存在或为 _agent_general → NOT_FOUND
+   │ getInsights（@hca/db）
+   ├─ doing_now.summary 非空 → 直接返回（纯读路径，不调 LLM、不写库）
+   └─ 空模板 → ensureDoingNow(hcpId)（已落地于 @hca/hcp-engagement-agent）
+        ├─ ready → 写回 hcp_insights 缓存，重取 getInsights 返回，insights 顶层 synthesized: true
+        ├─ 同 hcp_id 进行中 → 进程内 in-flight 去重，复用同一次合成
+        └─ pending（事实不足 / 无 Key / LLM 失败）→ 返回空模板，insights 顶层 pending: true + repair_hint，不报 INTERNAL_ERROR
 ```
 
 | 规则 | 行为 |
 | --- | --- |
-| 入参 | `hcp_id` 必填；不存在的编号 → `NOT_FOUND` |
+| 入参 | `hcp_id` 必填；`getTwin` 预检：编号不存在或为 `_agent_general` → `NOT_FOUND`（与 `query_hcp` 口径一致） |
+| 处理流 | ① `getTwin` 预检 → ② `getInsights`：`doing_now.summary` 非空走纯读 → ③ 空模板时调注入的 `EnsureDoingNowFn`：`ready` 重取 `getInsights`（含写回结果）组装返回；`pending` 返回空模板 insights，不抛错 |
 | 纯读路径 | `insights.doing_now` 已存在：不调 LLM、不写库，行为与纯读一致 |
 | 按需合成 | `doing_now` 为空且 Twin 事实（专长、主题、标签等）足够时调用 `ensureDoingNow`；同一 HCP 已有进行中的 run 时复用该 run（去重），不并发起第二个任务 |
 | 事实不足 | Twin 无足够事实（如身份 twin 刚建、无专长与主题）：不调 LLM，返回空模板 + `pending: true`，`repair_hint` 指明等待 TWIN2-01 刷新或 Web 编辑补充 |
 | 降级 | LLM 失败、超时、无 Key：返回空模板 + `pending: true`；错误记结构化日志，不映射 `INTERNAL_ERROR` |
 | 写回 | 合成结果写 `hcp_insights`（幂等缓存回填，ADR-013）；失败时不写，下次调用重试 |
-| 返回 | `{ twin, insights }`；按需合成发生的调用在 insights 顶层附 `synthesized: true` 标记，便于调用方区分即时合成与存量 |
+| 返回 | `{ twin, insights }`；`synthesized: true`（合成成功）与 `pending: true`（事实不足 / 无 Key / LLM 失败）互斥，均在 `insights` 顶层；`repair_hint` 仅 pending 时出现，指明等待 TWIN2-01 刷新或 Web 编辑补充 |
 | Annotations | `readOnlyHint: false`（幂等缓存回填，ADR-012 修订见 ADR-013）、`openWorldHint: false` |
 
 实现落点：
 
-- `ensureDoingNow(hcpId)` 落在 Agent/BFF 侧既有 `synthesizeDoingNow` 同层（收敛为共享服务），三个触发源（build 完成、TWIN2-01 定时、本工具按需）调用同一入口；本故事补齐该入口并把 `get_hcp_insights` 接上。
-- handler 对 `ensureDoingNow` 与 `getInsights`/`getTwin` 采用注入，同 §7 模式，便于契约测试注入假 LLM 与假库。
+- `ensureDoingNow(hcpId)` 已随 feature-05 落地于 `packages/hcp-engagement-agent/src/ensure-doing-now.ts` 并从包入口导出，返回 `ready { doing_now, reused }` 或 `pending { reason: twin_missing | insufficient_facts | llm_unavailable }`；三个触发源（build 完成、TWIN2-01 定时、本工具按需）已收敛到该入口。本故事只做 MCP 工具接线。
+- `@hca/hcp-engagement-mcp` 新增 workspace 依赖 `@hca/hcp-engagement-agent`；无其他新依赖、无新表、无迁移。
+- handler 对 `EnsureDoingNowFn` 与 `getInsights` / `getTwin` 采用注入，同 §7 模式，便于契约测试注入假实现；并发去重由 `ensureDoingNow` 进程内 in-flight 表承担（已实现），handler 不重复实现。
 - 环境需要 `DATABASE_URL` 与 LLM Key（与 Web 合成同一配置）；Key 缺失走降级路径，不算配置错误。
+
+## 10. feature-02 `retrieve_academic` 技术设计（Sprint 2，ADR-012）
+
+纯读数据面工具：按 HCP 与条件检索 medical-kb 学术证据，返回带引用的 chunk；不生成方案、不写库。
+
+```text
+MCP Client
+   │ retrieve_academic
+   ▼
+handler（packages/hcp-engagement-mcp）
+   │ getTwin 预检（@hca/db）：编号不存在或为 _agent_general → NOT_FOUND
+   │ query 组装：调用方传 query 用之；否则 research.themes 前 3 拼接，
+   │   退「{姓名} 学术交流」（同 propose.ts 既有先例）
+   │ specialty 组装：调用方传 specialty 用之；否则 twin.profile.specialties[0]
+   ▼
+RetrieveAcademicFn（缺省 retrieveAcademicForAgent，@hca/hcp-engagement-agent）
+   │ themes / language / top_k 走底层默认；不暴露 year_from / top_k 入参
+   ▼
+{ chunks: RagChunk[] } 原样返回
+```
+
+| 规则 | 行为 |
+| --- | --- |
+| 入参 | `hcp_id` 必填；`query`、`specialty`、`themes` 可选（对齐 I-AGT-007 与 [product-backlog](../product-backlog.md#pb-4)）；`getTwin` 预检同 §9 口径 |
+| query 组装 | 只传 `hcp_id` 时由 twin 派生检索词（themes 优先、姓名学术交流兜底），保证无 query 也可检索；组装结果为空 → `VALIDATION_ERROR` |
+| 过滤透传 | 调用方传的 `query` / `specialty` / `themes` 原样透传底层检索 |
+| 返回 | `{ chunks }`，每条 `RagChunk` 含引用字段：`source`、`source_url`、`doi`、`pmid`、`year`、`specialty`、`version`、`as_of`、`score`；不含方案生成结果。**扩展（[ADR-014](../../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md)，feature-07 实施批次落地）**：返回体增加 `coverage`（复用 `coverageCheck` 的 `status` 与专科 chunk 数）；`sparse` 时附 `repair_hint` 建议补种后重试；不内联补种、不阻塞 |
+| 失败 | twin 预检失败 → `NOT_FOUND`；缺 `hcp_id` → SDK schema 层拦截；底层 RAG 不可用（Qdrant / 嵌入失败）→ `INTERNAL_ERROR`，`repair_hint` 指向 Qdrant 连通性；错误信封无 `stack`、无连接串 |
+| Annotations | `readOnlyHint: true`（纯读）、`openWorldHint: true`（公开文献库） |
+
+实现落点：
+
+- `retrieveAcademicForAgent(raw)` 已落地于 `@hca/hcp-engagement-agent/src/retrieve.ts` 并从包入口导出，内部经 `@hca/medical-kb` `retrieveAcademic`（向量 + BM25 + RRF + rerank）；本故事只做 MCP 接线。
+- 依赖不变：`@hca/hcp-engagement-mcp` 已依赖 `@hca/hcp-engagement-agent`（feature-01 接入）；无新依赖、无迁移。
+- handler 注入 `GetTwinFn`（复用 §9 定义）与 `RetrieveAcademicFn`；检索与排序逻辑全部留在 medical-kb，handler 不复制。
+- 环境：`DATABASE_URL`（twin 预检）+ Qdrant 与嵌入配置（`VECTOR_BACKEND=qdrant-local`、`QDRANT_URL`、`EMBEDDING_MODEL`、`RERANK_MODEL`，与 medical-kb 现有口径一致）。
+
+## 11. feature-04 `retrieve_compliance` 技术设计（Sprint 2，ADR-012）
+
+纯读数据面工具：检索合规知识库条款引用，返回带条款元数据的 chunk；工具 description 写明不是预审判定、不替代正式 MLR。`tenant_id` 不作入参（ADR-012）。
+
+```text
+MCP Client
+   │ retrieve_compliance
+   ▼
+handler（packages/hcp-engagement-mcp）
+   │ getTwin 预检：编号不存在或为 _agent_general → NOT_FOUND
+   │ query 组装：调用方传 query 用之；否则默认合规检索词
+   │   「医药代表 学术推广 机构同意 备案 科室会 RDPAC 合规」（同 propose.ts）
+   │ jurisdiction 服务端固定 CN，不作入参
+   │ tenant_id 不入参、不透传 → 底层仅返回全局种子（tid 为空的过滤已实现）
+   ▼
+RetrieveComplianceFn（缺省 retrieveComplianceForAgent，@hca/hcp-engagement-agent）
+   │ interaction_type 透传；top_k 走底层默认
+   ▼
+{ chunks: RagChunk[] } 原样返回
+```
+
+| 规则 | 行为 |
+| --- | --- |
+| 入参 | `hcp_id` 必填；`query`、`interaction_type` 可选（对齐 I-AGT-008 与 [product-backlog](../product-backlog.md#pb-5)）；schema properties 不含 `tenant_id` 键、不含 `jurisdiction` 键 |
+| tenant 边界 | `tenant_id` 不入参、handler 不透传；底层 `tenant_id` 缺省时过滤 `tid == null`，只返回全局种子（租户鉴权上线后改由服务端上下文注入，见 ADR-012） |
+| query 组装 | 只传 `hcp_id` 时用默认合规检索词，保证无 query 也可检索 |
+| description | 声明本工具只返回条款引用，不是预审判定、不替代正式 MLR |
+| 返回 | `{ chunks }`，每条 `RagChunk` 含 `clause_id`、`authority`、`version`、`jurisdiction`、`source`、`as_of`、`score` |
+| 失败 | twin 预检失败 → `NOT_FOUND`；缺 `hcp_id` → SDK schema 层拦截；底层 RAG 不可用 → `INTERNAL_ERROR`，`repair_hint` 指向 Qdrant 连通性；错误信封无 `stack`、无连接串 |
+| Annotations | `readOnlyHint: true`（纯读）、`openWorldHint: false`（内部知识库种子） |
+
+实现落点：
+
+- `retrieveComplianceForAgent(raw)` 已落地并从包入口导出，内部经 `@hca/medical-kb` `retrieveCompliance`；本故事只做 MCP 接线。
+- handler 注入 `GetTwinFn`（复用）与 `RetrieveComplianceFn`；注入与契约测试模式同 §10，feature-02 先行落地后本故事大部分为机械复制。
+- 环境：同 §10 的 Qdrant 与嵌入配置；合规种子须已灌库（`seedCompliance` 既有流程）。
+- 与 feature-02 的分界：两个工具各自注册、各自验收（MCP2-04 / MCP2-05 两个父 PBI）；共享的只有注入模式与测试脚手架。
+
+## 12. feature-07 知识覆盖对齐技术设计（Sprint 2，ADR-014）
+
+MCP 调用方与 Web 获得同等的知识库覆盖：`add_hcp` 写库成功后按 Twin 专科 fire-and-forget 预灌（与 Web confirm 的 `triggerKnowledgeIngest` 同语义）；`retrieve_academic` 返回体增加 `coverage` 信号，低命中建议补种。
+
+```text
+MCP Client
+   │ add_hcp（写库成功后）
+   ▼
+handler（packages/hcp-engagement-mcp）
+   │ 写库 + 异步 build（既有，ADR-013，不动）
+   │ fire-and-forget TriggerIngestFn（注入项，缺省 defaultTriggerKnowledgeIngest）：
+   │   resolveSpecialtiesForIngest(twin: specialties / research.themes / department / tags_draft)
+   │   → 逐受控专科 ingestOnDemand（coverage 门控幂等；INGEST_IN_PROGRESS 记 pending）
+   ▼
+返回体可选附 knowledge_jobs[]（{ specialty, job_id, knowledge_status }）
+   预灌失败只记结构化日志，不进错误信封、不阻塞返回
+
+MCP Client
+   │ retrieve_academic
+   ▼
+RetrieveAcademicFn（缺省 retrieveAcademicForAgent）
+   │ 底层 medical-kb retrieveAcademic 返回 { chunks, coverage? }：
+   │   coverage 内部经 coverageCheck(specialty)：{ status: ready | sparse, chunk_count }
+   │   归一化出受控专科 → 带 coverage；无专科口径 → 省略字段
+   ▼
+{ chunks, coverage? } 原样返回
+   coverage.status 为 sparse → 返回体附 repair_hint 建议补种后重试
+   （ingest_academic 工具由 feature-08 / MCP2-08 提供；未上线前建议语写「知识库覆盖不足，补种后重试」）
+```
+
+| 规则 | 行为 |
+| --- | --- |
+| add_hcp 预灌 | 写库成功后 fire-and-forget；`TriggerIngestFn` 注入（缺省 `defaultTriggerKnowledgeIngest`）；失败只记日志、不进错误信封、不影响写入成功 |
+| 专科解析 | 与 Web confirm 完全同源：twin `profile.specialties` / `research.themes` / `department` / `tags_draft` → `resolveSpecialtiesForIngest`（受控键；非受控静默跳过，不报错） |
+| coverage 来源 | 底层 `retrieveAcademic` 返回体附 `coverage`（同一次调用内 `coverageCheck`），handler 不二次查询；`coverage` 权威以 job / manifest 为准（F-RAG-017，不写 Twin 文档） |
+| coverage 省略 | 无法归一化出受控专科时省略 `coverage` 字段，检索照常返回、不报错 |
+| sparse 建议 | `coverage.status: "sparse"` 时返回体附 `repair_hint`；检索本身不触发灌注、不写库（ADR-014 决策 1） |
+| Annotations | 两工具注解不变（`retrieve_academic` 保持 `readOnlyHint: true`；`add_hcp` 保持既有写注解） |
+
+实现落点：
+
+- `triggerKnowledgeIngest` / `resolveSpecialtiesForIngest` 从 `apps/web/src/lib/rag-ingest.ts` 提取到 `@hca/medical-kb` 并导出；webapp 改为从包导入，行为不变（回归验证）。Web 的 department 正则启发式（肾移植 / 噬菌体 / 遗传）随函数一并入包。
+- `@hca/medical-kb` `retrieveAcademic` 返回签名扩为 `{ chunks, coverage? }`；`@hca/hcp-engagement-agent` `retrieveAcademicForAgent` 透传，coverage 类型从 agent 包入口再导出（同 `RagChunk` 先例）。
+- mcp 包 `CreateMcpServerOptions` 增 `triggerIngest` 注入项；`RetrieveAcademicFn` 返回签名同步扩展。
+- 依赖不变：mcp 包仍只依赖 `@hca/hcp-engagement-agent`；medical-kb 新导出经 agent 包再导出，无新包依赖、无迁移。
+- 环境：同 §10；预灌走 `ingestOnDemand` 既有链路（Qdrant + PubMed / OpenAlex 可达时拉公开源，否则 fixture 路径）。
+- 与 feature-08 的分界：本故事只做预灌触发与信号透出；`ingest_academic` / `get_ingest_status` 两个新工具注册归 MCP2-08。feature-07 先交付时 sparse 建议语不点名工具，feature-08 落地后建议语升级为工具名。
+
+## 13. feature-11 科室来源标注与预灌映射预览技术设计（MCP2-09，DEF-005）
+
+> 故事：[US-MCP2-007](./mcp2-stories.md) · 测试：[mcp2-test §14](./mcp2-test.md) · 需求：[pb-14](../product-backlog.md#pb-14) · 对内契约：[mcp-design · MCP2-09 节](../mcp/mcp-design.md)
+
+### 13.1 动因与范围
+
+- DEF-005：`resolve_hcp_identity` 把调用方提示科室当已核实身份回显，确认页以 high confidence 展示；陆林「神经科」错标预灌 neurology（应为 psychiatry）、王拥军「神经病」截断，两次实际发生。
+- 本节三件事：外部候选透传科室来源标注；`add_hcp` 确认返回「科室 → 将预灌专科」映射预览；映射不到受控专科时的可见提示。
+- 范围外（pb-14）：不自动纠正科室（OpenAlex 无可靠中文科室字段）；不新增对外工具。
+
+### 13.2 query_hcp 候选透传
+
+- `query_hcp`（`include_external: true`）的外部候选逐字段透传 twin-mcp resolve 新字段：`department_provenance`、`department_signal`、`department_mismatch`（字段语义见 [mcp-design · MCP2-09 节](../mcp/mcp-design.md)）。
+- candidate-store 缓存一并保存新字段，供 `add_hcp` 确认时回看；令牌有效期与既有口径一致（ADR-010）。
+
+### 13.3 add_hcp 映射预览
+
+- `add_hcp` 确认返回体新增 `specialty_preview[]`，每行 `{ input, specialty, matched }`：
+  - `input`：入参科室原文（或候选缓存中的科室）。
+  - `specialty`：`resolveSpecialtiesForIngest` 归一化出的受控专科键；`matched: false` 表示映射不到任何受控专科。
+- 预览与实际预灌同源：预览是 `resolveSpecialtiesForIngest` 同一次调用结果的明细视图，不另起一套映射，保证「预览与实际预灌专科一致」（与 §12 预灌链路共用，无第二份归一化）。
+- `matched: false` 的行附跳过提示（预灌将跳过该科室）；预灌静默跳过行为本身不变，但返回体可见。
+- 既有口径不变：预灌失败不影响 `add_hcp` 成功返回（§12）。
+
+### 13.4 数据流
+
+```text
+调用方输入科室
+  → twin-mcp resolve（来源标注 + OpenAlex 主题/机构信号对照，mismatch 判定）
+  → query_hcp include_external 候选透传（provenance / signal / mismatch）
+  → add_hcp 确认（resolveSpecialtiesForIngest 明细 → specialty_preview + knowledge_jobs）
+  → Web 确认页展示（US-WEB-004 / F-WEB-047）
+```
+
+### 13.5 实现落点
+
+- `packages/hcp-engagement-mcp`：`ResolveCandidateInput` 与 `CandidatePayload` 扩展三新字段；`add_hcp` 返回体拼装 `specialty_preview`（复用 §12 已提取的 `resolveSpecialtiesForIngest`，medical-kb 导出）。
+- 归一化（输入科室正则、OpenAlex 主题归一化）主权在 `@hca/medical-kb`，与 §12 同源；OpenAlex 主题归一化按 [mcp-design · MCP2-09 节](../mcp/mcp-design.md) 落 twin-mcp 侧导入。
+- 依赖不变：mcp 包仍只依赖 `@hca/hcp-engagement-agent` / `@hca/medical-kb` 既有导出，无新包依赖、无迁移。

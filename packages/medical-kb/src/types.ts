@@ -12,6 +12,7 @@ export const RagErrorCodeSchema = z.enum([
   "INGEST_FAILED",
   "COVERAGE_SPARSE",
   "RATE_LIMITED",
+  "SOURCES_UNAVAILABLE",
   "INTERNAL_ERROR",
 ]);
 
@@ -71,7 +72,15 @@ export const RagChunkSchema = z.object({
   tenant_id: z.string().nullable().optional(),
 });
 
+/** 学术库覆盖率信号（ADR-014；判定复用 coverageCheck，权威以 job/manifest 为准，F-RAG-017） */
+export const RagCoverageSchema = z.object({
+  specialty: z.string(),
+  status: z.enum(["ready", "sparse", "pending"]),
+  chunk_count: z.number().int().nonnegative(),
+});
+
 export type RagChunk = z.infer<typeof RagChunkSchema>;
+export type RagCoverage = z.infer<typeof RagCoverageSchema>;
 
 export const ComplianceSeedChunkSchema = z.object({
   clause_id: z.string().min(1),

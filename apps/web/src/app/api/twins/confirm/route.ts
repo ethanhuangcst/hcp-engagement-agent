@@ -2,7 +2,7 @@ import { z } from "zod";
 import { getMcp } from "@/lib/mcp";
 import { loadRootEnv } from "@/lib/env";
 import { jsonOk, jsonError } from "@/lib/api";
-import { triggerKnowledgeIngest } from "@/lib/rag-ingest";
+import { triggerKnowledgeIngest, resolveSpecialtyPreview } from "@/lib/rag-ingest";
 
 const Schema = z.object({
   hcpId: z.string().min(1),
@@ -51,9 +51,17 @@ export async function POST(req: Request) {
     } catch {
       /* fire-and-forget: confirm must not fail on ingest errors */
     }
+    // MCP2-09（DEF-005）：与上方 triggerKnowledgeIngest 同一输入同一归一化核心，预览与实际预灌一致
+    const specialty_preview = resolveSpecialtyPreview({
+      department: parsed.data.department,
+      specialties: parsed.data.specialties,
+      themes: parsed.data.themes,
+      tags_draft: parsed.data.tags_draft,
+    });
     return jsonOk({
       ...(result.data as object),
       knowledge_jobs,
+      specialty_preview,
     });
   } catch (err) {
     return jsonError(

@@ -11,13 +11,16 @@ esac
 VER="${QDRANT_VERSION:-v1.14.1}"
 URL="https://github.com/qdrant/qdrant/releases/download/${VER}/${ASSET}"
 TGZ="$ROOT/tools/qdrant/qdrant.tgz"
-if [[ ! -x "$ROOT/tools/qdrant/qdrant" ]]; then
+if [[ -f "$ROOT/tools/qdrant/qdrant" ]]; then
+  # 复用已有二进制：丢执行位时 chmod 修复而非重新下载（Future action #1）
+  chmod +x "$ROOT/tools/qdrant/qdrant"
+else
   echo "Downloading $URL"
   curl -L --retry 5 --retry-delay 2 -o "$TGZ" "$URL"
   tar -xzf "$TGZ" -C "$ROOT/tools/qdrant"
   rm -f "$TGZ"
   # tarball may unpack flat or nested
-  if [[ ! -x "$ROOT/tools/qdrant/qdrant" ]]; then
+  if [[ ! -f "$ROOT/tools/qdrant/qdrant" ]]; then
     find "$ROOT/tools/qdrant" -type f -name qdrant -perm +111 | head -1 | while read -r bin; do
       cp "$bin" "$ROOT/tools/qdrant/qdrant"
     done

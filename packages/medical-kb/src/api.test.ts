@@ -208,6 +208,17 @@ describe("MVP-3 academic ingest + retrieve (live Qdrant)", () => {
     expect(chunks.every((c) => !c.clause_id)).toBe(true);
   });
 
+  it("should_omit_coverage_and_not_throw_when_specialty_unresolved", async () => {
+    // feature-09 后 神经内科 已受控；未受控路径改用 肝胆外科 验证（mcp2-design §12）
+    const result = await retrieveAcademic({
+      query: "肝胆外科",
+      specialty: "肝胆外科",
+      top_k: 5,
+    });
+    expect(result.coverage).toBeUndefined();
+    expect(Array.isArray(result.chunks)).toBe(true);
+  });
+
   it("concurrent ingest without force returns INGEST_IN_PROGRESS or existing", async () => {
     await ingestOnDemand({ specialty: "phage_therapy", force: true });
     try {

@@ -20,4 +20,14 @@ export const en: Messages = {
   "career.empty":
     "No career timeline entries yet. They may be filled after intelligence build (MVP-2).",
   "career.role.default": "Role",
+  "newtwin.dept.provenance.caller_input":
+    "Department comes from your input hint, not verified against data sources",
+  "newtwin.dept.provenance.fixture":
+    "Department comes from sample data, not verified against data sources",
+  "newtwin.dept.mismatch":
+    "Data-source signal check: input side {input_side} · source side {signal_side}; please verify the department",
+  "newtwin.dept.preview.title": "Department → specialties to prefill",
+  "newtwin.dept.preview.ok": "{input} → {specialty}",
+  "newtwin.dept.preview.skipped":
+    "{input}: no controlled specialty match, prefill will skip it",
 };

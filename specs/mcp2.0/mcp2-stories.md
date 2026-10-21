@@ -1,6 +1,6 @@
 # 对外 MCP 2.0 用户故事与验收标准（ATDD）
 
-> as_of：2026-10-20（US-MCP2-006 补写前模糊查重与确认语义，ADR-009；OGT-1 并入库外检索与候选令牌，ADR-010，改写 US-MCP2-004 / US-MCP2-006；医院/科室过滤包含匹配，ADR-011；ADR-012 数据面口径：US-MCP2-002 / US-MCP2-003 改为洞察与学术证据、合规条款检索）  
+> as_of：2026-10-21（US-MCP2-006 补写前模糊查重与确认语义，ADR-009；OGT-1 并入库外检索与候选令牌，ADR-010，改写 US-MCP2-004 / US-MCP2-006；医院/科室过滤包含匹配，ADR-011；ADR-012 数据面口径：US-MCP2-002 / US-MCP2-003 改为洞察与学术证据、合规条款检索；2026-10-21 US-MCP2-002 的 get_hcp_insights 扩写为九场景，ADR-013 按需合成、幂等与降级；US-MCP2-002 的 retrieve_academic 扩写为七场景、US-MCP2-003 扩写为九场景并修 Sprint 标题；2026-10-21 retrieve_academic 增知识稀疏场景、US-MCP2-006 增专科预灌与预灌失败两场景，ADR-014，feature-07 实施批次落地；新增 US-MCP2-007 科室来源标注与预灌映射预览，MCP2-09 / DEF-005，Sprint 2 feature-11）  
 > 依据：[product-backlog.md](../product-backlog.md#external-service)、[mcp2-design.md](./mcp2-design.md)  
 > 角色：**MCP 调用方**（集成工程师 / 宿主 Agent）  
 > 样例 HCP：朱同玉 fixture（与 [7.test-strategy.md](../spec1.0/7.test-strategy.md) 一致）
@@ -285,7 +285,7 @@ Feature: list_hcp
 **I want to** 在不打开 Web 的情况下把一位 query_hcp 检出、经人选认的库外医生新增为主数据  
 **So that** 后续可在该医生上做查询、洞察与一人一策  
 
-**覆盖**：Sprint 1 `feature-03` · Sprint 2 `feature-05` 联动（ADR-013）· [MCP2-02](../product-backlog.md#pb-2)
+**覆盖**：Sprint 1 `feature-03` · Sprint 2 `feature-05` 联动（ADR-013）· Sprint 2 `feature-07` 预灌联动（[ADR-014](../../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md)）· [MCP2-02](../product-backlog.md#pb-2)
 **约束**：新增来源限库外候选令牌，入参只收 `candidate_id`（[ADR-010](../../docs/adr/ADR-010-external-resolve-and-candidate-token.md)）；写入前走 ADR-009 同名查重；写库成功后异步触发刷新（[ADR-013](../../docs/adr/ADR-013-insight-synthesis-triggers.md)）。
 
 ### 验收标准
@@ -313,7 +313,22 @@ Feature: add_hcp
     Then twin_version 为 1 且 insights 为空模板（无 doing_now 摘要、无机会列表）
     And 返回含 refresh.run_id 供 get_twin_status 查询进度
     And 服务端异步对该 hcp_id 起一次 build，不阻塞本次返回
-    And 响应不含 knowledge_jobs 键
+
+  Scenario: 写库成功后按专科预灌知识库（ADR-014，feature-07）
+    Given 一个有效且未用过的 candidate_id
+    And 候选所载科室或专长可归一化出至少一个受控专科
+    When 调用 add_hcp 传入该 candidate_id
+    Then 工具结果为成功且记录已写入
+    And 返回可选附 knowledge_jobs[]，每条含 specialty、job_id 与 knowledge_status
+    And 服务端 fire-and-forget 逐专科触发 on-demand ingest，不阻塞本次返回
+    And 预灌语义与 Web 确认保存完全同源
+
+  Scenario: 预灌失败不影响新增结果（ADR-014，feature-07）
+    Given 一个有效且未用过的 candidate_id
+    And 服务端知识预灌触发失败
+    When 调用 add_hcp 传入该 candidate_id
+    Then 工具结果仍为成功且记录已写入
+    And 失败记入服务端日志、不在工具结果中报错
 
   Scenario: 触发失败不影响新增结果
     Given 一个有效且未用过的 candidate_id
@@ -396,32 +411,250 @@ Feature: add_hcp
 
 ## US-MCP2-002 洞察与学术证据（Sprint 2）
 
-**覆盖**：`get_hcp_insights`、`retrieve_academic`（[ADR-012](../../docs/adr/ADR-012-mcp2-data-plane-only.md)：一人一策不经对外 MCP） · AGT2-01 同批验收
+**As a** MCP 调用方  
+**I want to** 读取一位已保存医生的洞察数据，空模板时由服务器按需合成一句话洞察并写回  
+**So that** 不打开 Web 就能拿到 `doing_now` 与洞察各块，宿主 Agent 可直接引用
+
+**覆盖**：Sprint 2 `feature-01`（`get_hcp_insights`）· `feature-02`（`retrieve_academic`）· [MCP2-03](../product-backlog.md#pb-3) · [MCP2-04](../product-backlog.md#pb-4) · [ADR-013](../../docs/adr/ADR-013-insight-synthesis-triggers.md)（一人一策不经对外 MCP，[ADR-012](../../docs/adr/ADR-012-mcp2-data-plane-only.md)） · AGT2-01 同批验收
+
+### 验收标准
 
 ```gherkin
-  Scenario: get_hcp_insights 返回 doing_now
-    Given 目标 hcp_id 已有 twin 与 insights
+Feature: get_hcp_insights
+
+  Scenario: 已有洞察纯读返回
+    Given 目标 hcp_id 已有 twin 且 insights.doing_now.summary 非空
     When 调用 get_hcp_insights
     Then 返回 twin 与 insights 且 doing_now.summary 非空
+    And 不调用 LLM、不写库
+    And insights 顶层无 synthesized 键
 
-  Scenario: retrieve_academic 返回带引用的学术证据
-    Given 目标 hcp_id 已有 twin
-    When 调用 retrieve_academic
-    Then 返回 chunks 且每条含 citation
+  Scenario: 空模板且事实足够时按需合成
+    Given 目标 hcp_id 的 insights 为空模板且 Twin 事实足够
+    When 调用 get_hcp_insights
+    Then 服务器内合成一次并写回缓存
+    And 返回的 insights 顶层附 synthesized: true 且 doing_now.summary 非空
+
+  Scenario: 合成幂等不重复起任务
+    Given 上一次调用已完成按需合成并写回
+    When 再次调用 get_hcp_insights
+    Then 走纯读路径且 insights 顶层无 synthesized 键
+    And 不再调用 LLM
+
+  Scenario: 同编号进行中合成被去重
+    Given 同一 hcp_id 的按需合成仍在进行中
+    When 并发再次调用 get_hcp_insights
+    Then 复用同一次合成，不重复起第二个任务
+
+  Scenario: 事实不足返回待定
+    Given 目标 hcp_id 仅有身份 twin 且无专长与主题
+    When 调用 get_hcp_insights
+    Then 工具结果为成功且 insights 为空模板
+    And insights 顶层 pending: true
+    And repair_hint 指明等待定时刷新或 Web 编辑补充
+
+  Scenario: LLM 不可用降级不报错
+    Given LLM Key 缺失或 LLM 调用失败
+    And 该 hcp_id 的 insights 为空模板且事实足够
+    When 调用 get_hcp_insights
+    Then 工具结果为成功且 insights 为空模板
+    And insights 顶层 pending: true
+    And 错误只记服务端结构化日志
+    And 错误码不是 INTERNAL_ERROR
+
+  Scenario: 编号不存在
+    Given 该 hcp_id 不在库中或为 _agent_general
+    When 调用 get_hcp_insights
+    Then 错误码为 NOT_FOUND
+
+  Scenario: 缺少编号
+    When 调用 get_hcp_insights 且未传 hcp_id
+    Then 错误码为 VALIDATION_ERROR
+    And 响应无堆栈
+
+  Scenario: 回填工具注记为非只读
+    When 调用方列出 tools
+    Then get_hcp_insights 的 annotations.readOnlyHint 为 false
+    And 响应无密钥、无堆栈、无内网路径
+```
+
+`retrieve_academic` 场景随 feature-02 扩写（七场景）：
+
+```gherkin
+Feature: retrieve_academic
+
+  Scenario: 带引用的学术证据检索
+    Given 目标 hcp_id 已有 twin 且学术库已灌种子
+    When 调用 retrieve_academic 传 hcp_id 与 query
+    Then 返回 chunks 且每条含 source、version、as_of 与 score
+    And 每条可选含 doi、pmid、year、specialty 引用字段
     And 响应不含方案生成结果、不写库
+
+  Scenario: 只传编号时由分身派生检索词
+    Given 目标 hcp_id 的 twin 含 research.themes
+    When 调用 retrieve_academic 仅传 hcp_id
+    Then 服务端以 themes 组装检索词完成检索并返回 chunks
+    And 组装规则与对内 propose 路径一致（themes 优先、姓名学术交流兜底）
+
+  Scenario: 专长与主题过滤透传
+    Given 目标 hcp_id 已有 twin
+    When 调用 retrieve_academic 传 hcp_id、specialty 与 themes
+    Then specialty 与 themes 原样透传底层检索
+
+  Scenario: 编号不存在
+    Given 该 hcp_id 不在库中或为 _agent_general
+    When 调用 retrieve_academic
+    Then 错误码为 NOT_FOUND
+
+  Scenario: 缺少编号
+    When 调用 retrieve_academic 且未传 hcp_id
+    Then 错误码为 VALIDATION_ERROR
+    And 响应无堆栈
+
+  Scenario: 知识库不可用返回结构化错误
+    Given Qdrant 或嵌入服务不在线
+    When 调用 retrieve_academic
+    Then 错误码为 INTERNAL_ERROR
+    And repair_hint 指向知识库连通性
+    And 响应无堆栈、无连接串
+
+  Scenario: 检索工具注记为只读开放世界
+    When 调用方列出 tools
+    Then retrieve_academic 的 annotations.readOnlyHint 为 true
+    And annotations.openWorldHint 为 true
+    And 调用前后库内记录无变化
+
+  Scenario: 知识稀疏时收到覆盖率信号与补种建议（ADR-014）
+    Given 目标专科在学术库覆盖为 sparse
+    When 调用 retrieve_academic
+    Then 返回 chunks 且返回体含 coverage.status 为 sparse
+    And repair_hint 建议补种后重试
+    And 本次调用不写库、不触发灌注任务
 ```
 
 ---
 
-## US-MCP2-003 合规条款检索（Sprint 3）
+## US-MCP2-003 合规条款检索（Sprint 2）
 
-**覆盖**：`retrieve_compliance`（[ADR-012](../../docs/adr/ADR-012-mcp2-data-plane-only.md)：预审不经对外 MCP）
+**As a** MCP 调用方
+**I want to** 检索合规知识库条款引用，确认计划的互动形式不触碰红线
+**So that** 不打开 Web 就能拿到可追溯的条款依据，正式预审仍走 MLR
+
+**覆盖**：Sprint 2 `feature-04`（`retrieve_compliance`）· [MCP2-05](../product-backlog.md#pb-5) · [ADR-012](../../docs/adr/ADR-012-mcp2-data-plane-only.md)（预审不经对外 MCP；`tenant_id` 不作入参）
+
+### 验收标准
 
 ```gherkin
+Feature: retrieve_compliance
+
   Scenario: 检索返回条款引用
-    Given 目标 hcp_id 已有 twin
-    When 调用 retrieve_compliance
+    Given 目标 hcp_id 已有 twin 且合规库已灌全局种子
+    When 调用 retrieve_compliance 传 hcp_id 与 query
     Then 返回 chunks 且每条含 clause_id、authority、version
-    And 工具 description 声明不是预审判定、不替代正式 MLR
-    And 请求不携带 tenant_id；租户鉴权未上线时仅返回全局种子
+    And 每条含 jurisdiction、source、as_of 与 score
+    And 响应不含方案生成结果、不写库
+
+  Scenario: 工具声明不是预审判定
+    When 调用方列出 tools
+    Then retrieve_compliance 的 description 写明不是预审判定、不替代正式 MLR
+
+  Scenario: 请求不携带租户编号且仅返回全局种子
+    Given 合规库同时存在全局种子与租户条款
+    When 调用 retrieve_compliance
+    Then 入参 schema 不含 tenant_id 键
+    And 返回 chunks 的 tenant_id 均为空
+
+  Scenario: 只传编号时用默认合规检索词
+    Given 目标 hcp_id 已有 twin
+    When 调用 retrieve_compliance 仅传 hcp_id
+    Then 服务端以默认合规检索词完成检索并返回 chunks
+    And 组装规则与对内 propose 路径一致
+
+  Scenario: 互动类型透传
+    Given 目标 hcp_id 已有 twin
+    When 调用 retrieve_compliance 传 hcp_id 与 interaction_type
+    Then interaction_type 原样透传底层检索
+
+  Scenario: 编号不存在
+    Given 该 hcp_id 不在库中或为 _agent_general
+    When 调用 retrieve_compliance
+    Then 错误码为 NOT_FOUND
+
+  Scenario: 缺少编号
+    When 调用 retrieve_compliance 且未传 hcp_id
+    Then 错误码为 VALIDATION_ERROR
+    And 响应无堆栈
+
+  Scenario: 知识库不可用返回结构化错误
+    Given Qdrant 或嵌入服务不在线
+    When 调用 retrieve_compliance
+    Then 错误码为 INTERNAL_ERROR
+    And repair_hint 指向知识库连通性
+    And 响应无堆栈、无连接串
+
+  Scenario: 检索工具注记为只读内部库
+    When 调用方列出 tools
+    Then retrieve_compliance 的 annotations.readOnlyHint 为 true
+    And annotations.openWorldHint 为 false
+    And 调用前后库内记录无变化
 ```
+
+---
+
+## US-MCP2-007 确认时看见科室来源与预灌专科映射（Sprint 2 · feature-11）
+
+**As a** 药企 HCP 互动负责人  
+**I want to** 在候选与确认返回中看见科室来源标注、数据源对照与「科室 → 将预灌专科」映射  
+**So that** 我不会把错标科室的候选确认入库并预灌错专科（DEF-005：陆林「神经科」错标预灌 neurology，应为 psychiatry）  
+
+**覆盖**：[mcp2-design §13](./mcp2-design.md)（承接 [F-MCP-012 增补](../mcp/mcp-function-spec.md) 与 [F-WEB-047](../app/app-function-spec.md)）  
+**关联**：[pb-14](../product-backlog.md#pb-14) · [DEF-005](../issues-log.md)  
+
+### 验收标准
+
+```gherkin
+Feature: 科室来源标注与预灌映射预览（MCP2-09）
+
+  Scenario: 外部候选透传科室来源标注
+    Given 调用方以 include_external 检索库外候选
+    When twin-mcp 返回带来源标注的候选
+    Then query_hcp 候选含 department_provenance（origin 为 caller_input、verified 为 false）
+    And 有数据源信号时候选含 department_signal（主题词与归一化专科键）
+    And 候选令牌缓存保存新字段，add_hcp 确认时可回看
+
+  Scenario: 数据源信号与输入不一致时候选附 mismatch 提示
+    Given 调用方输入科室归一化为 neurology
+    And 数据源信号归一化为 psychiatry
+    When 候选返回
+    Then 候选附 department_mismatch 与两侧专科键
+    And mismatch 不阻塞确认流程（由确认者判断，不自动改写科室）
+
+  Scenario: add_hcp 返回科室到预灌专科映射预览
+    Given 候选科室「精神科」可归一化到受控专科 psychiatry
+    When 调用方确认 add_hcp
+    Then 返回体含 specialty_preview，行为 input「精神科」、specialty psychiatry、matched true
+    And 预览与实际预灌专科一致（同一 resolveSpecialtiesForIngest 同一次结果的明细视图）
+
+  Scenario: 科室映射不到受控专科时提示
+    Given 候选科室无法归一化到任何受控专科
+    When 调用方确认 add_hcp
+    Then specialty_preview 该行 matched 为 false 并附跳过提示
+    And 预灌静默跳过行为不变，add_hcp 仍成功返回
+
+  Scenario: 数据源信号不可用时降级
+    Given OpenAlex 主题与机构元数据均无可用科室信号
+    When 调用方执行检索与确认
+    Then 候选仅带来源标注，无 department_signal 与 department_mismatch
+    And 检索与确认不报错不阻塞
+
+  Scenario: 确认页展示映射预览
+    Given Web 确认页展示候选与确认返回（F-WEB-047）
+    When 确认保存完成
+    Then 页面显示科室来源标注与「科室 → 将预灌专科」映射结果
+    And 映射不到专科时显示跳过提示而非空白
+```
+
+### 说明
+
+- 对内 resolve 行为（来源标注、信号归一化、mismatch 判定）的故事与测试归 mcp 模块：[US-MCP-002 后三场景](../mcp/mcp-stories.md)、[mcp-tests §5](../mcp/mcp-tests.md)。
+- 不自动纠正科室、不新增对外工具（pb-14 范围外）。

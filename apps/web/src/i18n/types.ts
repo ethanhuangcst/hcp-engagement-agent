@@ -17,6 +17,12 @@ export type MessageKey =
   | "career.kind.past"
   | "career.kind.society"
   | "career.empty"
-  | "career.role.default";
+  | "career.role.default"
+  | "newtwin.dept.provenance.caller_input"
+  | "newtwin.dept.provenance.fixture"
+  | "newtwin.dept.mismatch"
+  | "newtwin.dept.preview.title"
+  | "newtwin.dept.preview.ok"
+  | "newtwin.dept.preview.skipped";
 
 export type Messages = Record<MessageKey, string>;

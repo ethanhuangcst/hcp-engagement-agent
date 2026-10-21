@@ -1,6 +1,6 @@
 # hcp-twin-mcp 功能规格
 
-> as_of：2026-07-16 · 包名建议 `@hca/hcp-twin-mcp`  
+> as_of：2026-10-21 · 包名建议 `@hca/hcp-twin-mcp` · 2026-10-21 F-MCP-012 增补：resolve 候选科室来源标注与数据源对照（MCP2-09 / DEF-005）  
 > 依据：[`1.product-definition.md`](../1.product-definition.md)、[`3.architecture.md`](../3.architecture.md) §5.2、[`4.install-dependencies.md`](../4.install-dependencies.md) §5、[`5.hcp-twin-data-dictionary.md`](../5.hcp-twin-data-dictionary.md)、[`../app/app-function-spec.md`](../app/app-function-spec.md)、[`../../knowledge/hcp-twin/hcp-tagging.md`](../../knowledge/hcp-twin/hcp-tagging.md)、[`../../knowledge/hcp-twin/twin-data-structure.md`](../../knowledge/hcp-twin/twin-data-structure.md)、**mcp-server-patterns**  
 > 范围：`packages/hcp-twin-mcp` — Twin 采集 MCP Server（**Tools / Resources** + 内部 Collectors）。不含 Web UI、BFF 路由、Agent、medical-kb 实现；与 BFF 的契约以本文件对外接口表为准。  
 > **相对架构补全**：架构 §5.2.1 未列 `tag_hcp` / `health_check`；本规格将其列为正式对外 Tool（与 skill / 安装文档一致）。
@@ -66,7 +66,7 @@ Research Collector **仅**使用同时满足下列条件的源：公开 HTTP API
 | 9 | F-MCP-009 | 合规采集边界 | 仅公开源；禁止处方/统方/非公开 CRM/私人手机微信号营销画像；活动不得用拜访笔记冒充 `events` | MVP-1 |
 | 10 | F-MCP-010 | Playwright 进程隔离 | Chromium 仅本 MCP；并发浏览器上下文有上限；`CRAWLER_HEADLESS` 可配 | MVP-1 |
 | 11 | F-MCP-011 | 外网限速与成本 | PubMed/NCBI（尊重 `NCBI_API_KEY` 配额）、OpenAlex、Playwright 导航：限速、超时、可重试；失败进结构化错误 | MVP-1 |
-| 12 | F-MCP-012 | 身份消歧（resolve） | 姓名+医院+科室 → **`candidates[]`（人候选）**、每候选 AuthorIds/tags 草稿、`disambiguation_status`；网页/库名进 `evidence[]`，不得当作人选主标题；**未确认前不强制入库完整 Twin** | MVP-1 |
+| 12 | F-MCP-012 | 身份消歧（resolve） | 姓名+医院+科室 → **`candidates[]`（人候选）**、每候选 AuthorIds/tags 草稿、`disambiguation_status`；网页/库名进 `evidence[]`，不得当作人选主标题；**未确认前不强制入库完整 Twin**；**候选 `department` 原样回显调用方输入并带来源标注（caller_input · 未经核实），不得当作已核实身份；OpenAlex 主题/机构信号可用时附 `department_signal` 并与输入对照，两侧归一化到受控专科键不一致时附 mismatch 提示；信号缺失或不可归一化时降级为仅来源标注，不阻塞消歧**（MCP2-09 / DEF-005） | MVP-1（MCP2-09 增补） |
 | 13 | F-MCP-013 | AuthorIds 绑定 | 权威在 `research.author_ids`；镜像在 `profile.external_ids`；活跃 P0：orcid / pubmed_author / openalex；`resolved` ⇒ ≥1 个活跃 P0 号非空 | MVP-1 |
 | 14 | F-MCP-014 | 文献灌库门禁 | Stage C 前校验数据字典 §3.2.1；未满足则**跳过/拒绝**论文灌库并返回可修复错误；禁止仅中文姓名灌库 | MVP-1 |
 | 15 | F-MCP-015 | 级别打标（Tagging） | 规则优先写 `profile.tags`：`hcp_tier` + `role_tags[]` + meta；禁止处方潜力；可选 LLM 建议，冲突时规则胜出 | MVP-1 |

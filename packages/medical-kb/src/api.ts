@@ -5,6 +5,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { getPool } from "@hca/db";
 import {
   ComplianceSeedChunkSchema,
+  ACADEMIC_COLLECTION,
   COMPLIANCE_COLLECTION,
   type ComplianceSeedChunk,
   type RagChunk,
@@ -237,21 +238,25 @@ export async function seedCompliance(raw: unknown = {}): Promise<{
   return { upserted: points.length, manifest_rev: rev };
 }
 
-async function loadCompliancePayloadsForBm25(): Promise<
+export async function loadCompliancePayloadsForBm25(): Promise<
   Array<{ id: string; text: string; payload: Record<string, unknown> }>
 > {
   const q = getQdrantClient();
   const rows: Array<{ id: string; text: string; payload: Record<string, unknown> }> =
     [];
-  let offset: string | number | null | undefined = undefined;
-  do {
+  // F-RAG-034 / DEF-004：point-ID 游标 + seen 去重（offset 语义含头，会重返回游标点）
+  const seen = new Set<string>();
+  let offset: string | number | undefined = undefined;
+  for (;;) {
     const page = await q.scroll(COMPLIANCE_COLLECTION, {
       limit: 100,
       offset,
       with_payload: true,
       with_vector: false,
     });
-    for (const p of page.points) {
+    const fresh = page.points.filter((p) => !seen.has(String(p.id)));
+    for (const p of fresh) {
+      seen.add(String(p.id));
       const payload = (p.payload ?? {}) as Record<string, unknown>;
       rows.push({
         id: String(p.id),
@@ -259,8 +264,9 @@ async function loadCompliancePayloadsForBm25(): Promise<
         payload,
       });
     }
-    offset = page.next_page_offset as string | number | null | undefined;
-  } while (offset != null);
+    if (fresh.length === 0) break;
+    offset = page.points[page.points.length - 1]!.id as string | number;
+  }
   return rows;
 }
 
@@ -371,6 +377,32 @@ export async function retrieveCompliance(
   return { chunks };
 }
 
+export type HealthProbeResult = { ok: boolean; error?: unknown };
+
+/** F-RAG-023 / DEF-004：带 filter 的 1 点探测读，复现实弹读路径（points/search）。坏 shard 只在这里 panic。 */
+async function probeCollectionRead(
+  collection: string,
+  indexValue: string,
+): Promise<HealthProbeResult> {
+  try {
+    const vector = await embedQuery("健康检查探针");
+    const q = getQdrantClient();
+    await q.search(collection, {
+      vector,
+      limit: 1,
+      with_payload: false,
+      with_vector: false,
+      filter: { must: [{ key: "index", match: { value: indexValue } }] },
+    });
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
 export async function health(): Promise<{
   ok: boolean;
   qdrant: boolean;
@@ -378,6 +410,7 @@ export async function health(): Promise<{
   bind_safe: boolean;
   embedding?: string;
   error?: unknown;
+  probe?: { academic: HealthProbeResult; compliance: HealthProbeResult };
 }> {
   const url = getQdrantUrl();
   const bindCheck = assertSafeQdrantUrl(url);
@@ -400,12 +433,23 @@ export async function health(): Promise<{
       collections = [];
     }
   }
+  const embedding = process.env.EMBEDDING_MODEL ?? "Xenova/bge-small-zh-v1.5";
+  if (!qdrantOk) {
+    return { ok: false, qdrant: false, collections, bind_safe, embedding };
+  }
+  const probe = {
+    academic: await probeCollectionRead(ACADEMIC_COLLECTION, "academic"),
+    compliance: await probeCollectionRead(COMPLIANCE_COLLECTION, "compliance"),
+  };
+  const probesOk = probe.academic.ok && probe.compliance.ok;
   return {
-    ok: qdrantOk && bind_safe,
+    ok: qdrantOk && bind_safe && probesOk,
     qdrant: qdrantOk,
     collections,
     bind_safe,
-    embedding: process.env.EMBEDDING_MODEL ?? "Xenova/bge-small-zh-v1.5",
+    embedding,
+    probe,
+    ...(probesOk ? {} : { error: "probe read failed" }),
   };
 }
 

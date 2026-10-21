@@ -49,3 +49,15 @@
 | HCP资料 | `apps/web/src/app/twins/[hcpId]/page.tsx` |
 | 职业轨迹展示 | `apps/web/src/components/CareerTimeline.tsx` + `apps/web/src/i18n/` |
 | 洞察 / 一人一策 | `apps/web/src/app/twins/[hcpId]/insights` · `options` |
+
+## 6. 确认页科室来源标注与预灌映射预览（MCP2-09 / DEF-005）
+
+| 元素 | 规范 |
+|------|------|
+| 候选卡片科室 | 科室旁展示来源标注（「来自调用方输入提示，未经数据源核实」，数据来自 `department_provenance`）；不当作已核实身份强调展示 |
+| mismatch 对照 | 候选带 `department_mismatch` 时展示两侧专科键（输入侧 / 数据源侧），供确认者对照判断；不阻塞选择与确认 |
+| 映射预览 | 确认保存响应含 `specialty_preview` 时展示「科室 → 将预灌专科」映射列表；与实际预灌同源（`add_hcp` 返回体） |
+| 跳过提示 | `matched: false` 行展示「无法映射到受控专科，预灌将跳过」；不静默空白 |
+| 文案 | 全部走 i18n message catalog（§3、F-WEB-046），禁止组件硬编码 |
+
+实现落点：确认向导组件（`apps/web/src/app/twins` 新增/确认流程）与 BFF `/api/twins/confirm` 响应透传；规格见 [app-function-spec F-WEB-047](./app-function-spec.md)、故事见 [app-stories US-WEB-004 后两场景](./app-stories.md)、上游契约见 [mcp2-design §13](../mcp2.0/mcp2-design.md)。

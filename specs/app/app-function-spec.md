@@ -1,6 +1,6 @@
 # Web App 功能规格（反推自当前设计）
 
-> as_of：2026-07-16  
+> as_of：2026-10-21（2026-07-16 首版；2026-10-21 新增 F-WEB-047：确认页科室来源标注与预灌映射预览，MCP2-09 / DEF-005）  
 > 依据：[`1.product-definition.md`](../1.product-definition.md)、[`6.ui-guideline.md`](../6.ui-guideline.md)、[`3.architecture.md`](../3.architecture.md)、[`5.hcp-twin-data-dictionary.md`](../5.hcp-twin-data-dictionary.md)、Canvas 原型 [`hcp-ui-prototype.canvas.tsx`](./hcp-ui-prototype.canvas.tsx)、[`knowledge/hcp-twin/twin-data-structure.md`](../../knowledge/hcp-twin/twin-data-structure.md)  
 > 范围：`apps/web` 表达层 + BFF 所暴露的**用户可感知功能**（不含 MCP/Agent/RAG 进程内部实现细节，但标注依赖）。
 
@@ -69,6 +69,7 @@
 | 44 | F-WEB-044 | （废止）返回当前数字分身 | 已由多开姓名标签 + 工作台子 Tab 取代；实现中移除洞察/一人一策返回条 | — |
 | 45 | F-WEB-045 | 分身工作台子导航 | HCP资料 / HCP洞察 / 一人一策水平子 Tab；与顶栏姓名标签联动 | MVP-1 |
 | 46 | F-WEB-046 | 界面 locale 与职业轨迹本地化 | 默认 `zh-CN`；UI/职业轨迹经 i18n catalog；切换 locale 时类型与常见职衔短语随语言变化；可扩展 `en` 等 | MVP-1 |
+| 47 | F-WEB-047 | 确认页科室来源标注与预灌映射预览 | 候选科室旁展示来源标注与 mismatch 对照（`department_provenance` / `department_signal` / `department_mismatch`）；确认保存展示「科室 → 将预灌专科」映射（`specialty_preview`），映射不到时显示跳过提示而非空白（MCP2-09 / DEF-005，承接 `add_hcp` 返回体与 F-WEB-039 同链路） | MVP-3 |
 
 ---
 

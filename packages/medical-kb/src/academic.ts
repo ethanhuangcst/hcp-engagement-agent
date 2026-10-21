@@ -32,12 +32,13 @@ import {
   updateJob,
 } from "./jobs.js";
 import { ensureCollections, getQdrantClient } from "./qdrant.js";
-import { normalizeSpecialty } from "./specialty.js";
+import { normalizeSpecialty, tryNormalizeSpecialty } from "./specialty.js";
 import {
   ACADEMIC_COLLECTION,
   AcademicSeedChunkSchema,
   type AcademicSeedChunk,
   type RagChunk,
+  type RagCoverage,
   GetIngestStatusInputSchema,
   IngestOnDemandInputSchema,
   ragError,
@@ -106,12 +107,30 @@ export function ensureAcademicCorpusFromFixtures(specialty: string): string {
   return target;
 }
 
-async function countQdrantSpecialtyChunks(specialty: string): Promise<number> {
+/**
+ * feature-09（MKB2-02）：语料引导三路径。
+ * 有 fixture / 已有语料 → 直接复用；无 fixture 时返回运行时语料路径（可空起步），
+ * 由调用方在 PubMed 拉取后落盘；两路皆空由调用方判 job 失败。
+ */
+export function ensureAcademicCorpusDir(specialty: string): string {
+  const dataDir = specialtyCorpusDir(specialty);
+  mkdirSync(dataDir, { recursive: true });
+  return join(dataDir, "chunks.jsonl");
+}
+
+export function hasAcademicFixture(specialty: string): boolean {
+  const fixture = join(packageAcademicFixturesRoot(), specialty, "chunks.jsonl");
+  return existsSync(fixture);
+}
+
+export async function countQdrantSpecialtyChunks(specialty: string): Promise<number> {
   try {
     const q = getQdrantClient();
-    let count = 0;
-    let offset: string | number | null | undefined = undefined;
-    do {
+    // F-RAG-034 / DEF-004：以上一页最后 point id 作游标，不依赖 Qdrant 内部 sequential
+    // offset。Qdrant scroll 的 offset 语义含头（会重返回游标点本身），用 seen 去重、无新点即终止。
+    const seen = new Set<string>();
+    let offset: string | number | undefined = undefined;
+    for (;;) {
       const page = await q.scroll(ACADEMIC_COLLECTION, {
         limit: 100,
         offset,
@@ -119,10 +138,12 @@ async function countQdrantSpecialtyChunks(specialty: string): Promise<number> {
         with_vector: false,
         filter: { must: [{ key: "specialty", match: { value: specialty } }] },
       });
-      count += page.points.length;
-      offset = page.next_page_offset as string | number | null | undefined;
-    } while (offset != null);
-    return count;
+      const fresh = page.points.filter((p) => !seen.has(String(p.id)));
+      for (const p of fresh) seen.add(String(p.id));
+      if (fresh.length === 0) break;
+      offset = page.points[page.points.length - 1]!.id as string | number;
+    }
+    return seen.size;
   } catch {
     return 0;
   }
@@ -158,8 +179,19 @@ export async function coverageCheck(specialty: string): Promise<{
   return { status: statusFromCount(count), chunk_count: count };
 }
 
-function academicPointId(chunk: AcademicSeedChunk, index: number): string {
-  const key = chunk.pmid ?? chunk.doi ?? `${chunk.specialty}:${index}:${chunk.version}`;
+/**
+ * F-RAG-033 / DEF-003：键必须含 specialty。同 PMID 跨学科是 PubMed 按专科
+ * 查询的常态，各自成点（fixture fallback 键不变）。
+ */
+export function academicPointId(
+  chunk: AcademicSeedChunk,
+  index: number,
+): string {
+  const key = chunk.pmid
+    ? `${chunk.specialty}:pmid:${chunk.pmid}`
+    : chunk.doi
+      ? `${chunk.specialty}:doi:${chunk.doi}`
+      : `${chunk.specialty}:${index}:${chunk.version}`;
   const h = createHash("sha256").update(key).digest("hex");
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
 }
@@ -317,6 +349,64 @@ async function upsertAcademicChunks(
   return points.length;
 }
 
+export type BootstrapAcademicCorpusResult = {
+  corpusPath: string;
+  chunks: AcademicSeedChunk[];
+};
+
+/**
+ * feature-09（MKB2-02）：语料引导三路径。
+ * 1) 有 fixture / 已有语料 → 直接复用；2) 无 fixture 且拉取可用 → 空语料起步，
+ * PubMed 合并后落盘；3) 两路皆空 → 抛 SOURCES_UNAVAILABLE（job 结构化失败）。
+ * 拉取函数可注入，便于单测。
+ */
+export async function bootstrapAcademicCorpus(
+  specialty: string,
+  themes?: string[],
+  fetchChunks: (
+    specialty: string,
+    themes?: string[],
+  ) => Promise<AcademicSeedChunk[]> = fetchPubmedChunks,
+): Promise<BootstrapAcademicCorpusResult> {
+  let corpusPath: string;
+  let chunks: AcademicSeedChunk[];
+  if (hasAcademicFixture(specialty)) {
+    corpusPath = ensureAcademicCorpusFromFixtures(specialty);
+    chunks = loadAcademicChunksJsonl(corpusPath);
+  } else {
+    corpusPath = ensureAcademicCorpusDir(specialty);
+    chunks = existsSync(corpusPath)
+      ? loadAcademicChunksJsonl(corpusPath)
+      : [];
+  }
+
+  const pubmed = await fetchChunks(specialty, themes);
+  if (pubmed.length > 0) {
+    const merged = [...chunks];
+    const seen = new Set(chunks.map((c) => c.pmid ?? c.text.slice(0, 80)));
+    for (const p of pubmed) {
+      const key = p.pmid ?? p.text.slice(0, 80);
+      if (!seen.has(key)) {
+        merged.push(p);
+        seen.add(key);
+      }
+    }
+    writeFileSync(
+      corpusPath,
+      merged.map((c) => JSON.stringify(c)).join("\n") + "\n",
+      "utf8",
+    );
+    chunks = merged;
+  }
+
+  if (chunks.length === 0) {
+    throw ragError("SOURCES_UNAVAILABLE", `${specialty} 无可用学术语料源`, {
+      repair_hint: "检查 RAG_ACADEMIC_FETCH/NCBI_API_KEY 或补 fixtures",
+    });
+  }
+  return { corpusPath, chunks };
+}
+
 async function runAcademicIngestJob(
   jobId: string,
   specialty: string,
@@ -324,27 +414,10 @@ async function runAcademicIngestJob(
 ): Promise<void> {
   try {
     await updateJob(jobId, { status: "running", progress: 0.1 });
-    const corpusPath = ensureAcademicCorpusFromFixtures(specialty);
-    let chunks = loadAcademicChunksJsonl(corpusPath);
-
-    const pubmed = await fetchPubmedChunks(specialty, themes);
-    if (pubmed.length > 0) {
-      const merged = [...chunks];
-      const seen = new Set(chunks.map((c) => c.pmid ?? c.text.slice(0, 80)));
-      for (const p of pubmed) {
-        const key = p.pmid ?? p.text.slice(0, 80);
-        if (!seen.has(key)) {
-          merged.push(p);
-          seen.add(key);
-        }
-      }
-      writeFileSync(
-        corpusPath,
-        merged.map((c) => JSON.stringify(c)).join("\n") + "\n",
-        "utf8",
-      );
-      chunks = merged;
-    }
+    const { corpusPath, chunks } = await bootstrapAcademicCorpus(
+      specialty,
+      themes,
+    );
 
     await updateJob(jobId, { progress: 0.5 });
     await upsertAcademicChunks(specialty, chunks, corpusPath);
@@ -469,21 +542,25 @@ export async function getIngestStatus(raw: unknown): Promise<{
   };
 }
 
-async function loadAcademicPayloadsForBm25(): Promise<
+export async function loadAcademicPayloadsForBm25(): Promise<
   Array<{ id: string; text: string; payload: Record<string, unknown> }>
 > {
   const q = getQdrantClient();
   const rows: Array<{ id: string; text: string; payload: Record<string, unknown> }> =
     [];
-  let offset: string | number | null | undefined = undefined;
-  do {
+  // F-RAG-034 / DEF-004：point-ID 游标 + seen 去重（offset 语义含头，会重返回游标点）
+  const seen = new Set<string>();
+  let offset: string | number | undefined = undefined;
+  for (;;) {
     const page = await q.scroll(ACADEMIC_COLLECTION, {
       limit: 100,
       offset,
       with_payload: true,
       with_vector: false,
     });
-    for (const p of page.points) {
+    const fresh = page.points.filter((p) => !seen.has(String(p.id)));
+    for (const p of fresh) {
+      seen.add(String(p.id));
       const payload = (p.payload ?? {}) as Record<string, unknown>;
       rows.push({
         id: String(p.id),
@@ -491,14 +568,15 @@ async function loadAcademicPayloadsForBm25(): Promise<
         payload,
       });
     }
-    offset = page.next_page_offset as string | number | null | undefined;
-  } while (offset != null);
+    if (fresh.length === 0) break;
+    offset = page.points[page.points.length - 1]!.id as string | number;
+  }
   return rows;
 }
 
 export async function retrieveAcademic(
   raw: unknown,
-): Promise<{ chunks: RagChunk[] }> {
+): Promise<{ chunks: RagChunk[]; coverage?: RagCoverage }> {
   const parsed = RetrieveAcademicInputSchema.safeParse(raw);
   if (!parsed.success) {
     throw ragError("VALIDATION_ERROR", "retrieve_academic 入参无效", {
@@ -511,8 +589,11 @@ export async function retrieveAcademic(
   assertVectorBackendLocal();
 
   const must: Array<Record<string, unknown>> = [];
-  if (rawSpecialty) {
-    const { specialty } = normalizeSpecialty(rawSpecialty);
+  /** ADR-014 / mcp2-design §12：无法归一化受控专科时省略 filter 与 coverage，检索照常、不报错 */
+  const specialty = rawSpecialty
+    ? tryNormalizeSpecialty(rawSpecialty) ?? undefined
+    : undefined;
+  if (specialty) {
     must.push({ key: "specialty", match: { value: specialty } });
   }
   if (language) {
@@ -600,5 +681,15 @@ export async function retrieveAcademic(
           : undefined,
   }));
 
-  return { chunks };
+  return {
+    chunks,
+    ...(specialty
+      ? {
+          coverage: {
+            specialty,
+            ...(await coverageCheck(specialty)),
+          },
+        }
+      : {}),
+  };
 }

@@ -1,9 +1,9 @@
 # medical-kb 设计：双索引 RAG 与灌注
 
-> as_of：2026-07-17  
+> as_of：2026-10-21（新增 §18：受控学科目录扩充与学术索引批量种子，feature-09 / MKB2-02；新增 §19：合规覆盖信号与条款版本治理，MKB2-03；新增 §20：学术索引写入与恢复健壮性，DEF-003 / DEF-004 修复，US-RAG-009 / F-RAG-033–034）  
 > 规格：[`rag-function-spec.md`](./rag-function-spec.md) · 架构 §5.3 · 安装 §6  
 > 包：`@hca/medical-kb` · 向量：Qdrant · 元数据：MySQL 主库（ADR-005）  
-> 原则：**rag-implementation**（Hybrid + citation；禁止全科预灌、禁止混库）
+> 原则：**rag-implementation**（Hybrid + citation；不做持续全科预灌、禁止混库；一次性冷启动批量种子见 §18）
 
 ## 1. 结论
 
@@ -290,16 +290,19 @@ Query
 
 朱同玉示例映射：器官移植 / 噬菌体 / BK 病毒等 → 受控标签后再过滤检索。
 
+受控目录于 feature-09（MKB2-02）扩充到临床一级学科全集；清单与批量种子设计见 [§18](#18-受控学科目录扩充与学术索引批量种子feature-09--mkb2-02)。
+
 ---
 
 ## 10. 对外 API（设计契约）
 
 | API | 调用方 | 要点 |
 |-----|--------|------|
-| `retrieve_academic` | Agent | filter + Hybrid；无写副作用 |
+| `retrieve_academic` | Agent | filter + Hybrid；无写副作用；返回体附 `coverage`（ADR-014，feature-07 批次） |
 | `retrieve_compliance` | Agent（提案**强制**） | 可空结果 → Agent gate；租户隔离 |
-| `ingest_on_demand` | BFF F-WEB-039 | 立即返回 `jobId`；异步写 |
-| `get_ingest_status` | BFF / UI | 按 jobId 或 specialty |
+| `ingest_on_demand` | BFF F-WEB-039 · 对外 MCP `add_hcp` 预灌（ADR-014） | 立即返回 `jobId`；异步写 |
+| `resolveSpecialtiesForIngest` / `triggerKnowledgeIngest` | BFF · 对外 MCP `add_hcp`（ADR-014，feature-07 批次从 webapp lib 提取入包） | twin 专科/主题/科室 → 受控键集合；fire-and-forget 灌注，失败不阻塞调用方 |
+| `get_ingest_status` | BFF / UI · 对外 MCP（ADR-014） | 按 jobId 或 specialty |
 | `seed_compliance` | 运维 | 同版本幂等 |
 | `upsert_tenant_sop` | 运维 / BFF | 路径 + payload `tenant_id` |
 | `health` | BFF `/api/health` | qdrant + collections + `bind_safe` |
@@ -394,6 +397,7 @@ packages/medical-kb/
 | MVP | 目标 |
 |-----|------|
 | MVP-3 | 目录 + Qdrant 双 collection + Zod + health + 合规种子 + `retrieve_compliance` + Hybrid 学术检索 + `ingest_on_demand` + coverage |
+| MVP-3 扩充（feature-09 / MKB2-02） | 受控目录扩到临床一级学科全集 + 学术索引一次性批量种子（[§18](#18-受控学科目录扩充与学术索引批量种子feature-09--mkb2-02)） |
 | 后置 | 租户 SOP + eval + 安全硬化 |
 
 总表：[`../1.product-definition.md`](../1.product-definition.md)。
@@ -408,3 +412,115 @@ packages/medical-kb/
 - Agent 消费：[`../agent/agent-design.md`](../agent/agent-design.md) · function-spec `retrieve_*`  
 - 安装：[`../4.install-dependencies.md`](../4.install-dependencies.md) §6  
 - 研究底稿：`knowledge/rag-medical-knowledge-base/`（[ingest-feasibility-and-ops](../../knowledge/rag-medical-knowledge-base/ingest-feasibility-and-ops.md) · architecture · on-demand · content-acquisition）  
+
+---
+
+## 18. 受控学科目录扩充与学术索引批量种子（feature-09 / MKB2-02）
+
+> 依据：[MKB2-02](../product-backlog.md#pb-12) · [ADR-014](../../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md) · US-RAG-007。动因：王拥军（神经内科）入库后预灌因学科非受控静默跳过，检索无真实证据。
+
+### 18.1 受控目录扩充
+
+| 项 | 设计 |
+| --- | --- |
+| 位置 | `packages/medical-kb/src/specialty.ts` `ALIAS_MAP`（既有机制不变，仅扩数据） |
+| 清单 | 临床一级学科全集，约 20-30 键（neurology 为首个案例；内、外、妇、儿等按 `specialty_key` 命名，同现有 snake_case 风格） |
+| 别名 | 每键中英文别名（如 neurology：神经内科、神经病学、neurology） |
+| 科室正则 | `ingest-trigger.ts` `resolveSpecialtiesForIngest` 的 department 启发式补神经科等模式（既有肾移植 / 噬菌体 / 遗传唐氏不回归） |
+| 行为不变项 | 未收录别名仍 `SPECIALTY_UNRESOLVED`；`tryNormalizeSpecialty` 仍返回 null 静默跳过；`CONTROLLED_KEYS` 由 `ALIAS_MAP` 派生 |
+
+### 18.2 批量种子脚本
+
+| 项 | 设计 |
+| --- | --- |
+| 位置 | `packages/medical-kb` 包内脚本（CLI 入口），复用 `ingestOnDemand` 既有管线（job、manifest、Qdrant、fixture 兜底全部既有） |
+| 流程 | 逐受控学科串行：先 `coverageCheck`，ready 幂等跳过；否则 `ingestOnDemand`（PubMed / OpenAlex 拉取为主，源不可用走 fixture 路径） |
+| 失败隔离 | 单学科失败降级 fixture 并继续；全部源不可用记结构化日志（JSON event）跳过；脚本可重跑，重跑仅补未 ready 学科 |
+| 限流 | 沿用 F-RAG-020 底线：公开源限流、摘要 / OA 优先、闭源不存全文 |
+| 产出 | 每学科 `coverageCheck` 为 ready（chunk ≥ 3）；`rag_ingest_jobs` / manifest 为权威记录 |
+
+### 18.3 验收锚点
+
+- 王拥军（`hcp_a5057449191`，神经内科）经 `retrieve_academic` 返回真实神经内科证据且 `coverage: ready`。
+- 批量脚本跑完逐学科 `coverageCheck` 全 ready；重跑幂等。
+- 批量验收以 §20.1 修复后口径为准（28 学科盘-vs-库逐条相等，非仅 ≥3 阈值）。
+
+### 18.4 与既有故事分界
+
+- 不改 MCP 工具面（feature-07/08 已交付或另批）；不改 Web；`ingest_on_demand` 接口签名不变。
+- 一次性冷启动；后续新学科走既有链路（add_hcp 预灌或 MCP2-08 `ingest_academic`）。
+
+---
+
+## 19. 合规知识覆盖信号与条款版本治理（MKB2-03）
+
+> 依据：[MKB2-03](../product-backlog.md#pb-13) · US-RAG-008 · F-RAG-030–032。动因：合规种子仅 10 条两个来源，稀疏不可见；同 `clause_id` 多版本并存，无下线机制。
+
+### 19.1 覆盖信号
+
+| 项 | 设计 |
+| --- | --- |
+| 权威源 | `ingest_manifest`（`index_name = compliance_index`），不扫 Qdrant、不写 Twin |
+| 聚合 | 新增 `complianceCoverage()`：按 `authority` 取最新版本行，返回 `{ authorities: [{ authority, version, chunk_count, as_of }], status }` |
+| 状态口径 | `ready`：至少一个 authority 行 `chunk_count > 0`；`sparse`：manifest 无任何 authority 行（冷启动未灌种）；跳过无阈值，全量来自 manifest | 
+| 地域维度 | manifest 无 jurisdiction 列，现行种子全部为 CN；本节 coverage 不做 jurisdiction 切分，后置另开条目 |
+| 挂载点 | `retrieveCompliance` 返回体附 `coverage`；sparse 附 `repair_hint` 建议运维 `seed_compliance` 后重试；同 ADR-014：只读旁路、不内联补种 |
+| 降级 | manifest 读取失败时省略 `coverage` 字段，检索照常，不报错 |
+| Agent 消费 | `retrieveComplianceForAgent` 透传；`proposeOptions` / gate 不因 coverage 缺失败或改变既有软失败语义 |
+
+### 19.2 条款版本治理
+
+| 项 | 设计 |
+| --- | --- |
+| 点 ID | 沿用 `hash(clause_id + version)`，天然携带版本 |
+| 下线策略 | `seedCompliance` 灌入 (authority, 新 version) 成功后，对该 authority 在 manifest 中登记的旧 version 按 Qdrant filter `{ authority, version = 旧 }` 执行 `delete`（`wait: true`），再写新 manifest 行 |
+| 幂等 | 重跑同版本：删除集合为空，行为等价 no-op；manifest 仍是 (authority:version) 主键 |
+| 失败语义 | 删除失败记结构化日志（`{ code, authority, version, message }`）并抛 `INGEST_FAILED`，可重跑；不允许半状态（已删未记、已记未删只允许日志可查） |
+| 检索侧 | 不加版本过滤兜底：下线以删除为主，检索逻辑保持不变 |
+
+### 19.3 种子扩充与目录口径
+
+| 项 | 设计 |
+| --- | --- |
+| 扩充量 | `rdpac` 2024-01 ≥15 条；`cn_med_rep_measures` 2026-08 ≥8 条；仍手动策展，不自动爬 |
+| authority 键 | `authority` 字段为灌库口径（如 `cn_med_rep_measures`），corpus 目录名不参与过滤；新 authority 仅受 Zod schema 约束，无受控词表 |
+| 数据卫生 | 灌库前逐行 Zod；行缺 `clause_id` / `version` 时按行号报 `VALIDATION_ERROR`，整批不灌，防半状态 |
+| 既有 tenant 数据 | 本地库存在历史 `tenant-demo` 测试点不属于全局种子；验收断言仅以 `tenant_id IS NULL` 全局行计 |
+
+### 19.4 与既有故事分界
+
+- 租户 SOP（F-RAG-021 / I-RAG-006）仍后置，本节不设计租户写入通路。
+- 不新增对外 MCP 工具；`retrieve_compliance`（MCP2-05）按既有 PBI 契约透传 `coverage`，须与本节同批验收。
+- 学术侧的 coverage 与本节互不复用（口径不同：受控专科 vs authority 清单），不抽公共层。
+
+---
+
+## 20. 学术索引写入与恢复健壮性（DEF-003 / DEF-004 修复）
+
+> 依据：[issues-log DEF-003 / DEF-004](../issues-log.md) · US-RAG-009 · F-RAG-023 / 029 / 033 / 034。动因：批量种子实测 13/28 学科丢点（point ID 冲突）；写入窗口进程被强杀导致 Qdrant WAL 损坏、读路径 panic 不可恢复。仿 §11（DEF-002 修复口径）先例，本节记录缺陷修复后的设计口径。
+
+### 20.1 学术 point ID 唯一性（DEF-003）
+
+| 项 | 设计 |
+| --- | --- |
+| 键结构 | `academicPointId` 键改为 `${specialty}:pmid:${pmid}` / `${specialty}:doi:${doi}`；fixture fallback（`${specialty}:${index}:${version}`）不变 |
+| 跨学科重叠 | 同 PMID 跨学科各自成点：语料重叠是 PubMed 按专科查询的常态，不是错误；两个专科的 chunk payload 不同（specialty 字段不同），必须并存 |
+| 迁移 | 新旧 ID 不同，原地重跑会留下旧 ID 孤儿点，污染 BM25 词频与 dense 检索。迁移必须**清 `academic_index` 全量重灌**（`seed:academic-batch --force --no-fetch` + `seed:compliance`），不允许增量补种 |
+
+### 20.2 读路径健康探测与损坏恢复（DEF-004）
+
+| 项 | 设计 |
+| --- | --- |
+| 根因 | 写入窗口进程被环境强杀（exit 137/143）→ Qdrant 磁盘 WAL/shard 损坏 → 读路径 panic（`OffsetOutOfBounds` → HTTP 500，复现在无 offset 的带 filter `points/search` 上）→ 重启不可恢复，唯清库重灌可行 |
+| 健康探测 | `health()` 在 ping + listCollections 基础上，对双 collection（`academic_index` / `compliance_index`）各执行一次带 filter 的 1 点探测读；坏 shard 在 listCollections 不可见，只有探测读会触发 panic；探测失败时 `ok: false` 并附错误细节 |
+| 信号陷阱 | seed CLI 捕获 SIGTERM / SIGINT：等待当前学科 job 到终态再退出，不产生半状态写入窗口 |
+| scroll 翻页 | `countQdrantSpecialtyChunks`、`loadAcademicPayloadsForBm25`、`loadCompliancePayloadsForBm25` 三处改 point-ID 游标（以上一页最后 point id 作游标），消除对 Qdrant 内部 sequential offset 的依赖；本项为稳健化，不是 DEF-004 根因修复 |
+| 恢复 runbook | 停 Qdrant → 删 `academic_index` 数据目录 → 重启 → `seed:academic-batch --force --no-fetch` + `seed:compliance`；语料全在盘上（`data/rag/corpus/`），实测约 3 分钟 |
+
+### 20.3 验收锚点
+
+- 28/28 学科盘-vs-库逐条相等（读 `data/rag/corpus/academic/{s}/chunks.jsonl` 对比 Qdrant scroll，非仅 `coverageCheck` ≥3 阈值）。
+- 重跑幂等：全量重灌后重跑，全部 `skipped_ready`。
+- 王拥军（`hcp_a5057449191`）经 `:3300 tools/call retrieve_academic` 返回 neurology 5 条真实证据。
+- health 探测用例：mock 探测读 panic / 500 时 `ok: false`。
+- 恢复演练计时 ≤5 分钟恢复 28/28 ready。

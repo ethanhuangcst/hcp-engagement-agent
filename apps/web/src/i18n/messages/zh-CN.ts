@@ -19,4 +19,11 @@ export const zhCN: Messages = {
   "career.kind.society": "学会",
   "career.empty": "暂无职业轨迹节点。确认保存后可由情报构建补齐（MVP-2）。",
   "career.role.default": "职位",
+  "newtwin.dept.provenance.caller_input": "科室来自您的输入提示，未经数据源核实",
+  "newtwin.dept.provenance.fixture": "科室来自样例数据，未经数据源核实",
+  "newtwin.dept.mismatch":
+    "数据源信号对照：输入侧 {input_side} · 数据源侧 {signal_side}，请核对科室",
+  "newtwin.dept.preview.title": "科室 → 将预灌专科",
+  "newtwin.dept.preview.ok": "{input} → {specialty}",
+  "newtwin.dept.preview.skipped": "{input}：无法映射到受控专科，预灌将跳过",
 };

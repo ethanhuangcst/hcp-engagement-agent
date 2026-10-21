@@ -1,8 +1,23 @@
 # 变更记录（HCP Engagement Assistant）
 
 > 类型：Framework (process) artifact，产品：HCP Engagement Assistant
-> as_of: 2026-10-20
+> as_of: 2026-10-21
 > [Definition](../.cursor/templates/framework.sdd.works/sdd-scrum-practices.md#changes-logmd)
+
+---
+
+## 2026-10-21
+
+### feature-01 Done：get_hcp_insights 对外工具（MCP2-03）
+
+**原因**：Sprint 2 需集成方经对外 MCP 读取 HCP 洞察；ADR-013 的按需合成入口已在 feature-05 落地，本故事完成 MCP 接线与契约验收。
+
+**变更内容**：
+- `@hca/hcp-engagement-mcp`：注册 `get_hcp_insights`（`hcp_id` 必填、`readOnlyHint: false`）；注入 `GetTwinFn` / `GetInsightsFn` / `EnsureDoingNowFn`；处理流按 §9（预检 → 纯读 → 按需合成 / pending）；workspace 依赖 `@hca/hcp-engagement-agent`。
+- 契约测试 9 例（纯读、合成 `synthesized: true`、pending 两原因、null insights、`NOT_FOUND`、`_agent_general`、INTERNAL_ERROR 无泄漏、annotations）。
+- 规格：`mcp2-design.md` §9、`mcp2-stories.md` US-MCP2-002、`mcp2-test.md` §10（开工准备批次）。
+
+**验收**：engagement-mcp 42/42、agent 27/27；typecheck / build 绿；本地 `:3300` 对朱同玉两条实调纯读成功；用户 close confirm feature-01 可用。
 
 ---
 
