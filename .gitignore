@@ -35,3 +35,6 @@ specs/.tmp
 # Qdrant 本地下载的二进制（用 scripts/start-qdrant.sh 获取）
 tools/qdrant/
 .qdrant-initialized
+
+# node-side stack env (Portainer compose dir)
+stack.env

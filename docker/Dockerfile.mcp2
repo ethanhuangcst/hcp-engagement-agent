@@ -1,0 +1,61 @@
+# hcp-engagement-mcp (对外 MCP 2.0, Streamable HTTP :3300)
+# Build: docker build -f docker/Dockerfile.mcp2 -t hcp-engagement-mcp .
+# 运行时含 medical-kb 检索/嵌入（@xenova/transformers），构建段对齐 Dockerfile.web（完整 npm ci，不 --ignore-scripts）。
+
+ARG NODE_IMAGE=node:22-bookworm-slim
+ARG NPM_REGISTRY=https://registry.npmmirror.com
+
+FROM ${NODE_IMAGE} AS build
+ARG NPM_REGISTRY
+WORKDIR /app
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates python3 make g++ \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY package.json package-lock.json ./
+# Workspace lockfile 要求全部 workspace 的 package.json 在位
+COPY packages/domain/package.json packages/domain/
+COPY packages/db/package.json packages/db/
+COPY packages/mcp-client/package.json packages/mcp-client/
+COPY packages/medical-kb/package.json packages/medical-kb/
+COPY packages/hcp-engagement-agent/package.json packages/hcp-engagement-agent/
+COPY packages/hcp-engagement-mcp/package.json packages/hcp-engagement-mcp/
+COPY packages/hcp-twin-mcp/package.json packages/hcp-twin-mcp/
+COPY apps/web/package.json apps/web/
+
+RUN npm config set registry "${NPM_REGISTRY}" \
+  && npm ci
+
+COPY tsconfig.base.json ./
+COPY packages/domain packages/domain
+COPY packages/db packages/db
+COPY packages/mcp-client packages/mcp-client
+COPY packages/medical-kb packages/medical-kb
+COPY packages/hcp-engagement-agent packages/hcp-engagement-agent
+COPY packages/hcp-engagement-mcp packages/hcp-engagement-mcp
+
+RUN npm run build -w @hca/domain -w @hca/db -w @hca/mcp-client -w @hca/medical-kb -w @hca/hcp-engagement-agent -w @hca/hcp-engagement-mcp \
+  && npm prune --omit=dev
+
+FROM ${NODE_IMAGE} AS runner
+WORKDIR /app
+ENV NODE_ENV=production \
+    MCP_TRANSPORT=http \
+    MCP2_PORT=3300
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /app/package.json /app/package-lock.json ./
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/packages/domain ./packages/domain
+COPY --from=build /app/packages/db ./packages/db
+COPY --from=build /app/packages/mcp-client ./packages/mcp-client
+COPY --from=build /app/packages/medical-kb ./packages/medical-kb
+COPY --from=build /app/packages/hcp-engagement-agent ./packages/hcp-engagement-agent
+COPY --from=build /app/packages/hcp-engagement-mcp ./packages/hcp-engagement-mcp
+
+EXPOSE 3300
+CMD ["node", "packages/hcp-engagement-mcp/dist/cli.js"]

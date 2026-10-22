@@ -148,7 +148,7 @@ Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规
 
 | # | Code | SBI | Parent PBI | Module/Type | Related specs | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| 16 | task-02 | MVP2 上线 | [REL2-01 MVP2 上线（mvp4 → 生产）](./product-backlog.md#pb-18) | 后台维护/Task | - [go-live-instruction.md](go-live/1021/go-live-instruction.md)<br>- [env-changes.md](go-live/1021/env-changes.md)<br>- [data-backfill-design.md](go-live/1021/data-backfill-design.md)<br>- [release.md](release.md) | **ToDo** |
+| 16 | task-02 | MVP2 上线 | [REL2-01 MVP2 上线（mvp4 → 生产）](./product-backlog.md#pb-18) | 后台维护/Task | - [go-live-instruction.md](go-live/1021/go-live-instruction.md)<br>- [env-changes.md](go-live/1021/env-changes.md)<br>- [data-backfill-design.md](go-live/1021/data-backfill-design.md)<br>- [release.md](release.md) | **WIP** |
 
 ### Retrospective
 

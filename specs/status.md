@@ -20,7 +20,7 @@
 
 ## 当前进展
 
-- 当前在做的 sprint：Sprint 2（WIP）。feature-03（Agent ROCKS，AGT2-01）已于 2026-10-22 关闭：`prompts/v1` 模板注册表、四路径模板版本元数据、时延计时与超预算降级、eval 门禁 15/15 过零红线（报告归档 `packages/hcp-engagement-agent/eval/reports/`），agent 46/46 绿 + typecheck 0 错，用户 close confirm。Sprint 2 功能面全部收口。
+- 当前在做的 sprint：Sprint 2（WIP）。当前 WIP SBI：task-02（MVP2 上线，REL2-01，2026-10-22 用户确认开工）。上线准备规格已修订就绪（[go-live 1021 手册](./go-live/1021/go-live-instruction.md)）；Phase 1 只读预检 2026-10-22 全过（3 容器 Up、web health ok、Qdrant 146/23 三面一致、3205 空闲、Portainer 凭据有效）；正在执行 Phase 0（B2 部署三件套合入 + B3 mcp2 镜像三处新增）。
 - 剩余 SBI：task-02（MVP2 上线，REL2-01，ToDo）。上线准备规格已修订就绪（[go-live 1021 手册](./go-live/1021/go-live-instruction.md)、env-changes、release.md 对齐八工具与 OGT-5 后基线）；阻塞项 B1 / B4 已清，B2 / B3（部署三件套合入 + mcp2 镜像）待执行。
 - 回顾 Future action #5 已落地：[release.md](release.md) Step 5 补「live 临时脚本放仓库根 `.tmp-*.mts`」，`.gitignore` 补 `.tmp-*`（feature-08 验收批次）。
 - 合规索引后台检查：`coverage.status=ready`（rdpac 15、cn_med_rep_measures 8）；已删除 Qdrant 孤儿点 `tenant-demo@2026-01`。

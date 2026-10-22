@@ -1,0 +1,53 @@
+# hcp-twin-mcp (Streamable HTTP :3200)
+# Build: docker build -f docker/Dockerfile.mcp -t hcp-twin-mcp .
+
+ARG NODE_IMAGE=node:22-bookworm-slim
+ARG NPM_REGISTRY=https://registry.npmmirror.com
+
+FROM ${NODE_IMAGE} AS build
+ARG NPM_REGISTRY
+WORKDIR /app
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY package.json package-lock.json ./
+COPY packages/domain/package.json packages/domain/
+COPY packages/db/package.json packages/db/
+COPY packages/hcp-twin-mcp/package.json packages/hcp-twin-mcp/
+# Workspace lockfile expects these package.json paths present
+COPY packages/mcp-client/package.json packages/mcp-client/
+COPY packages/medical-kb/package.json packages/medical-kb/
+COPY packages/hcp-engagement-agent/package.json packages/hcp-engagement-agent/
+COPY apps/web/package.json apps/web/
+
+RUN npm config set registry "${NPM_REGISTRY}" \
+  && npm ci --ignore-scripts
+
+COPY tsconfig.base.json ./
+COPY packages/domain packages/domain
+COPY packages/db packages/db
+COPY packages/hcp-twin-mcp packages/hcp-twin-mcp
+
+RUN npm run build -w @hca/domain -w @hca/db -w @hca/hcp-twin-mcp \
+  && npm prune --omit=dev
+
+FROM ${NODE_IMAGE} AS runner
+WORKDIR /app
+ENV NODE_ENV=production \
+    MCP_TRANSPORT=http \
+    MCP_PORT=3200
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /app/package.json /app/package-lock.json ./
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/packages/domain ./packages/domain
+COPY --from=build /app/packages/db ./packages/db
+COPY --from=build /app/packages/hcp-twin-mcp ./packages/hcp-twin-mcp
+
+EXPOSE 3200
+CMD ["node", "packages/hcp-twin-mcp/dist/cli.js"]
