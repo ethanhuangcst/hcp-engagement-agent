@@ -1,7 +1,0 @@
-{
-  "mcpServers": {
-    "hcp-engagement-mcp": {
-      "url": "http://localhost:3300/mcp"
-    }
-  }
-}

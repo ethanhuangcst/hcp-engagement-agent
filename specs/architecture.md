@@ -303,7 +303,7 @@ Sprint 门禁：
 |----|------|------|
 | `list_hcp` 无分页的响应体积 | HCP 量大后膨胀 | Sprint 1 接受；超阈值再开分页故事 |
 | `knowledge_jobs` 触发条件 | `add_hcp` 是否联动学术 ingest | MVP 默认不联动；如需联动另开故事 |
-| ROCKS eval-set 的具体用例数 | AGT2-01 验收口径 | Sprint 2 开工前定 |
+| ROCKS eval-set 的具体用例数 | AGT2-01 验收口径 | 已决 2026-10-21：三类任务各 5 例合计 15 例，每类含朱同玉 fixture 锚点；见 [agent/agent-design.md](./agent/agent-design.md) §13.2 与 [agent/agent-tests.md](./agent/agent-tests.md) |
 
 ---
 

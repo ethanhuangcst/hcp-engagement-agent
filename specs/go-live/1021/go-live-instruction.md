@@ -153,7 +153,7 @@ QDRANT_ENABLED=false npm run db:migrate
 
 ## Phase 3 — RAG 种子灌进生产 Qdrant（SSH 隧道，本次核心数据动作）
 
-> **状态：已于 2026-10-21 执行完毕(OGT-5),G1–G3 通过:academic 146 / compliance 23,三面一致,零测试残留。** 上线时本 Phase 只剩 G4 冒烟(并入 Phase 6 S4)。执行细节、绕过的 DEF-005 与隧道窗口风险见 [data-backfill-design.md](./data-backfill-design.md) 执行记录。
+> **状态：已于 2026-10-21 执行完毕(OGT-5),G1–G3 通过:academic 146 / compliance 23,三面一致,零测试残留。** 上线时本 Phase 只剩 G4 冒烟(并入 Phase 6 S4)。执行细节、绕过的 DEF-007 与隧道窗口风险见 [data-backfill-design.md](./data-backfill-design.md) 执行记录。
 > 验收口径以该设计文件为准(146 / 23,不是本机现存量口径)。
 
 灌种**从本机跑**（种子 CLI 进程内自设 `RAG_ACADEMIC_FETCH=pubmed`，语料兜底在 repo 的 `data/rag/corpus/academic/*` 已随提交携带 28 学科 chunks.jsonl），向量写入方向通过隧道指向生产节点 Qdrant。
@@ -184,7 +184,7 @@ QDRANT_ENABLED=false npm run db:migrate
      npm run seed:academic-batch -w @hca/medical-kb -- --force --no-fetch
      ```
    - 失败学科单独补跑：`npm run seed:academic-batch -w @hca/medical-kb -- --force --only=<specialty>`。
-   - 空库首次执行会因 seed-compliance 的 health 先于 ensure 而 404 中止（DEF-005）：先手动预建空集合再跑，绕法见 [data-backfill-design.md](./data-backfill-design.md) 执行记录。
+   - 空库首次执行会因 seed-compliance 的 health 先于 ensure 而 404 中止（DEF-007）：修复后可直接跑；修复前进生产前先手动预建空集合（绕法见 [data-backfill-design.md](./data-backfill-design.md) 执行记录）。
    - 嵌入模型本机已缓存（dev 阶段已下过），不重复下载；`NCBI_API_KEY` 可选不设（限速时代码退避重试）。
 5. 灌后复核（验收闸门 G1–G3，已于 2026-10-21 执行通过；口径见 [data-backfill-design.md](./data-backfill-design.md)）：
    ```bash

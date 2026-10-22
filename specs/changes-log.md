@@ -8,6 +8,89 @@
 
 ## 2026-10-21
 
+### feature-03 开工准备：AGT2-01 规格四件与 process 同步（不动代码）
+
+**原因**：feature-03（Agent ROCKS 质量优化，AGT2-01）开工前 agent 模块规格不齐：三件规格停在 spec1.0 口径（as_of 2026-07-17）、无 AGT2-01 功能编号与故事，[architecture §12](architecture.md) eval-set 用例数挂起待定。
+
+**变更内容**：
+- [agent-function-spec.md](agent/agent-function-spec.md)：新增「Sprint 2 增补」节 F-AGT-031 ~ 034（模板版本化、ROCKS 五段、eval 门禁、时延预算与降级）。
+- [agent-stories.md](agent/agent-stories.md)：新增 US-AGT-007（三类输出质量可验收）与 US-AGT-008（评测门禁 15 例），Gherkin 场景、追溯矩阵行与验收顺序 Sprint 2 段。
+- [agent-design.md](agent/agent-design.md)：新增 §13 feature-03 技术设计（`prompts/v1` 常量模块非运行时读盘、eval 门槛三类各 ≥ 4/5 且无红线、`latency_ms` 元数据与规则降级接线、预算初值待实测校准），原「相关文档」顺延 §14。
+- 新建 [agent-tests.md](agent/agent-tests.md)（单元 mock 断言 / 33 例回归 / eval opt-in / live 抽检四层），并注册进 `artifacts-map.json` agent files。
+- [architecture.md](architecture.md)：§12 开放问题「ROCKS eval-set 用例数」置已决（三类各 5 例合计 15，朱同玉 fixture 锚点）。
+- [sprint-backlog.md](sprint-backlog.md)：feature-03 行 Related specs 补四件规格链接，Status 保持 **ToDo**。
+
+**验收**：规格四件与 [architecture §7](architecture.md) / ADR-2.0-6 口径一致、互相引用可达；`git status` 无代码文件改动。feature-03 开工待用户确认。
+
+---
+
+### feature-04 Done：retrieve_compliance 对外工具（MCP2-05）
+
+**原因**：Sprint 2 需集成方经对外 MCP 检索合规条款引用并确认互动形式不触红线（ADR-012：预审不经对外 MCP、`tenant_id` 不作入参）；用户 close confirm feature-04 可用。
+
+**变更内容**：
+- `@hca/hcp-engagement-mcp`：`retrieve_compliance` 注册与契约测试 12 例（实现随 feature-08 前序会话提交，本批验收）：`hcp_id` 必填，`query` / `interaction_type` 可选，缺省用默认合规检索词（同 propose.ts）；schema 无 `tenant_id` / `jurisdiction` 键；description 声明不是预审判定、不替代正式 MLR；MKB2-03 `coverage` / sparse `repair_hint` 透传，底层 `retrieveComplianceForAgent` 已随 feature-13 落地。
+- 对外工具至此 8 个齐全（[mcp2-design §3](mcp2.0/mcp2-design.md) 全集）。
+
+**验收**：engagement-mcp 97/97、agent 33/33、medical-kb 99/99、typecheck 0 错；live（`:3300`）：朱同玉只传 `hcp_id` → 5 chunks（首条 `CN-MR-7` / cn_med_rep_measures / `2026-08`），全部 chunk 无租户标记，`coverage: ready`（2 authority），缺号 → `NOT_FOUND`。用户 close confirm feature-04。
+
+---
+
+### feature-08 Done：ingest_academic 对外工具（MCP2-08）
+
+**原因**：Sprint 2 需集成方按专科显式触发知识灌注并查询进度（[ADR-014](../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md) 决策 3）；用户 close confirm feature-08 可用。
+
+**变更内容**：
+- `@hca/hcp-engagement-mcp`：注册 `ingest_academic` / `get_ingest_status`（[mcp2-design §14](mcp2.0/mcp2-design.md)）；`ingest_academic` 写工具（`readOnlyHint: false`、`openWorldHint: true`），`get_ingest_status` 只读；`retrieve_academic` sparse 时 `repair_hint` 点名 `ingest_academic`（实现于前序会话提交，本批共 8 工具）。
+- `@hca/hcp-engagement-agent`：再导出 `ingestOnDemand` / `getIngestStatus`。
+- 契约测试 11 例（进度 job_id / specialty 两路径、幂等跳过、`INGEST_IN_PROGRESS`、`VALIDATION_ERROR`、`INTERNAL_ERROR` 无泄漏、annotations）。
+- 附带兑现回顾 Future action #5：[release.md](release.md) Step 5 补「live 临时脚本放仓库根 `.tmp-*.mts`」；`.gitignore` 补 `.tmp-*`。
+
+**验收**：engagement-mcp 97/97、agent 33/33、全仓 typecheck 0 错（重建 agent dist 后）；live 冒烟（`:3300`）：tools/list 8 工具、`ingest_academic(肾移植)` 归一 kidney_transplant 幂等跳过返回 `knowledge_status: ready`、`get_ingest_status` 两路径 `chunk_count: 9`。用户 close confirm feature-08。
+
+---
+
+### feature-14 Done：seed CLI 启动序统一（DEF-007 关闭，MKB2-05）
+
+**原因**：DEF-007：`seed-compliance.ts` 的 main 先 `health()`（探测读要求双 collection 已存在）后 ensure，空库上 404 中止且需人工预建集合绕过；用户 close confirm feature-14 可用。
+
+**变更内容**：
+- `@hca/medical-kb`：`seed-compliance.ts` main 改 `ensureDualCollectionsWithProbe()` → `health()` → seed 启动序（[rag-design §21](rag/rag-design.md)），预检不过以退出码 1 终止；`health()` 与 ensure 本身不动，DEF-004 探测口径不变。
+- 新增 `src/cli/seed-compliance.test.ts` 2 例启动序回归（mock `../api.js`，断言 ensure → health → seed 调用顺序、预检失败不 seed 且退出码 1）。
+- 知识笔记：[ssh-tunnel-qdrant-backfill-pitfalls.md](knowledge/ops/ssh-tunnel-qdrant-backfill-pitfalls.md) 补陷阱 5（本机空库验证的存储换装法）。
+
+**验收**：medical-kb 99/99（含新增 2 例）、typecheck 0 错、engagement-mcp 97/97 回归；实机空库（临时空存储换装）直跑 `npm run seed:compliance` 全流程通过、无人工预建（seeded 23、EXIT=0），验毕恢复原存储并核对 146/24；DEF-007 Close Check 三项全达成。用户 close confirm feature-14 / MKB2-05。
+
+---
+
+### DEF-007 开工准备：MKB2-05 规格写入与排期（不动代码）
+
+**原因**：OGT-5 关闭同批，用户指令完成 DEF-007 修复开工准备；止损口径沿用 feature-06 / feature-10 先例（缺陷修复独立小 SBI、规格先行）。
+
+**变更内容**：
+- 新增 PBI [MKB2-05](product-backlog.md#pb-17)（seed CLI 启动序统一，Sprint 2，ToDo）与 SBI feature-14（sprint-backlog Sprint 2 ToDo）。
+- 规格：[rag-design §21](rag/rag-design.md)（启动序契约）、[US-RAG-010](rag/rag-stories.md)（四场景）、[rag-tests §8](rag/rag-tests.md)（单元 / 集成 / 实机三层）。
+- [issues-log](issues-log.md) DEF-007 Related 补三处规格引用。
+
+**验收**：规格三件就位，覆盖 DEF-007 Close Check 全项；feature-14 保持 ToDo、不动代码、不置 WIP。开工待用户确认。
+
+---
+
+### OGT-5 Done：生产 RAG 向量数据回灌（方案 A 规范重灌）
+
+**原因**：生产节点 Qdrant 双集合为空、manifest 与向量脱节，上线前需把受控语料回灌到与 manifest 三面一致；用户确认回灌数据并 close confirm OGT-5 关闭。
+
+**变更内容**：
+- 生产 Qdrant（经 SSH 隧道执行）：`academic_index` 28 学科 146 点、`compliance_index` 23 点（rdpac 15 + cn_med_rep_measures 8）；生产 MySQL manifest 30 行幂等覆盖、31 个 seed job 全 ready（其中 2 行卡 running/pending 按实测置 ready，用户已接受）。
+- 清理隧道窗口期串写的 tenant-demo 测试点 1 个（compliance count 回 23）。
+- 文档：[data-backfill-design.md](go-live/1021/data-backfill-design.md) 执行记录与基线口径修正（146/23）；[go-live-instruction.md](go-live/1021/go-live-instruction.md) Phase 3 标注已执行、补 `--force --no-fetch` 与空库绕法。
+- 缺陷：DEF-007（seed-compliance 空库自锁）登记 [issues-log](issues-log.md)。
+- 知识：[ssh-tunnel-qdrant-backfill-pitfalls.md](knowledge/ops/ssh-tunnel-qdrant-backfill-pitfalls.md)。
+
+**验收**：G1–G3 三面一致（语料 146/23 = manifest 合计 = 向量 count）；31 job 全 ready；零测试残留。G4（MCP 冒烟）待 Portainer 部署新镜像后执行（保留在 go-live Phase 6 S4）。本机 Qdrant 已恢复且原数据完好（146/24）。用户确认 OGT-5 关闭。
+
+---
+
 ### feature-13 Done：合规知识覆盖信号与条款版本治理（MKB2-03）
 
 **原因**：合规检索缺 coverage 信号、种子稀疏、同 authority 多版本并存；用户 close confirm feature-13 可用。

@@ -157,6 +157,12 @@
   - **范围外**：租户 SOP 通路（F-RAG-021 仍后置）；不按病种自动爬；不新增对外 MCP 工具。
   - **验收口径**：新灌版本后，旧版本条款不再出现在检索结果；抽检命中含 `clause_id` / `authority` / `version`；`coverage` 与 `ingest_manifest` 一致；未注册 `authority` 无受控词表门槛，置入 corpus 后可直接灌入。
   - **失败**：coverage 获取失败降级省略字段，检索不报错；版本清理失败记结构化日志，可重跑。
+- <a id="pb-17"></a>[MKB2-05](#pb-17) seed CLI 启动序统一（DEF-007）
+  - **做什么**：`seed-compliance.ts` main 改为 `ensureDualCollectionsWithProbe()` → `health()` → seed 顺序（同包 `seed-academic-batch.ts` / `ingest-academic.ts` 已正确，不动）；`health()` 与 `ensureDualCollectionsWithProbe()` 本身不改，DEF-004 探测口径不变。
+  - **动因**：DEF-007（OGT-5 生产回灌实发）：`health()` 探测读要求双 collection 已存在，seed-compliance 先预检后建集合，空库上永远 404 中止，清库重灌与首次部署需人工预建集合绕过。
+  - **范围外**：不做公共启动序抽取（Opportunities 记录在案，本次只修错序的一个）；不动 MCP 工具面；不改 Web。
+  - **验收口径**：空库直接 `npm run seed:compliance` 全流程通过、无人工预建；已灌环境重跑幂等；单元回归锁定 ensure → health → seed 调用顺序。
+  - **规格**：[US-RAG-010](rag/rag-stories.md) · [rag-design §21](rag/rag-design.md) · [rag 测试计划 §8](rag/rag-tests.md) · [DEF-007](issues-log.md)。
 
 
 <a id="agent"></a>
@@ -167,6 +173,7 @@
   - 用 **ROCKS 范式**优化 Agent 质量：一人一策、开放对话与一句话洞察在真实 LLM 下达到可验收基线。
   - 优化范围含输出质量、时延与降级策略。
   - 优化结果通过现有 Agent 包与 BFF 交付，不新增对外 MCP 工具。
+  - **规格**：[Agent 功能规格 Sprint 2 增补](agent/agent-function-spec.md) · [Agent 设计 §13](agent/agent-design.md) · [US-AGT-007 / 008](agent/agent-stories.md) · [Agent 测试与 eval 计划](agent/agent-tests.md)。
 
 [返回目录](#index)
 
@@ -183,17 +190,18 @@
 | 3 | 对外服务 | [MCP2-02](#pb-2) | add_hcp · 新增 HCP | Implementable | - [Web 确认保存](app/app-function-spec.md)<br>- [对内 confirm_and_save_twin](mcp/mcp-function-spec.md) | Sprint 1 | Done |
 | 4 | 对外服务 | [MCP2-03](#pb-3) | get_hcp_insights · HCP 洞察 | Implementable | - [Agent 洞察与 doing_now](agent/agent-function-spec.md)<br>- [Web 洞察页](app/app-function-spec.md) | Sprint 2 | Done |
 | 5 | 对外服务 | [MCP2-04](#pb-4) | retrieve_academic · 学术证据检索 | Implementable | - [Agent 学术检索 I-AGT-007](agent/agent-function-spec.md)<br>- [Web 洞察页](app/app-function-spec.md) | Sprint 2 | Done |
-| 6 | 对外服务 | [MCP2-05](#pb-5) | retrieve_compliance · 合规条款检索 | Implementable | - [Agent 合规检索 I-AGT-008](agent/agent-function-spec.md)<br>- [Web 合规检查](app/app-function-spec.md) | Sprint 2 | ToDo |
+| 6 | 对外服务 | [MCP2-05](#pb-5) | retrieve_compliance · 合规条款检索 | Implementable | - [Agent 合规检索 I-AGT-008](agent/agent-function-spec.md)<br>- [Web 合规检查](app/app-function-spec.md) | Sprint 2 | Done |
 | 7 | 后台维护 | [TWIN2-01](#pb-6) | 定时自动更新数字分身 | Implementable | - [对内 build_twin](mcp/mcp-function-spec.md)<br>- [安装与运行 §11](spec1.0/4.install-dependencies.md) | Sprint 2 | Done |
-| 8 | Agent | [AGT2-01](#pb-8) | Agent 优化 · ROCKS 范式 | Implementable | - [Agent 功能规格](agent/agent-function-spec.md)<br>- [Agent 设计](agent/agent-design.md) | Sprint 2 | ToDo |
+| 8 | Agent | [AGT2-01](#pb-8) | Agent 优化 · ROCKS 范式 | Implementable | - [Agent 功能规格（Sprint 2 增补）](agent/agent-function-spec.md)<br>- [Agent 设计 §13](agent/agent-design.md)<br>- [US-AGT-007 / 008](agent/agent-stories.md)<br>- [Agent 测试与 eval 计划](agent/agent-tests.md) | Sprint 2 | ToDo |
 | 9 | 后台维护 | [MKB2-01](#pb-9) | 元数据层 MySQL 方言修复（DEF-002） | Implementable | - [US-RAG-006](rag/rag-stories.md)<br>- [rag 测试计划](rag/rag-tests.md)<br>- [DEF-002](issues-log.md) | Sprint 2 | Done |
 | 10 | 对外服务 | [MCP2-07](#pb-10) | 知识覆盖对齐 · add_hcp 预灌 + coverage 信号 | Implementable | - [Web 确认保存 F-WEB-039](app/app-function-spec.md)<br>- [ADR-014](../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md) | Sprint 2 | Done |
-| 11 | 对外服务 | [MCP2-08](#pb-11) | ingest_academic · 学术知识按需灌注 | Implementable | - [rag 功能规格 ingest_on_demand](rag/rag-function-spec.md)<br>- [ADR-014](../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md) | Sprint 2 | ToDo |
+| 11 | 对外服务 | [MCP2-08](#pb-11) | ingest_academic · 学术知识按需灌注 | Implementable | - [rag 功能规格 ingest_on_demand](rag/rag-function-spec.md)<br>- [ADR-014](../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md) | Sprint 2 | Done |
 | 12 | 后台维护 | [MKB2-02](#pb-12) | 受控学科目录扩充与学术索引批量种子 | Implementable | - [ADR-014](../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md)<br>- [rag 功能规格 ingest_on_demand](rag/rag-function-spec.md) | Sprint 2 | Done |
 | 13 | 后台维护 | [MKB2-03](#pb-13) | 合规知识覆盖信号与条款版本治理 | Implementable | - [F-RAG-030–032](rag/rag-function-spec.md)<br>- [US-RAG-008](rag/rag-stories.md) | Sprint 2 | Done |
 | 14 | 对外服务 | [MCP2-09](#pb-14) | add_hcp 入库科室校验与预灌映射预览 | Implementable | - [DEF-005](issues-log.md)<br>- [US-MCP2-007](mcp2.0/mcp2-stories.md)<br>- [mcp2-design §13](mcp2.0/mcp2-design.md)<br>- [F-MCP-012 增补](mcp/mcp-function-spec.md)<br>- [F-WEB-047](app/app-function-spec.md) | Sprint 2 | Done |
 | 15 | 后台维护 | [MKB2-04](#pb-15) | 学术索引写入与恢复健壮性修复（DEF-003 / DEF-004） | Implementable | - [US-RAG-009](rag/rag-stories.md)<br>- [F-RAG-023/029/033/034](rag/rag-function-spec.md)<br>- [rag-design §20](rag/rag-design.md)<br>- [rag 测试计划 §7](rag/rag-tests.md) | Sprint 2 | Done |
 | 16 | 对外服务 | [MCP2-10](#pb-16) | add_hcp 入库科室以选中记录信号专科为准（DEF-006，D2） | Implementable | - [DEF-006](issues-log.md)<br>- [US-MCP2-007 增补](mcp2.0/mcp2-stories.md)<br>- [mcp2-design §13.6](mcp2.0/mcp2-design.md)<br>- [mcp2 测试计划 §15](mcp2.0/mcp2-test.md)<br>- [F-WEB-047 增补](app/app-function-spec.md) | Sprint 2 | Done |
+| 17 | 后台维护 | [MKB2-05](#pb-17) | seed CLI 启动序统一（DEF-007） | Implementable | - [DEF-007](issues-log.md)<br>- [US-RAG-010](rag/rag-stories.md)<br>- [rag-design §21](rag/rag-design.md)<br>- [rag 测试计划 §8](rag/rag-tests.md) | Sprint 2 | Done |
 
 [返回目录](#index)
 
@@ -205,6 +213,12 @@
 
 | Date | Change |
 | --- | --- |
+| 2026-10-21 | feature-03 开工准备（用户指令，不动代码）：agent 模块规格四件就位——[功能规格 Sprint 2 增补](agent/agent-function-spec.md)（F-AGT-031~034）、[US-AGT-007 / 008](agent/agent-stories.md)、[agent-design §13](agent/agent-design.md)、新建 [agent-tests.md](agent/agent-tests.md) 入 artifacts-map；[architecture §12](architecture.md) eval-set 用例数置已决（三类各 5 例合计 15，朱同玉 fixture 锚点）；AGT2-01 保持 ToDo。 |
+| 2026-10-21 | [MCP2-05](#pb-5) / feature-04 Done：`retrieve_compliance` 对外工具接线验收（实现随前序会话提交）：八工具全齐，租户不入参仅返回全局种子，coverage / sparse `repair_hint` 透传（MKB2-03 增补）；契约 12 例 + live 通过；见 `changes-log.md`。 |
+| 2026-10-21 | [MCP2-08](#pb-11) / feature-08 Done：对外 MCP 注册 `ingest_academic` / `get_ingest_status`（写工具 + 只读进度查询），`retrieve_academic` sparse `repair_hint` 点名补种；契约 11 例 + live 冒烟通过；附带兑现 Future action #5（release `.tmp-*.mts` 约定）；见 `changes-log.md`。 |
+| 2026-10-21 | [MKB2-05](#pb-17) / feature-14 Done（DEF-007 关闭）：seed-compliance main 改 `ensureDualCollectionsWithProbe` → `health` → seed 启动序（rag-design §21）；空库自举实机验证通过（seeded 23、无人工预建）；回归测试 2 例锁定启动序；见 `issues-log.md`、`changes-log.md`。 |
+| 2026-10-21 | DEF-007 开工准备（用户指令）：新增 [MKB2-05](#pb-17)（seed CLI 启动序统一）并写规格三件（rag-design §21、US-RAG-010、rag-tests §8），排入 Sprint 2 backlog（SBI feature-14，ToDo）；issues-log DEF-007 Related 补引用；不动代码。 |
+| 2026-10-21 | OGT-5 生产 RAG 向量回灌完成并关闭：生产 Qdrant academic 146 / compliance 23 三面一致；DEF-007（seed-compliance 空库自锁）登记 issues-log；知识条目 [ssh-tunnel-qdrant-backfill-pitfalls.md](./knowledge/ops/ssh-tunnel-qdrant-backfill-pitfalls.md)；见 `changes-log.md`。 |
 | 2026-10-21 | Sprint 2 批量收口（用户确认 1-10 全关）：MCP2-04 / MCP2-07 / MKB2-02 / MCP2-09 / MKB2-04 / MCP2-10 六条 Done（SBI feature-02 / 07 / 09 / 10 / 11 / 12）；DEF-003 / 004 / 005 / 006 关闭；OGT-1 关闭；回顾块写入 sprint-backlog，知识条目 [openalex-department-signal-works-concepts.md](./knowledge/data/openalex-department-signal-works-concepts.md)。 |
 | 2026-10-21 | MCP2-03 `get_hcp_insights` Done（Sprint 2 feature-01）：对外 MCP 接线 `ensureDoingNow`；契约 42/42、朱同玉实调、close confirm。 |
 | 2026-10-20 | DEF-002 方案 A 确认：新增 MKB2-01（medical-kb 元数据层 MySQL 方言修复，Sprint 2）；US-RAG-006 入 rag 故事；rag 模块新增测试计划 rag-tests.md 并入 artifacts-map；rag 规格九处 Postgres 口径改 MySQL（ADR-005）。 |

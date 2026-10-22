@@ -129,6 +129,9 @@ Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规
 
 | # | Code | SBI | Parent PBI | Module/Type | Related specs | Status |
 | --- | --- | --- | --- | --- | --- | --- |
+| 4 | feature-04 | retrieve_compliance 对外工具 | [MCP2-05 retrieve_compliance · 合规条款检索](./product-backlog.md#L94) | mcp2.0/Feature | - [Agent 合规检索 I-AGT-008](agent/agent-function-spec.md)<br>- [Web 合规检查](app/app-function-spec.md) | **Done** |
+| 8 | feature-08 | ingest_academic 对外工具 | [MCP2-08 ingest_academic · 学术知识按需灌注](./product-backlog.md#pb-11) | mcp2.0/Feature | - [rag 功能规格 ingest_on_demand](rag/rag-function-spec.md)<br>- [ADR-014](../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md) | **Done** |
+| 15 | feature-14 | seed CLI 启动序统一（DEF-007 修复） | [MKB2-05 seed CLI 启动序统一（DEF-007）](./product-backlog.md#pb-17) | rag/Task | - [US-RAG-010](rag/rag-stories.md)<br>- [rag-design §21](rag/rag-design.md)<br>- [rag 测试计划 §8](rag/rag-tests.md)<br>- [DEF-007](issues-log.md) | **Done** |
 | 13 | feature-13 | 合规知识覆盖信号与条款版本治理 | [MKB2-03 合规知识覆盖信号与条款版本治理](./product-backlog.md#pb-13) | rag/Feature | - [F-RAG-030–032](rag/rag-function-spec.md)<br>- [US-RAG-008](rag/rag-stories.md)<br>- [mcp2-design §11](mcp2.0/mcp2-design.md)<br>- [ADR-014](../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md) | **Done** |
 | 12 | feature-12 | add_hcp 入库科室以选中记录信号专科为准 | [MCP2-10 add_hcp 入库科室以选中记录信号专科为准（DEF-006，D2）](./product-backlog.md#pb-16) | mcp2.0/Task | - [US-MCP2-007 增补](mcp2.0/mcp2-stories.md)<br>- [mcp2-design §13.6](mcp2.0/mcp2-design.md)<br>- [mcp2 测试计划 §15](mcp2.0/mcp2-test.md)<br>- [DEF-006](issues-log.md)<br>- [F-WEB-047 增补](app/app-function-spec.md) | **Done** |
 | 11 | feature-11 | add_hcp 入库科室校验与预灌映射预览 | [MCP2-09 add_hcp 入库科室校验与预灌映射预览](./product-backlog.md#pb-14) | mcp2.0/Task | - [US-MCP2-007](mcp2.0/mcp2-stories.md)<br>- [mcp2-design §13](mcp2.0/mcp2-design.md)<br>- [mcp2 测试计划 §14](mcp2.0/mcp2-test.md)<br>- [DEF-005](issues-log.md) | **Done** |
@@ -144,9 +147,7 @@ Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规
 
 | # | Code | SBI | Parent PBI | Module/Type | Related specs | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| 3 | feature-03 | Agent ROCKS 质量优化 | [AGT2-01 Agent 优化 · ROCKS 范式](./product-backlog.md#L115) | agent/Feature | - [Agent 功能规格](agent/agent-function-spec.md)<br>- [Agent 设计](agent/agent-design.md) | **ToDo** |
-| 4 | feature-04 | retrieve_compliance 对外工具 | [MCP2-05 retrieve_compliance · 合规条款检索](./product-backlog.md#L94) | mcp2.0/Feature | - [Agent 合规检索 I-AGT-008](agent/agent-function-spec.md)<br>- [Web 合规检查](app/app-function-spec.md) | **ToDo** |
-| 8 | feature-08 | ingest_academic 对外工具 | [MCP2-08 ingest_academic · 学术知识按需灌注](./product-backlog.md#pb-11) | mcp2.0/Feature | - [rag 功能规格 ingest_on_demand](rag/rag-function-spec.md)<br>- [ADR-014](../docs/adr/ADR-014-retrieve-coverage-signal-and-academic-ingest.md) | **WIP** |
+| 3 | feature-03 | Agent ROCKS 质量优化 | [AGT2-01 Agent 优化 · ROCKS 范式](./product-backlog.md#L115) | agent/Feature | - [Agent 功能规格（Sprint 2 增补）](agent/agent-function-spec.md)<br>- [Agent 设计 §13](agent/agent-design.md)<br>- [Agent 故事 US-AGT-007 / 008](agent/agent-stories.md)<br>- [Agent 测试与 eval 计划](agent/agent-tests.md) | **WIP** |
 
 ### Retrospective
 
@@ -174,6 +175,22 @@ Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规
 - `retrieveCompliance` 单测里 `rerank` mock 须为 `(query, texts)` 双参，与生产签名一致。
 - ADR-014 假设在合规侧成立：coverage 以 manifest 为准、sparse 附 repair_hint、seed 下线旧版本与学术侧同语义；MCP `retrieve_compliance` 接线仍归 feature-04。
 
+#### 6. [Oct 21, 2026], OGT-5 生产 RAG 向量数据回灌 done
+- `loadRootEnv` 让 `.env.local` 强制覆盖进程环境，shell 里 `export QDRANT_URL` 在读 env 的 Node 进程内无效，隧道须直接占用应用默认端口 6333，见 [ssh-tunnel-qdrant-backfill-pitfalls.md](./knowledge/ops/ssh-tunnel-qdrant-backfill-pitfalls.md)。
+- 隧道窗口内另一会话的测试夹具把 tenant-demo 点写进生产（已定位删除、count 回 23）；窗口内禁止跑任何测试套件，监听者用 `lsof -nP -i :6333` 分辨，处理见同上笔记。
+- `wc -l` 对无末行换行的 JSONL 少计 1（合规语料误判 21，实为 23），验收计数一律按 JSONL 记录数，见同上笔记。
+- ADR-014 假设成立：空生产按受控语料 + 种子 CLI 规范重灌即达语料 / manifest / 向量三面一致（146 / 23），无需快照搬运；DEF-007（seed-compliance 空库自锁）已登记待修。
+
+#### 7. [Oct 21, 2026], feature-14 seed CLI 启动序统一（DEF-007 修复） done
+- 空库自举实机验证证实 `loadRootEnv` 覆盖同样封死本机换实例路径：本机验证空库行为须用存储换装（备份 `data/qdrant` → 同端口起空存储 → 验毕还原核对 count），见 [ssh-tunnel-qdrant-backfill-pitfalls.md](./knowledge/ops/ssh-tunnel-qdrant-backfill-pitfalls.md)。
+
+#### 8. [Oct 21, 2026], feature-08 ingest_academic 对外工具 done
+- 回顾门已运行，无新增 durable 教训；stale dist 教训（本 sprint #1 / #4）在验收中再次适用：重建 agent dist 后 engagement-mcp 97/97 通过。
+- 本 sprint Future action #5（release 补「live 临时脚本放仓库根 `.tmp-*.mts`」）已随本故事验收落地：[release.md](./release.md) Step 5 + `.gitignore` `.tmp-*`。
+
+#### 9. [Oct 21, 2026], feature-04 retrieve_compliance 对外工具 done
+- feature-04 的注册与契约测试随 feature-08 前序会话提前提交，验收时 live tools/list（8 工具）已能察觉混入但无人核对；下一条对外工具 SBI 收口前先核对 tools/list 与本批范围一致（检查点：下一条同类 SBI）。
+
 **Opportunities**
 
 #### 1. [Oct 20, 2026], feature-06 done
@@ -181,6 +198,9 @@ Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规
 
 #### 4. [Oct 21, 2026], feature-02, feature-07, feature-09, feature-10, feature-11, feature-12 done
 - 医院中英文名归一是下一个匹配质量缺口：库内存 `Nanfang Hospital` 时中文「南方医院」查不到库内记录，可另立小故事。
+
+#### 6. [Oct 21, 2026], OGT-5 生产 RAG 向量数据回灌 done
+- medical-kb 三个 seed / ingest CLI 预检顺序两对一错（DEF-007），修复时可抽公共 `ensure → health → seed` 启动序，避免再分叉。
 
 **Future actions**
 
@@ -195,6 +215,9 @@ Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规
 
 #### 5. [Oct 21, 2026], feature-13 合规知识覆盖信号与条款版本治理 done
 - 下一条需 Qdrant + MySQL live 脚本验收的 SBI 开工前，在 release 或 README 补一句「临时脚本放仓库根 `.tmp-*.mts`」；检查点：下一条同类 SBI。
+
+#### 6. [Oct 21, 2026], OGT-5 生产 RAG 向量数据回灌 done
+- 下一次经 SSH 隧道操作生产数据前，先停本机同端口服务、用 `lsof` 确认监听者是隧道，窗口内不跑任何测试、完成即拆并恢复本机服务；检查点：下一条同类生产数据操作 OGT。
 
 ---
 

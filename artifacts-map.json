@@ -35,7 +35,8 @@
       "files": [
         "specs/agent/agent-design.md",
         "specs/agent/agent-stories.md",
-        "specs/agent/agent-function-spec.md"
+        "specs/agent/agent-function-spec.md",
+        "specs/agent/agent-tests.md"
       ]
     },
     {

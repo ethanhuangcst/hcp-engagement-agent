@@ -143,6 +143,8 @@ flowchart TB
 | 对内 MCP | `GET http://38.55.192.140:3200/health`（或容器内 `curl hcp-twin-mcp:3200/health`）`twin_mode=live` |
 | RAG | 合规检索命中含 `clause_id`（有灌库时） |
 
+本地 live 脚本（Qdrant + MySQL 实调验收）放仓库根，命名 `.tmp-*.mts`，用 `npx tsx` 从仓库根跑；验收后删除（`.gitignore` 已覆盖 `.tmp-*`）。
+
 ### Step 6 — 共存抽查（必做）
 
 从 §1.2 选 ≥1 个既有应用（如 `https://places.agent-mate.ai` 或 `https://kb.agent-mate.ai`）验证可用；确认其他 Stack 无异常。

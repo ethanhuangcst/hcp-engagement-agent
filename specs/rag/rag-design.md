@@ -524,3 +524,22 @@ packages/medical-kb/
 - 王拥军（`hcp_a5057449191`）经 `:3300 tools/call retrieve_academic` 返回 neurology 5 条真实证据。
 - health 探测用例：mock 探测读 panic / 500 时 `ok: false`。
 - 恢复演练计时 ≤5 分钟恢复 28/28 ready。
+
+## 21. seed CLI 启动序统一（DEF-007 修复）
+
+> 依据：[issues-log DEF-007](../issues-log.md) · [US-RAG-010](rag-stories.md) · F-RAG-002 / F-RAG-023 · [MKB2-05](../product-backlog.md#pb-17)。动因：OGT-5 生产回灌实发——`seed-compliance.ts` 先跑 `health()` 预检（探测读要求集合已存在）后跑 `ensureDualCollectionsWithProbe()` 建集合，空库上鸡生蛋、永远 404 中止；同包 `seed-academic-batch.ts` 与 `ingest-academic.ts` 顺序正确。仿 §20 先例记录修复后的设计口径。
+
+### 21.1 启动序契约
+
+| 项 | 设计 |
+| --- | --- |
+| 顺序 | 所有 seed / ingest CLI 统一启动序：`ensureDualCollectionsWithProbe()` → `health()` → 业务 seed。预检只探测「已确保存在」的对象，不在建集合前探测 |
+| 修复范围 | `seed-compliance.ts` main 改 ensure 先行（其余两个 CLI 已正确）；`health()` 与 `ensureDualCollectionsWithProbe()` 本身不改，DEF-004 探测口径不变 |
+| 测试锚 | 单元：mock `../api.js` 断言三步调用顺序；health 不 ok 时 exit 非零且不 seed。集成（opt-in）：删双 collection 的本地 Qdrant 上直接 `seed:compliance` 自举通过；重跑幂等 |
+| 绕法退役 | 手动预建空集合绕法（data-backfill-design 执行记录）随修复退役，只保留历史记录 |
+
+### 21.2 验收锚点
+
+- 空库（无任何 collection 的 Qdrant）直接 `npm run seed:compliance` 全流程通过，无人工预建。
+- 已灌环境重跑幂等：compliance 向量数与 manifest 不变。
+- 单元回归锁定三个 CLI 的 ensure → health → seed 顺序。

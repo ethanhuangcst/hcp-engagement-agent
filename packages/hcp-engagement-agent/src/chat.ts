@@ -7,6 +7,8 @@ import {
 } from "@hca/db";
 import { isLlmStrict } from "./config.js";
 import { createLlmClient, type LlmClient } from "./llm.js";
+import { LATENCY_BUDGET_MS, timeLlmCall } from "./latency.js";
+import { PROMPTS_V1 } from "./prompts/v1/index.js";
 import { reviseEngagement } from "./revise.js";
 import {
   AGENT_GENERAL_HCP_ID,
@@ -15,11 +17,7 @@ import {
   type AgentError,
 } from "./types.js";
 
-const OPEN_SYSTEM = `你是 HCP Engagement Agent（中国市场药企互动助手）。
-这是**通用开放对话**：不默认绑定某一位医生数字分身；可讨论疾病领域找人、渠道策略、合规边界、访前准备等。
-若用户点名某位 HCP / 医院 / 专科，按通用公开知识与合规边界作答；需要分身级事实时，提示用户先在「HCP数字分身」建立并打开该人，再到一人一策修订。
-硬边界：不编造说明书外疗效；不假设处方/统方；院内活动须提示机构同意与代表备案；不替代 MLR。
-用简洁中文回复。`;
+const OPEN_SYSTEM = PROMPTS_V1.open_chat.text;
 
 export type ChatResult = {
   sessionId: string;
@@ -111,6 +109,8 @@ export async function chat(
       messages: [...(session?.messages ?? []), userMsg, assistantMsg],
       as_of: asOf,
       llm: revise.llm,
+      template: revise.template,
+      latency_ms: revise.latency_ms,
     };
     await upsertChatSession(next);
     return {
@@ -139,6 +139,7 @@ export async function chat(
 
   let reply: string;
   let llmMeta: ChatSession["llm"];
+  let chatLatencyMs: number | undefined;
 
   if (!llm) {
     if (isLlmStrict()) {
@@ -161,21 +162,27 @@ export async function chat(
           role: m.role as "user" | "assistant",
           content: m.content,
         }));
-      const result = await llm.chat([
-        { role: "system", content: OPEN_SYSTEM },
-        ...(attachNote
-          ? ([
-              {
-                role: "user" as const,
-                content: `本轮附件元数据：${attachNote}`,
-              },
-            ] as const)
-          : []),
-        ...history,
-        { role: "user", content: message },
-      ]);
+      const outcome = await timeLlmCall(
+        () =>
+          llm.chat([
+            { role: "system", content: OPEN_SYSTEM },
+            ...(attachNote
+              ? ([
+                  {
+                    role: "user" as const,
+                    content: `本轮附件元数据：${attachNote}`,
+                  },
+                ] as const)
+              : []),
+            ...history,
+            { role: "user", content: message },
+          ]),
+        LATENCY_BUDGET_MS.open_chat,
+      );
+      const result = outcome.value;
       reply = result.content;
       llmMeta = { provider: result.provider, model: result.model };
+      chatLatencyMs = outcome.latency_ms;
     } catch (err) {
       if (isLlmStrict()) throw err as AgentError;
       reply =
@@ -199,6 +206,8 @@ export async function chat(
     messages: [...(session?.messages ?? []), userMsg, assistantMsg],
     as_of: asOf,
     llm: llmMeta,
+    template: { name: PROMPTS_V1.open_chat.name, version: PROMPTS_V1.open_chat.version },
+    ...(chatLatencyMs !== undefined ? { latency_ms: chatLatencyMs } : {}),
   };
   await upsertChatSession(next);
   return {

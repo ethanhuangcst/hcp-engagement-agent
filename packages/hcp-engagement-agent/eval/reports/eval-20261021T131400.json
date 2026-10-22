@@ -1,0 +1,159 @@
+{
+  "generated_at": "2026-10-21T13:14:00.549Z",
+  "provider": "qwen",
+  "model": "qwen-max",
+  "template_version": "v1",
+  "gate_pass": true,
+  "redline_count": 0,
+  "per_task": {
+    "propose": {
+      "pass": 5,
+      "total": 5
+    },
+    "open_chat": {
+      "pass": 5,
+      "total": 5
+    },
+    "synthesize": {
+      "pass": 5,
+      "total": 5
+    }
+  },
+  "cases": [
+    {
+      "id": "propose-zhu-anchor",
+      "task": "propose",
+      "pass": true,
+      "redline": false,
+      "latency_ms": 15443,
+      "over_budget": false,
+      "reasons": []
+    },
+    {
+      "id": "propose-phage",
+      "task": "propose",
+      "pass": true,
+      "redline": false,
+      "latency_ms": 13223,
+      "over_budget": false,
+      "reasons": []
+    },
+    {
+      "id": "propose-bk-virus",
+      "task": "propose",
+      "pass": true,
+      "redline": false,
+      "latency_ms": 20321,
+      "over_budget": false,
+      "reasons": []
+    },
+    {
+      "id": "propose-donor-ethics",
+      "task": "propose",
+      "pass": true,
+      "redline": false,
+      "latency_ms": 17134,
+      "over_budget": false,
+      "reasons": []
+    },
+    {
+      "id": "propose-followup",
+      "task": "propose",
+      "pass": true,
+      "redline": false,
+      "latency_ms": 14121,
+      "over_budget": false,
+      "reasons": []
+    },
+    {
+      "id": "chat-zhu-anchor",
+      "task": "open_chat",
+      "pass": true,
+      "redline": false,
+      "latency_ms": 6094,
+      "over_budget": false,
+      "reasons": []
+    },
+    {
+      "id": "chat-find-kol",
+      "task": "open_chat",
+      "pass": true,
+      "redline": false,
+      "latency_ms": 7833,
+      "over_budget": false,
+      "reasons": []
+    },
+    {
+      "id": "chat-rep-filing",
+      "task": "open_chat",
+      "pass": true,
+      "redline": false,
+      "latency_ms": 11490,
+      "over_budget": false,
+      "reasons": []
+    },
+    {
+      "id": "chat-admin-hospital",
+      "task": "open_chat",
+      "pass": true,
+      "redline": false,
+      "latency_ms": 5103,
+      "over_budget": false,
+      "reasons": []
+    },
+    {
+      "id": "chat-visit-brief",
+      "task": "open_chat",
+      "pass": true,
+      "redline": false,
+      "latency_ms": 9140,
+      "over_budget": false,
+      "reasons": []
+    },
+    {
+      "id": "synth-zhu-anchor",
+      "task": "synthesize",
+      "pass": true,
+      "redline": false,
+      "latency_ms": 2978,
+      "over_budget": false,
+      "reasons": []
+    },
+    {
+      "id": "synth-bk",
+      "task": "synthesize",
+      "pass": true,
+      "redline": false,
+      "latency_ms": 2366,
+      "over_budget": false,
+      "reasons": []
+    },
+    {
+      "id": "synth-tolerance",
+      "task": "synthesize",
+      "pass": true,
+      "redline": false,
+      "latency_ms": 3838,
+      "over_budget": false,
+      "reasons": []
+    },
+    {
+      "id": "synth-sparse",
+      "task": "synthesize",
+      "pass": true,
+      "redline": false,
+      "latency_ms": 2939,
+      "over_budget": false,
+      "reasons": []
+    },
+    {
+      "id": "synth-dysfunction",
+      "task": "synthesize",
+      "pass": true,
+      "redline": false,
+      "latency_ms": 2759,
+      "over_budget": false,
+      "reasons": []
+    }
+  ]
+}

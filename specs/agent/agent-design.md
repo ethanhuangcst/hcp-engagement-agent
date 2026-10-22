@@ -206,7 +206,46 @@ packages/hcp-engagement-agent/
 
 ---
 
-## 13. 相关文档
+## 13. feature-03 技术设计（AGT2-01 ROCKS，Sprint 2）
+
+> 新增于 2026-10-21 开工准备批次。承接 [architecture §7](../architecture.md)（提示词版本化 · eval 门禁 · 时延预算 · 降级）与 [architecture §9](../architecture.md) ADR-2.0-6。功能编号 F-AGT-031 ~ 034，故事 [US-AGT-007 / 008](./agent-stories.md)。不新增对外 MCP 工具，交付面在 `packages/agent` 与 BFF 调用点。
+
+### 13.1 模板版本化（F-AGT-031 / 032）
+
+现状：四条路径的 system 模板为内联字符串常量（`propose.ts` / `revise.ts` / `synthesize.ts` / `chat.ts`）。
+
+设计：
+
+```text
+packages/agent/src/prompts/
+  v1/
+    index.ts        # 导出 v1 模板注册表 { name, version, text }[]
+```
+
+- 模板只在编译期进 bundle，**不运行时读盘**；四个初始版本均为 v1，内容承接现状四个常量。
+- 每个模板 `text` 按 ROCKS 五段以注释分节：`R=角色`、`O=目标`、`C=上下文`、`K=关键事实`、`S=输出要求`；五段齐全是版本合入的检查项。
+- 修改模板 = 新增版本常量（如 `v2/`），旧版本保留在 git 历史，回滚 = revert 到上一版本；不提供运行时模板路由。
+- 四个调用点改为从 `prompts/v1` 取模板；上下文注入策略不变（Insights 经 tool 注入，RAG 以 tool result 进入，不整包 Twin 入提示）。
+
+### 13.2 评测门禁（F-AGT-033）
+
+- 评测集：`packages/agent/eval/` 下固定 15 例（一人一策 5 · 开放对话 5 · 一句话洞察 5），每类至少 1 例以朱同玉 fixture 锚点；输入为 fixture 检索结果，不调生产库。
+- 跑法：包内 `npm run eval:agent`，真实 LLM 走既有 `LLM_API_KEY` 环境变量（§11 列表，不新增 env 名）；eval 与 CI 解耦，opt-in 运行。
+- 门槛：三类任务各 ≥ 4/5 例达标且无红线项（编造疗效、伪造引用、会话模式混用）即过门禁；任一红线 → 整批不过。
+- 报告：`eval/` 内归档 JSON 摘要（不含密钥、不透传模型原始输出），作为变更合入的核验证据。
+- 意义：不改对外契约；是模板/模型变更的合入前闸门（architecture §7 eval 门禁落地）。
+
+### 13.3 时延预算与降级（F-AGT-034）
+
+- 预算：Options 生成单次 ≤ 30 s，chat 首响应 ≤ 15 s；`LLM_TIMEOUT_MS` 语义不变，预算是其上的元数据层。
+- 实测（2026-10-21 首跑 eval，qwen-max，[eval 报告](../../packages/hcp-engagement-agent/eval/reports/)）：propose 13–20 s、open_chat 5–11 s、synthesize 2–4 s，均在预算内；初值维持（30 s / 15 s），后续漂移超阈值再校准。
+- 计时：`llm` 调用点到点 wrap `Date.now()`，写 `meta.latency_ms`（elapsed ms），超预算另记 `over_budget: true`。
+- 降级：超时、无 Key、鉴权失败、限速 → Options/Insights 走既有 `ruleProposeOptions` / `ruleSynthesizeDoingNow`，chat 给固定致歉 + 修复提示文案；降级结果标 `degraded: true`，保留 `LLM_UNAVAILABLE` 错误码语义；不暴露堆栈与密钥。
+- 计时与降级不改变 33 例既有测试断言的契约形状（字段只增不改）。
+
+---
+
+## 14. 相关文档
 
 - 功能规格：[`agent-function-spec.md`](./agent-function-spec.md)  
 - RAG 触发：[`../rag/rag-design.md`](../rag/rag-design.md)  

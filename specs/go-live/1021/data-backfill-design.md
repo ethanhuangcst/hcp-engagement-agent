@@ -65,7 +65,7 @@
    ```bash
    npm run seed:academic-batch -w @hca/medical-kb -- --force --no-fetch
    ```
-5. 若 seed 因空库 404 中止:先手动预建空集合(DEF-005 绕法,见执行记录),再重跑。
+5. 若 seed 因空库 404 中止:先手动预建空集合(DEF-007 绕法,见执行记录),再重跑。
 
 ## 验收闸门
 
@@ -114,7 +114,7 @@ G1–G3 已执行并通过;G4 待 Portainer 部署后执行。
 | G3 | manifest:academic 28 行合计 146、compliance 2 行合计 23,与向量、语料三面一致 |
 | 附加 | 隧道窗口期混入的 tenant-demo 测试点已删除(见决策表);31 个 seed job 全部 ready(phage_therapy 两行卡 running 的账本已按实测置 ready) |
 
-执行中发现并绕过的缺陷(待登记 issues-log,编号建议 DEF-005):
+执行中发现并绕过的缺陷(已登记 issues-log,编号 DEF-007):
 
 - `seed-compliance.ts` 顺序自锁:先跑 `health` 预检(probe 要求集合已存在),后跑 `ensureDualCollectionsWithProbe` 建集合。空库上 health 永远 404,seed 永远中止,集合永远建不成。本机从未触发是因为本地集合一直存在;`seed-academic-batch.ts` 顺序正确(先 ensure 后 health,代码注释已点名此防御)。
 - 执行绕法:手动预建两个空集合(SDK `createCollection`,dim 512、Cosine,与 `ensureCollections` 参数一致),health 即通过。

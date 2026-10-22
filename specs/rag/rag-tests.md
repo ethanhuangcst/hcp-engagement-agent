@@ -1,6 +1,6 @@
 # medical-knowledge-base — 测试策略与计划
 
-> as_of：2026-10-21（新增 US-RAG-007：受控学科目录扩充与学术索引批量种子，MKB2-02 / feature-09；US-RAG-008：合规覆盖信号与条款版本治理，MKB2-03；§7 US-RAG-009：学术索引写入与恢复健壮性修复，DEF-003 / DEF-004）
+> as_of：2026-10-21（新增 US-RAG-007：受控学科目录扩充与学术索引批量种子，MKB2-02 / feature-09；US-RAG-008：合规覆盖信号与条款版本治理，MKB2-03；§7 US-RAG-009：学术索引写入与恢复健壮性修复，DEF-003 / DEF-004；§8 US-RAG-010：seed CLI 空库自举与启动序，DEF-007 / MKB2-05）
 
 **Area:** medical-kb 元数据层（US-RAG-006）+ 受控学科目录与批量种子（US-RAG-007）+ 合规覆盖与版本治理（US-RAG-008）
 **Stories:** [rag-stories.md](./rag-stories.md) · Design: [rag-design.md](./rag-design.md) §11、§18、§19
@@ -115,6 +115,30 @@ npm run seed:compliance -w @hca/medical-kb
 npm run test -w @hca/medical-kb
 npm run typecheck -w @hca/medical-kb
 npm run seed:academic-batch -w @hca/medical-kb -- --force --no-fetch
+```
+
+## 8. US-RAG-010 增量（seed CLI 空库自举与启动序，DEF-007）
+
+范围：
+
+| 层 | 对象 | 默认 CI | Live opt-in |
+| --- | --- | --- | --- |
+| 单元 | `seed-compliance.ts` 启动序（mock `../api.js`：断言 `ensureDualCollectionsWithProbe` → `health` → `seedCompliance` 调用顺序）；health 不 ok 时中止且不 seed | Always | — |
+| 集成 | 本地 Qdrant 删除双 collection 后直接 `npm run seed:compliance` 自举通过、manifest 写回；重跑幂等（向量数与 manifest 不变） | — | opt-in |
+| E2E | 无 UI；实机：清库重灌旅程复验空库首启（[rag-design §21.2](./rag-design.md)） | — | opt-in |
+
+单元用例（happy / failure）：
+
+| 模块 | 通过 | 失败或空 |
+| --- | --- | --- |
+| 启动序 | ensure 在 health 之前、health 在 seedCompliance 之前被调用 | health `ok: false` 时以非零码退出且 `seedCompliance` 从未被调用 |
+
+集成与实机命令（opt-in，沿用既有命令）：
+
+```bash
+npm run test -w @hca/medical-kb
+npm run typecheck -w @hca/medical-kb
+npm run seed:compliance -w @hca/medical-kb
 ```
 
 ## 命令

@@ -271,6 +271,19 @@ A0 壳 / Zod / LlmClient（默认 qwen）/ Postgres 持久化
 
 ---
 
+## Sprint 2 增补：AGT2-01 ROCKS 输出质量（feature-03）
+
+> 新增于 2026-10-21 开工准备批次。承接 [architecture §7](../architecture.md)；设计与验收见 [agent-design §14](./agent-design.md) 与 [US-AGT-007 / 008](./agent-stories.md)。实现批次：**Sprint 2 feature-03**。
+
+| 序号 | 功能编号 | 功能名称 | 功能简述 | 实现批次 |
+|---|---|---|---|---|
+| 31 | F-AGT-031 | 提示词模板版本化 | 四个内联 system 模板（propose / revise / synthesize / open_chat）收进带版本号的常量模块 `src/prompts/v1`，每个模板携带 `{ name, version, text }`；模板名与版本写入 run / summary / session 元数据（`template: { name, version }`），与既有 `llm: { provider, model }` 并列。模板改动即新版本，运行时不读外部提示词文件 | Sprint 2 feature-03 |
+| 32 | F-AGT-032 | ROCKS 分段结构 | 每个模板按五段组织并以注释分节：R=角色、O=目标、C=上下文、K=关键事实、S=输出要求；上下文注入策略不变（Insights 仅经 tool 注入，RAG 结果仅以 tool result 进入，禁止整包 Twin 塞入模板） | Sprint 2 feature-03 |
+| 33 | F-AGT-033 | 评测门禁（eval gate） | 三类任务（一人一策、开放对话、一句话洞察）各建 5 例固定评测集，合计 15 例，每类至少 1 例以朱同玉 fixture 为锚点；提示词模板或模型变更须跑 `npm run eval:agent` 达门槛且无红线才可合入；评测 opt-in 不进默认 CI，报告归档且不含密钥 | Sprint 2 feature-03 |
+| 34 | F-AGT-034 | 时延预算与降级 | Options 生成与 chat 首响应按调用计时（`latency_ms` 入元数据），超预算记标注；超时、无 Key 或限速时走既有规则路径（`ruleProposeOptions` / `ruleSynthesizeDoingNow`）或 chat 固定致歉提示，`LLM_UNAVAILABLE` 错误语义保留，不向调用方暴露堆栈与密钥 | Sprint 2 feature-03 |
+
+---
+
 ## 非目标
 
 - Twin 采集 / Playwright（`hcp-twin-mcp`）

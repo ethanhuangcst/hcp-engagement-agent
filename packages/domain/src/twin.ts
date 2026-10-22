@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AuthorIdsSchema, hasActiveP0AuthorId } from "./author-ids.js";
 import { HcpTagsSchema } from "./tags.js";
+import { PromptTemplateMetaSchema } from "./engagement.js";
 
 export const SCHEMA_VERSION = "0.1.5-p0";
 
@@ -96,6 +97,9 @@ export const DoingNowSchema = z.object({
       model: z.string().min(1),
     })
     .optional(),
+  template: PromptTemplateMetaSchema.optional(),
+  latency_ms: z.number().int().nonnegative().optional(),
+  degraded: z.boolean().optional(),
 });
 
 export type DoingNow = z.infer<typeof DoingNowSchema>;

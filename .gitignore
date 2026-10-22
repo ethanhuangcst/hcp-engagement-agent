@@ -29,6 +29,9 @@ data/rag/corpus/tenants/**
 specs/.secrets
 specs/.tmp
 
+# 本地 live 验收临时脚本（约定命名，验收后删除；见 release.md Step 5）
+.tmp-*
+
 # Qdrant 本地下载的二进制（用 scripts/start-qdrant.sh 获取）
 tools/qdrant/
 .qdrant-initialized

@@ -88,8 +88,8 @@ describe("openAlexConceptSpecialty（B+ 论文级科室信号）", () => {
 
 
 describe("CONTROLLED_SPECIALTY_KEYS（feature-09 MKB2-02 目录扩充）", () => {
-  it("should_contain_28_controlled_keys_after_expansion", () => {
-    expect(CONTROLLED_SPECIALTY_KEYS).toHaveLength(28);
+  it("should_contain_29_controlled_keys_after_geriatrics_addition", () => {
+    expect(CONTROLLED_SPECIALTY_KEYS).toHaveLength(29);
     expect(CONTROLLED_SPECIALTY_KEYS).toEqual([...CONTROLLED_SPECIALTY_KEYS].sort());
   });
 
@@ -127,6 +127,8 @@ describe("CONTROLLED_SPECIALTY_KEYS（feature-09 MKB2-02 目录扩充）", () =>
       ["急诊科", "emergency_medicine"],
       ["放射科", "radiology"],
       ["康复科", "rehabilitation_medicine"],
+      ["老年医学", "geriatrics"],
+      ["老年科", "geriatrics"],
     ];
     for (const [alias, key] of samples) {
       expect(tryNormalizeSpecialty(alias)).toBe(key);

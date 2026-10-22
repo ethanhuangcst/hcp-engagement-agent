@@ -13,9 +13,10 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p eval/tsconfig.json --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "eval:agent": "tsx eval/run-eval.ts",
     "synthesize:zhu": "tsx src/cli/synthesize-zhu.ts"
   },
   "dependencies": {

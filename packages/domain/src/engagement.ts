@@ -56,6 +56,14 @@ export const GateResultSchema = z.object({
 
 export type GateResult = z.infer<typeof GateResultSchema>;
 
+/** AGT2-01：生成模板版本元数据（与 llm 元数据并列，只增不改） */
+export const PromptTemplateMetaSchema = z.object({
+  name: z.string().min(1),
+  version: z.string().min(1),
+});
+
+export type PromptTemplateMeta = z.infer<typeof PromptTemplateMetaSchema>;
+
 export const EngagementOptionsRunSchema = z.object({
   run_id: z.string().min(1),
   hcp_id: z.string().min(1),
@@ -75,6 +83,10 @@ export const EngagementOptionsRunSchema = z.object({
       product_context: z.string().optional(),
       retrieval_degraded: z.boolean().optional(),
       retrieval_degraded_reason: z.string().optional(),
+      template: PromptTemplateMetaSchema.optional(),
+      latency_ms: z.number().int().nonnegative().optional(),
+      latency_over_budget: z.boolean().optional(),
+      degraded: z.boolean().optional(),
     })
     .optional(),
 });
@@ -116,6 +128,8 @@ export const ChatSessionSchema = z.object({
       model: z.string().min(1),
     })
     .optional(),
+  template: PromptTemplateMetaSchema.optional(),
+  latency_ms: z.number().int().nonnegative().optional(),
 });
 
 export type ChatSession = z.infer<typeof ChatSessionSchema>;

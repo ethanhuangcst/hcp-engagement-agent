@@ -1,6 +1,6 @@
 # hcp-engagement-agent 用户故事与验收标准（ATDD）
 
-> as_of：2026-07-17  
+> as_of：2026-10-21（2026-07-17 初版；新增 US-AGT-007 / US-AGT-008：AGT2-01 ROCKS 模板版本化、评测门禁与降级，Sprint 2 feature-03）  
 > 依据：[`agent-function-spec.md`](./agent-function-spec.md)（F-AGT-* / I-AGT-*）  
 > 角色默认：**药企 HCP 互动负责人**（经 BFF 消费 Agent）；契约场景中的执行者称「调用方」  
 > 验收样例 HCP：复旦大学附属中山医院 **朱同玉** 教授  
@@ -271,6 +271,92 @@ Feature: Agent 验收门禁
 
 ---
 
+## US-AGT-007 三类输出质量可验收（AGT2-01）
+
+**As a** 药企 HCP 互动负责人  
+**I want to** 每类 LLM 生成的输出都在时延预算内完成，超时能降级到规则路径且仍可用，输出可追溯到生成它的模板版本  
+**So that** 访前工作不被超时卡死，出问题时可定位到模板版本并回滚，审计可还原生成路径  
+
+**覆盖**：F-AGT-031、F-AGT-032、F-AGT-034 · I-AGT-001、002、003（入口不变）  
+**MVP**：Sprint 2 feature-03（AGT2-01）  
+
+### 规则清单
+
+- 模板版本写入 run / summary / session 元数据，与既有 `llm: { provider, model }` 并列。
+- 模板按 ROCKS 五段组织：R=角色、O=目标、C=上下文、K=关键事实、S=输出要求。
+- 超时降级复用既有规则路径 `ruleProposeOptions` / `ruleSynthesizeDoingNow`；`LLM_UNAVAILABLE` 错误语义保留。
+- 时延预算初始值在 [agent-design §14.3](./agent-design.md) 定义，验收时按实测校准。
+
+### 验收标准
+
+```gherkin
+Feature: 模板版本化与降级（AGT2-01）
+
+  Scenario: 输出元数据携带模板版本
+    Given 任一 LLM 生成路径（propose / revise / synthesize / chat）完成一次生成
+    Then 该次运行的元数据含模板名与模板版本
+    And 与既有提供方、模型字段并列，用户可见输出不变
+
+  Scenario: 模板变更可回滚
+    Given 模板内容需要修改
+    When 修改合入
+    Then 产生新版本常量而非就地覆盖历史版本
+    And 上一版本可经 git 历史整体回滚
+
+  Scenario: 生成在时延预算内完成
+    Given LLM 与知识库可用
+    When 生成一套方案或一句洞察
+    Then 每类任务在 [agent-design §14.3](./agent-design.md) 预算内完成
+    And 本次调用的时延毫秒数写入元数据
+
+  Scenario: 超时降级到规则路径仍可用
+    Given LLM 调用超预算或不可用（超时、无 Key、限速）
+    When 调用方请求生成方案或一句话洞察
+    Then 走既有规则路径返回可用结果并标注非 LLM 结果
+    And 客户端不收到堆栈、密钥或无限等待
+```
+
+---
+
+## US-AGT-008 评测门禁守护模板与模型变更（AGT2-01）
+
+**As a** 开发 / 产品验收方  
+**I want to** 提示词模板或模型变更在合入前通过三类任务的固定评测集  
+**So that** AGT2-01 的输出质量有可复验基线，变更不静默回退质量  
+
+**覆盖**：F-AGT-033  
+**MVP**：Sprint 2 feature-03（AGT2-01）  
+
+### 规则清单
+
+- 评测集固定 15 例：一人一策 5、开放对话 5、一句话洞察 5；每类至少 1 例以朱同玉 fixture 为锚点。
+- 门槛与红线在 [agent-design §14.2](./agent-design.md) 定义；eval 为 opt-in，不进默认 CI。
+- 评测用 fixture 与 mock 检索，不写生产库；报告不含密钥。
+
+### 验收标准
+
+```gherkin
+Feature: 评测门禁（eval gate）
+
+  Scenario: 评测集覆盖三类任务且数量确定
+    Given 评测集就位
+    Then 一人一策、开放对话、一句话洞察各含 5 例，合计 15 例
+    And 每类至少 1 例以朱同玉 fixture 为锚点
+
+  Scenario: 变更合入前过门禁
+    Given 提示词模板版本或模型配置发生变更
+    When 在本地或 CI opt-in 跑 `npm run eval:agent`
+    Then 三类任务各达到门槛（≥ 4/5 例达标）且无红线项才判过
+    And 评测报告摘要随变更归档
+
+  Scenario: 评测不污染生产
+    Given 评测在本地或 CI 运行
+    Then 仅用 fixture 与 mock 检索注入，不写生产库
+    And 报告与日志不出现密钥
+```
+
+---
+
 ## 故事与功能追溯矩阵
 
 | 用户故事 | F-AGT 覆盖 | 主要接口 | MVP |
@@ -281,11 +367,14 @@ Feature: Agent 验收门禁
 | US-AGT-004 | 007、015、020–021 | I-AGT-003、010 | MVP-4 |
 | US-AGT-005 | 019、022–023 | I-AGT-003 | MVP-4 |
 | US-AGT-006 | 029–030 | — | MVP-4 |
+| US-AGT-007 | 031、032、034 | I-AGT-001、002、003 | Sprint 2 feature-03（AGT2-01） |
+| US-AGT-008 | 033 | — | Sprint 2 feature-03（AGT2-01） |
 
 ## 建议验收顺序
 
 1. MVP-2：US-AGT-001 → 002  
 2. MVP-4：US-AGT-003 → 004 → 005 → 006  
+3. Sprint 2：US-AGT-007 → 008（AGT2-01，feature-03）  
 
 ## 相关文档
 

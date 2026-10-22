@@ -1,6 +1,6 @@
 # medical-knowledge-base（RAG）用户故事与验收标准（ATDD）
 
-> as_of：2026-10-21（新增 US-RAG-007：受控学科目录扩充与学术索引批量种子，MKB2-02 / feature-09；US-RAG-008：合规知识覆盖信号与条款版本治理，MKB2-03；US-RAG-009：学术索引写入与恢复健壮性修复，DEF-003 / DEF-004）  
+> as_of：2026-10-21（新增 US-RAG-007：受控学科目录扩充与学术索引批量种子，MKB2-02 / feature-09；US-RAG-008：合规知识覆盖信号与条款版本治理，MKB2-03；US-RAG-009：学术索引写入与恢复健壮性修复，DEF-003 / DEF-004；US-RAG-010：seed CLI 空库自举与启动序，DEF-007 / MKB2-05）  
 > 依据：[`rag-function-spec.md`](./rag-function-spec.md)（F-RAG-* / I-RAG-*）  
 > 角色默认：**Agent / BFF / 运维调用方**（下文称「调用方」）  
 > 验收锚点：合规种子命中含条款号；朱同玉相关专科可按需命中  
@@ -447,6 +447,50 @@ Feature: 学术索引写入与恢复健壮性
 
 ---
 
+## US-RAG-010 seed CLI 空库自举与启动序（DEF-007）
+
+**As a** 运维 / 部署调用方
+**I want to** 在全新环境（空 Qdrant）直接执行 seed CLI 完成自举，不需人工预建集合
+**So that** 首次部署与清库重灌一步到位，预检不再误杀合法首启
+
+**覆盖**：F-RAG-002、023 · [MKB2-05](../product-backlog.md#pb-17) · [DEF-007](../issues-log.md) · [rag-design §21](./rag-design.md)
+**MVP**：MVP-3 缺陷修复
+
+### 验收标准
+
+```gherkin
+Feature: seed CLI 空库自举与启动序
+
+  Scenario: 空库首启合规种子自举
+    Given 全新部署的 Qdrant 无任何 collection
+    When 运维执行 seed_compliance
+    Then CLI 先创建双 collection 再做预检，全流程通过并写 manifest
+    And 不需要任何人工预建集合步骤
+
+  Scenario: 预检不通过仍中止
+    Given Qdrant 未启动或绑定不安全
+    When 运维执行 seed_compliance
+    Then 预检返回 ok: false 并以非零码退出，不写入任何数据
+
+  Scenario: 已有数据重跑幂等
+    Given 合规种子已灌库且 manifest 就绪
+    When 运维重跑 seed_compliance
+    Then 结果稳定，compliance 向量数与 manifest 均不变
+
+  Scenario: 启动序回归锁定
+    Given 任一 seed / ingest CLI 启动
+    When 执行其 main 流程
+    Then ensureDualCollectionsWithProbe 先于 health 执行、health 先于业务 seed
+```
+
+### 规则清单
+
+- 启动序契约见 [rag-design §21](./rag-design.md)：预检只探测「已确保存在」的对象。
+- `health()` 与 `ensureDualCollectionsWithProbe()` 本身不改，DEF-004 探测口径不变。
+- 手动预建空集合绕法随修复退役；生产侧该绕法记录保留在 data-backfill-design 执行记录。
+
+---
+
 ## 故事与功能追溯矩阵
 
 | 用户故事 | F-RAG 覆盖 | 主要接口 | MVP |
@@ -460,10 +504,11 @@ Feature: 学术索引写入与恢复健壮性
 | US-RAG-007 | 028、029（消费 014–017、019） | （目录数据 + 批量脚本，MKB2-02） | MVP-3 扩充 |
 | US-RAG-008 | 030、031、032（消费 013、018） | I-RAG-002、005 | MVP-3 扩充（未排期） |
 | US-RAG-009 | 033、034（消费 023、029） | （缺陷修复，DEF-003 / DEF-004） | MVP-3 缺陷修复 |
+| US-RAG-010 | 002、023 | （缺陷修复，DEF-007） | MVP-3 缺陷修复 |
 
 ## 建议验收顺序
 
-0. 缺陷修复：US-RAG-006（MVP-3 验收路径前置）；US-RAG-009（DEF-003 / DEF-004 修复，Sprint 2 feature-09 验收前置）  
+0. 缺陷修复：US-RAG-006（MVP-3 验收路径前置）；US-RAG-009（DEF-003 / DEF-004 修复，Sprint 2 feature-09 验收前置）；US-RAG-010（DEF-007 修复，Sprint 2 feature-14 验收前置）  
 1. MVP-3：US-RAG-001 → 002 → 003 → 004  
 2. MVP-3 扩充：US-RAG-007（Sprint 2 · feature-09；依赖 US-RAG-004 管线已绿）  
 3. MVP-3 扩充（未排期）：US-RAG-008（MKB2-03，合规侧；排入 sprint 后执行）  

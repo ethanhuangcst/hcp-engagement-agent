@@ -96,6 +96,11 @@ const ALIAS_MAP: Record<string, string> = {
   "rehabilitation medicine": "rehabilitation_medicine",
   康复科: "rehabilitation_medicine",
   康复医学科: "rehabilitation_medicine",
+  geriatrics: "geriatrics",
+  "geriatric medicine": "geriatrics",
+  老年医学: "geriatrics",
+  老年科: "geriatrics",
+  老年医学科: "geriatrics",
 };
 
 const CONTROLLED_KEYS = new Set(Object.values(ALIAS_MAP));
@@ -146,6 +151,7 @@ const SPECIALTY_DISPLAY: Record<string, string> = {
   emergency_medicine: "急诊科",
   radiology: "放射科",
   rehabilitation_medicine: "康复科",
+  geriatrics: "老年医学",
 };
 
 /**
