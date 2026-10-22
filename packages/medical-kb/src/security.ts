@@ -21,6 +21,7 @@ export function assertSafeQdrantUrl(url: string): { ok: true } | { ok: false; er
     LOOPBACK.has(host) ||
     host.endsWith(".internal") ||
     host === "qdrant" ||
+    host === "hcp-qdrant" ||
     host.startsWith("172.");
 
   if (!isLocal && !allowNonLocal) {
