@@ -93,6 +93,8 @@ services:
       VECTOR_BACKEND: qdrant-local
       MCP_TRANSPORT: http
       MCP2_PORT: "3300"
+      # 库外消歧经对内 twin-mcp（容器名 DNS，别名唯一）；不设则继承 stack.env 的 127.0.0.1 宿主机口径，容器内不可达
+      MCP_URL: http://hcp-twin-mcp:3200
       HCA_DATA_DIR: /data
       RAG_DEBUG: "1"   # 上线排障临时开关；定位 retrieve 空结果后移除
       # 生产在线拉取 PubMed（原「已知限制」，本次兼作 server 进程外部 fetch 诊断）
