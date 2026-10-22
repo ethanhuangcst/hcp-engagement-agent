@@ -1,6 +1,6 @@
 # 上线部署手册 — HCP Engagement Assistant
 
-> **as_of**：2026-10-19
+> **as_of**：2026-10-22
 > **信息源**：`~/code/release-bot`（半自动发布手册 + 野草云3 实机清单 as_of 2026-08-20）+ 本仓库 main 分支制品（compose / Dockerfile / CI）。
 > **架构**：[spec1.0/3.architecture.md](./spec1.0/3.architecture.md) · 2.0 增量：[architecture.md](./architecture.md)
 > **安全基线**：本文件不写数据库口令、API Key、PAT；密码只在节点 `.env` / Portainer env / 本机密钥库。
@@ -29,6 +29,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | web | `hcp-engagement-agent-web-1` | `…/web:latest` | 3001 | 3001 | 是（经 NPM） | Next UI + BFF |
 | hcp-twin-mcp | `hcp-engagement-agent-hcp-twin-mcp-1` | `…/hcp-twin-mcp:latest` | 3200 | 3200 | 否 | 对内采集 MCP |
+| hcp-engagement-mcp（2.0 上线后） | `hcp-engagement-agent-hcp-engagement-mcp-1` | `…/hcp-engagement-mcp:<tag>` | 3300 | `127.0.0.1:3205` | 否 | 对外 MCP 八工具（[1021 上线手册](./go-live/1021/go-live-instruction.md) Phase 4 起存在） |
 | qdrant | `hcp-engagement-agent-qdrant-1` | `qdrant/qdrant:v1.14.1` | 6333 | `127.0.0.1:6333` | 否 | 向量库 |
 
 内网互访（Docker DNS）：`MCP_URL=http://hcp-twin-mcp:3200`；`QDRANT_URL=http://qdrant:6333`。
@@ -56,7 +57,7 @@ flowchart TB
     AGT --> LLM[DashScope Qwen]
 ```
 
-2.0 新增服务 `hcp-engagement-mcp`（对外六工具）见 §6。
+2.0 新增服务 `hcp-engagement-mcp`（对外 MCP 八工具）见 §6。
 
 ---
 
@@ -69,7 +70,7 @@ flowchart TB
 | 3 | CI → GHCR | `.github/workflows/docker-build.yml`：push `main` 或 tag `v*` → `latest` / `sha-*` / `semver` | main 已有；mvp4 缺失 |
 | 4 | Env 模板 | `.env.example` | 已有；示例连接串已按 ADR-005 更新为 MySQL |
 | 5 | 迁移命令 | `npm run db:migrate`（MySQL 建表）；`db:migrate:pg-to-mysql`（首次迁库）；`db:migrate:mysql-to-mysql`（换主机） | 已有 |
-| 6 | 2.0 新增 | `docker/Dockerfile.mcp2`（hcp-engagement-mcp 镜像）+ compose 新服务 + CI matrix 追加 | **未建**，2.0 首次发布的前置工作 |
+| 6 | 2.0 新增 | `docker/Dockerfile.mcp2`（hcp-engagement-mcp 镜像）+ compose 新服务 + CI matrix 追加 | **未建**（mvp4 分支，2026-10-22 实查）；2.0 首次发布的前置工作，执行件 [1021 上线手册](./go-live/1021/go-live-instruction.md) Phase 0.2–0.4，跟踪 [REL2-01 MVP2 上线](./product-backlog.md#pb-18) |
 
 ---
 
@@ -141,6 +142,7 @@ flowchart TB
 | `GET /api/health` | MySQL 可达、MCP ping ok（或显式 degraded 项有说明） |
 | 核心路径 | 新增（消歧→确认保存）→ 构建情报（进度推进）→ 洞察八块 → 一人一策生成 → 合规检查 |
 | 对内 MCP | `GET http://38.55.192.140:3200/health`（或容器内 `curl hcp-twin-mcp:3200/health`）`twin_mode=live` |
+| 对外 MCP（2.0 起） | 节点上 `GET http://127.0.0.1:3205/health` `{"ok":true}` |
 | RAG | 合规检索命中含 `clause_id`（有灌库时） |
 
 本地 live 脚本（Qdrant + MySQL 实调验收）放仓库根，命名 `.tmp-*.mts`，用 `npx tsx` 从仓库根跑；验收后删除（`.gitignore` 已覆盖 `.tmp-*`）。
@@ -159,7 +161,7 @@ flowchart TB
 | --- | --- |
 | 镜像 | `ghcr.io/ethanhuangcst/hcp-engagement-agent/hcp-engagement-mcp:<IMAGE_TAG>`（CI matrix 追加，前置条件 §3-6） |
 | 容器端口 | `3300` |
-| 主机端口 | 建议 `3204→3300`（32xx 段 3201–3203 已被占用；以发布当日隔离门禁实机核对为准） |
+| 主机端口 | `127.0.0.1:3205→3300`（2026-10-21 实测 3204 已被同节点他应用占用，改 3205；loopback-only，同 qdrant 模式） |
 | 公网 | 默认**不**开 Cloudflare（2.0 不做鉴权，仅内网/节点可达）；如需给外部宿主用，走 SSH 隧道或运维批准的专用入口 |
 | env | 同 §4（共享 `DATABASE_URL`），`MCP2_PORT=3300`（仅 Streamable HTTP，ADR-008） |
 | 健康 | `GET :3300/health` |
@@ -175,9 +177,11 @@ flowchart TB
 
 | # | 事项 | 说明 |
 | --- | --- | --- |
-| 1 | 把 `docker-compose.yml` / `docker/` / `.github/workflows/` 从 main 合回 mvp4 | 当前 mvp4 分支缺这三样，CI 无法出制品 |
+| 1 | 把 `docker-compose.yml` / `docker/` / `.github/workflows/` 从 main 合回 mvp4 | mvp4 分支缺这三样（2026-10-22 实查），CI 无法出制品 |
 | 2 | 新增 `docker/Dockerfile.mcp2`（或等价）+ compose 新服务 + CI matrix | 对应 [architecture.md](./architecture.md) §10 |
-| 3 | NPM / 端口决策 | 若对外 MCP 需被节点外宿主直连，先由运维定入口方式（默认仅内网） |
+| 3 | NPM / 端口决策 | 已决：主机端口 `127.0.0.1:3205→3300`，不对公网开；若对外 MCP 需被节点外宿主直连，先由运维定入口方式（默认仅内网） |
+
+> 跟踪：以上三项归 [REL2-01 MVP2 上线](./product-backlog.md#pb-18)（Sprint 2，SBI task-02）；执行细节见 [1021 上线手册](./go-live/1021/go-live-instruction.md)。工作区提交（原阻塞 1）与生产 Qdrant 回灌（原数据阻塞）已于 2026-10-21 完成。
 
 ---
 

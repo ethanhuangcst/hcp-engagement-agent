@@ -3,7 +3,7 @@
 # Sprint Backlog — HCP Engagement Assistant
 
 > 类型：Framework (process) artifact，产品：HCP Engagement Assistant
-> as_of: 2026-10-21
+> as_of: 2026-10-22
 > [Definition](../.cursor/templates/framework.sdd.works/sdd-scrum-practices.md#sprint-backlogmd)
 
 ## 当前项目进度
@@ -142,12 +142,13 @@ Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规
 | 5 | feature-05 | 定时刷新数字分身 | [TWIN2-01 定时自动更新数字分身](./product-backlog.md#L106) | mcp/Task | - [对内 build_twin](mcp/mcp-function-spec.md)<br>- [安装与运行 §11](spec1.0/4.install-dependencies.md) | **Done** |
 | 2 | feature-02 | retrieve_academic 对外工具 | [MCP2-04 retrieve_academic · 学术证据检索](./product-backlog.md#L88) | mcp2.0/Feature | - [Agent 学术检索 I-AGT-007](agent/agent-function-spec.md)<br>- [Web 洞察页](app/app-function-spec.md) | **Done** |
 | 1 | feature-01 | get_hcp_insights 对外工具 | [MCP2-03 get_hcp_insights · HCP 洞察](./product-backlog.md#L82) | mcp2.0/Feature | - [Agent 洞察](agent/agent-function-spec.md)<br>- [Web 洞察页](app/app-function-spec.md) | **Done** |
+| 3 | feature-03 | Agent ROCKS 质量优化 | [AGT2-01 Agent 优化 · ROCKS 范式](./product-backlog.md#L115) | agent/Feature | - [Agent 功能规格（Sprint 2 增补）](agent/agent-function-spec.md)<br>- [Agent 设计 §13](agent/agent-design.md)<br>- [Agent 故事 US-AGT-007 / 008](agent/agent-stories.md)<br>- [Agent 测试与 eval 计划](agent/agent-tests.md) | **Done** |
 
 ### **ToDo**
 
 | # | Code | SBI | Parent PBI | Module/Type | Related specs | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| 3 | feature-03 | Agent ROCKS 质量优化 | [AGT2-01 Agent 优化 · ROCKS 范式](./product-backlog.md#L115) | agent/Feature | - [Agent 功能规格（Sprint 2 增补）](agent/agent-function-spec.md)<br>- [Agent 设计 §13](agent/agent-design.md)<br>- [Agent 故事 US-AGT-007 / 008](agent/agent-stories.md)<br>- [Agent 测试与 eval 计划](agent/agent-tests.md) | **WIP** |
+| 16 | task-02 | MVP2 上线 | [REL2-01 MVP2 上线（mvp4 → 生产）](./product-backlog.md#pb-18) | 后台维护/Task | - [go-live-instruction.md](go-live/1021/go-live-instruction.md)<br>- [env-changes.md](go-live/1021/env-changes.md)<br>- [data-backfill-design.md](go-live/1021/data-backfill-design.md)<br>- [release.md](release.md) | **ToDo** |
 
 ### Retrospective
 
@@ -190,6 +191,9 @@ Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规
 
 #### 9. [Oct 21, 2026], feature-04 retrieve_compliance 对外工具 done
 - feature-04 的注册与契约测试随 feature-08 前序会话提前提交，验收时 live tools/list（8 工具）已能察觉混入但无人核对；下一条对外工具 SBI 收口前先核对 tools/list 与本批范围一致（检查点：下一条同类 SBI）。
+
+#### 10. [Oct 22, 2026], feature-03 Agent ROCKS 质量优化 done
+- 回顾门已运行，无新增 durable 教训；eval 门禁首跑 15/15 过且三类时延实测均在预算内（已记 [agent-design §13.3](agent/agent-design.md)），architecture §7 / ADR-2.0-6 的「eval 门禁可落地」假设成立。
 
 **Opportunities**
 

@@ -1,18 +1,18 @@
 # 1021 上线手册（mvp4 → 生产）
 
-> 目标：把 `mvp4`（Sprint 1+2 成果：对外 MCP、TWIN2 定时刷新、28 学科学术种子、MySQL 方言修复）安全发布到野草云3 节点 Portainer Stack `hcp-engagement-agent`。
+> 目标：把 `mvp4`（Sprint 1+2 成果：对外 MCP 八工具、TWIN2 定时刷新、28 学科学术种子、MySQL 方言修复）安全发布到野草云3 节点 Portainer Stack `hcp-engagement-agent`。
 > 对比差异见 [env-changes.md](./env-changes.md)；密钥清单见 `specs/.secrets`（不外链，gitignored）。
-> 基线快照（2026-10-21 实测）：生产跑 `main@03bd588 / latest`，3 容器，Web/MCP 正常，**生产 Qdrant 空**。
-> 停机窗口：不需要（滚动 recreate）；RAG 灌种在生产 Qdrant 上是新写数据，无覆盖风险。
+> 基线快照（2026-10-22 复核）：生产跑 `main@03bd588 / latest`，3 容器，Web/MCP 正常；生产 Qdrant 已经 OGT-5 回灌（academic 146 / compliance 23，三面一致）。mvp4 HEAD `61410eb`（含 feature-03 Agent ROCKS 进行中工作，上线内容以发布当日 HEAD 为准）。
+> 停机窗口：不需要（滚动 recreate）；RAG 灌种已完成（OGT-5），无新数据覆盖风险。
 
 ## 阻塞项（开始前必须清零）
 
 | # | 阻塞项 | 处置 | 状态 |
 | --- | --- | --- | --- |
-| B1 | 46 文件未提交（hcp-engagement-mcp 服务、EMC 测试、medical-kb coverage 等） | Phase 0.1 提交到 mvp4 |  |
-| B2 | `mvp4` 缺 docker / compose / CI 三件套（只在 main 有） | Phase 0.2 合 main 进 mvp4 |  |
-| B3 | 无 `hcp-engagement-mcp` 镜像：无 Dockerfile、无 compose 服务、CI matrix 只有 2 镜像 | Phase 0.3 新增三处 |  |
-| B4 | 生产 Qdrant collections 为空（manifest 与向量脱节） | Phase 3 隧道灌种 |  |
+| B1 | 46 文件未提交（hcp-engagement-mcp 服务、EMC 测试、medical-kb coverage 等） | Phase 0.1 提交到 mvp4 | **已清**（`aedfc1b` / `e99b563` / `61410eb`，工作区仅剩本机 qdrant 日志） |
+| B2 | `mvp4` 缺 docker / compose / CI 三件套（只在 main 有） | Phase 0.2 合 main 进 mvp4 | 待执行（2026-10-22 实查：mvp4 无 `docker/`、`docker-compose.yml`、`.github/`） |
+| B3 | 无 `hcp-engagement-mcp` 镜像：无 Dockerfile、无 compose 服务、CI matrix 只有 2 镜像 | Phase 0.3 新增三处 | 待执行 |
+| B4 | 生产 Qdrant collections 为空（manifest 与向量脱节） | Phase 3 隧道灌种 | **已清**（OGT-5：146 / 23，G1–G3 通过） |
 
 已知不阻塞：DEF-004（Qdrant scroll offset 分页在并发写时可能 panic）未修复——灌种窗口内无并发写，`retrieve` 只读触发不了；列入已知问题，随 MKB2-04 修复。DEF-003 已在 `aedfc1b` 修复（`academicPointId` 含 specialty）。
 
@@ -22,17 +22,13 @@
 
 ### 0.1 提交工作区
 
-1. 本机终端，工作目录 `/Users/ethanhuang/code/hcp-engagement-agent`，确认分支：
-   ```bash
-   git branch --show-current        # 期望 mvp4
-   git status --short | wc -l        # 期望 ~48（46 源/规格文件 + qdrant 日志）
-   ```
-2. 排除本机运行痕迹（不提交）：
-   ```bash
-   printf '\n# local qdrant run logs\ndata/qdrant*.log\n' >> .gitignore
-   git add .gitignore
-   ```
-3. 分主题提交（示例切分，可合并但不要漏）：
+> **状态（2026-10-22）：已完成**——工作区已由 `aedfc1b` / `e99b563` / `61410eb` 提交干净，仅剩 `data/qdrant*.log` 本机日志（不提交）。上线时本步只剩核对：
+
+```bash
+git status --short        # 期望仅 data/qdrant*.log
+```
+
+原始分主题提交指引（已完成，留档）：
    ```bash
    git add packages/medical-kb packages/hcp-twin-mcp packages/db data/rag/corpus
    git commit -m "MKB2: compliance coverage signal + academic corpus refresh (feature-09 WIP state)"
@@ -40,7 +36,6 @@
    git commit -m "MCP2: engagement MCP server, display/query formats, web confirm prefetch, specs"
    git status --short      # 期望 qdrant*.log 之外为空
    ```
-   注意：`apps/web/src/lib/rag-ingest.ts` 与 twin 流程文件必须包含；`specs/` 的 process 文件草稿（sprint-backlog DEF 引用、status.md）此时一并带走，避免上线后漂移。
 
 ### 0.2 从 main 合入部署三件套
 
@@ -131,14 +126,14 @@ SSH="ssh -o PubkeyAuthentication=no -o PreferredAuthentications=password root@38
 # 密码在 specs/.secrets: SSH_PASSWORD
 $SSH 'docker ps --format "{{.Names}}\t{{.Status}}" | grep hcp'      # 3 容器 Up
 $SSH 'curl -s http://127.0.0.1:3001/api/health'                       # 期望 ok:true
-$SSH 'curl -s http://127.0.0.1:6333/collections | head -c 300'        # 期望 {"result":{"collections":[]}}
+$SSH 'curl -s http://127.0.0.1:6333/collections | head -c 300'        # 期望 2 个 collection（academic_index / compliance_index，OGT-5 已回灌）
 $SSH 'ss -tlnp | grep -E "3204|3205"'                                # 3204 被占确认，3205 空闲
 ```
 回滚锚点记录（写在手边，不许只存聊天）：
 ```text
 回滚镜像 tag: latest（当前生产实际运行 = main@03bd588 的 push）
 生产 DB 表结构: mysql/001–004 已建（六表）——回滚不受影响（旧镜像只读不写这些表也安全）
-Qdrant: collections 为空 —— 灌种前状态=可完全回滚；灌种后新增集合（回滚不删，属无害残留）
+Qdrant: academic 146 / compliance 23（OGT-5 已回灌）——回滚不删 collection（旧镜像不读 RAG，属无害残留；需清理时 DELETE collection）
 ```
 
 ## Phase 2 — 数据库迁移确认（幂等，预期零变化）
@@ -231,6 +226,8 @@ QDRANT_ENABLED=false npm run db:migrate
 | S6 | 洞察画风 | `get_hcp_insights`（已有 twin 档案如朱同玉） | 结构完整 |
 | S7 | TWIN 直连（旧链路） | 宿主 `:3200` twin MCP `health_check` | 正常（确认旧进程未被新部署破坏） |
 | S8 | 定时刷新（若启用） | hcp-twin-mcp 容器日志 `grep -i cron` | 出现 cron 注册行 |
+| S10 | 合规检索（feature-04） | MCP2 `tools/call` `retrieve_compliance`（王拥军，默认检索词） | 5 chunks 含 `clause_id` / `authority` / `version`，`coverage: ready`（rdpac 15 + cn_med_rep 8） |
+| S11 | 灌注状态查询（feature-08） | MCP2 `tools/call` `get_ingest_status`（`specialty: "kidney_transplant"` 中文别名亦可） | 返回最近 job，`knowledge_status: ready` |
 | S9 | 共存应用抽查 | `curl` places-agent / kb-agent 的驻留端口（release.md 记录值） | 均存活，与发布前一致 |
 
 任一 S 失败：见回滚。
@@ -260,7 +257,12 @@ $SSH 'curl -X DELETE http://127.0.0.1:6333/collections/compliance_index'
 - 容器网络内（web / 未来代理容器）：`http://hcp-engagement-mcp:3300/mcp`
 - 节点 loopback（运维 / 冒烟）：`http://127.0.0.1:3205/mcp`，另有 `GET /health`
 - 跨机（中心 Agent 临时联调）：`ssh -L 6334:127.0.0.1:3205 root@38.55.192.140` 之类隧道；公网 TLS 入口属后续 NPM 代理 story（不在 1021 范围）。
-- 5 个 MCP 工具：`list_hcp` `query_hcp` `add_hcp` `get_hcp_insights` `retrieve_academic`（合规检索不经 MCP 暴露，走 web 确认链路内部调用）。
+- **8 个 MCP 工具**（feature-04 / feature-08 收口后全集，2026-10-22 更新）：`list_hcp` `query_hcp` `add_hcp` `get_hcp_insights` `retrieve_academic` `retrieve_compliance` `ingest_academic` `get_ingest_status`。合规检索已按 ADR-012 数据面口径对外暴露（仅条款引用，非预审判定）；`ingest_academic` 受 coverage 门控（ready 幂等跳过）。
+
+### 已知数据差异（2026-10-22 记录，不阻塞上线）
+
+- 受控专科目录代码已含第 29 个专科 `geriatrics`（老年医学，演示验证用），但仓库受控语料仍为 28 学科 146 条，生产亦无 geriatrics 数据：生产上 geriatrics 检索返回 coverage `pending`/`sparse` + `repair_hint`（设计行为，ADR-014）。
+- 生产环境未设 `RAG_ACADEMIC_FETCH` / `NCBI_API_KEY`：生产上 `ingest_academic` 对无语料专科拉取会返回结构化 `SOURCES_UNAVAILABLE`，属已知限制；如需生产在线拉取，后续在 Portainer env 增设该开关（不在 1021 范围）。
 
 ## 附录 A：时间线估算
 

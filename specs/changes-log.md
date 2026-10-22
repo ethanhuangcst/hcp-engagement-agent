@@ -1,8 +1,39 @@
 # 变更记录（HCP Engagement Assistant）
 
 > 类型：Framework (process) artifact，产品：HCP Engagement Assistant
-> as_of: 2026-10-21
+> as_of: 2026-10-22
 > [Definition](../.cursor/templates/framework.sdd.works/sdd-scrum-practices.md#changes-logmd)
+
+---
+
+## 2026-10-22
+
+### feature-03 Done：Agent ROCKS 质量优化（AGT2-01）
+
+**原因**：Sprint 2 目标要求 Agent 一人一策、开放对话与一句话洞察在真实 LLM 下达到可验收质量（ROCKS 范式）；用户 close confirm feature-03 可用。
+
+**变更内容**：
+- `packages/hcp-engagement-agent`（实现随 `61410eb` 提交，本批收口）：`src/prompts/v1/` 模板注册表（四模板 `{ name, version: "v1", text }`，ROCKS 五段注释分节）；propose / revise / synthesize / chat 四路径 `meta.template` 元数据接线；`latency.ts` 计时写 `latency_ms` 与 `over_budget`；超时 / 无 Key 降级复用 `ruleProposeOptions` / `ruleSynthesizeDoingNow` 并标 `degraded: true`（`LLM_UNAVAILABLE` 语义保留）。
+- 评测门禁（US-AGT-008）：`eval/cases.ts` 15 例（一人一策 5 · 开放对话 5 · 一句话洞察 5，每类 #1 朱同玉 fixture 锚点）+ `eval/run-eval.ts` + `npm run eval:agent`（opt-in）；首跑报告归档 [eval-20261021T131400.json](../packages/hcp-engagement-agent/eval/reports/eval-20261021T131400.json)：15/15 过、零红线，propose 13–20 s / open_chat 5–11 s / synthesize 2–4 s 均在预算内（[agent-design §13.3](agent/agent-design.md) 初值维持 30 s / 15 s）。
+- process：sprint-backlog feature-03 → **Done**（Sprint 2 功能 SBI 全部收口，剩 task-02 MVP2 上线）；product-backlog AGT2-01 → **Done**；status.md 同步。
+
+**验收**：agent 46/46 绿（含 rocks.test.ts）、typecheck 0 错（含 eval tsconfig）；eval gate `gate_pass: true`（15/15，无红线）；用户 close confirm feature-03。
+
+---
+
+### REL2-01 新增与 MVP2 上线准备规格修订（spec-to-build，不动代码）
+
+**原因**：用户指令新增 MVP2 上线 PBI（Task）并完成上线准备；上线规格与实际状态漂移——1021 手册与 env-changes 仍写「5 个 MCP 工具 / 生产 Qdrant 空 / 46 文件未提交」，而 feature-04 / 08 已收口（八工具）、OGT-5 已回灌（146 / 23）、工作区已提交（`61410eb`）。
+
+**变更内容**：
+- [product-backlog.md](product-backlog.md)：新增 [REL2-01](product-backlog.md#pb-18)（MVP2 上线，Task，需求条目 pb-18 + Backlog 行 18，Sprint 2，ToDo）与变更记录行。
+- [sprint-backlog.md](sprint-backlog.md)：Sprint 2 ToDo 新增 SBI task-02（MVP2 上线，# 16）；feature-03 保持 WIP 不动。
+- [go-live-instruction.md](go-live/1021/go-live-instruction.md)：阻塞项表标状态（B1 / B4 已清，B2 / B3 待执行）；Phase 0.1 置已完成留档；Phase 1 预检与回滚锚点对齐 OGT-5 后基线（collections 146 / 23）；Phase 6 冒烟新增 S10（retrieve_compliance）与 S11（get_ingest_status）；工具面通告改 8 工具全集；新增「已知数据差异」节（geriatrics 第 29 专科目录 vs 语料 / 生产 28 学科；生产无 `RAG_ACADEMIC_FETCH` 时 `ingest_academic` 返回 `SOURCES_UNAVAILABLE` 属已知限制）。
+- [env-changes.md](go-live/1021/env-changes.md)：工作区基线改 `61410eb`（已提交）；§1.2 改「生产 Qdrant 已回灌」；§3 工具行改 8 工具；§4 改已处置；§5 基线 collections 行更新。
+- [release.md](release.md)：as_of 2026-10-22；§1.1 服务表预登 `hcp-engagement-mcp`（`127.0.0.1:3205→3300`）；§3-6 与 §6.3 阻塞项状态更新并挂 REL2-01 跟踪；§6.1 端口定稿 3205；§5 冒烟补对外 MCP 健康行；§2 注改八工具。
+- 信息源核对：`~/code/release-bot` 无 hcp 专属发布记录，上一次上线基线（`main@03bd588` / `latest`）已在本仓库 specs，无需引入新信息；密钥沿用 `specs/.secrets` 现值，无新增。
+
+**验收**：B2 / B3 待执行状态与 mvp4 实查一致（`git ls-files` 无 docker / compose / CI 三件套）；geriatrics 差异已入手册「已知数据差异」；`git status` 无代码文件改动（本批仅 specs）。
 
 ---
 
