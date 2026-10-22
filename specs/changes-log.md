@@ -8,6 +8,16 @@
 
 ## 2026-10-22
 
+### On-demand 回顾：上线过程操作错误复盘（用户发起）
+
+**原因**：用户 `/sdd-retrospective` 要求记录 MVP2 上线过程中若干错误的更新（操作层面，区别于 DEF-008/009/010 产品缺陷）。
+
+**变更内容**：新建知识条目 [prod-ops-output-and-assertion-discipline.md](knowledge/ops/prod-ops-output-and-assertion-discipline.md)（密钥文件与运维 API 响应脱敏、冒烟断言不吞错误信封、编辑/清理小纪律）；sprint-backlog Sprint 2 Retrospective 追加 On-demand 块 #12；knowledge README 索引更新。
+
+**验收**：七项过程错误逐条复核（两项泄露、一项断言误导、四项小事故），无残留项；**open item：MySQL root 密码（共享实例）已进 chat，轮换待协调窗口**。
+
+---
+
 ### Sprint 2 关闭 + task-02（MVP2 上线）Done
 
 **原因**：用户 close confirm task-02 可用与 Sprint 2 Goal 达成（Sprint 2 全部 SBI Done：feature-01–14 + task-02）。

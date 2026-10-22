@@ -218,6 +218,11 @@ Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规
 - 下一次发布沿用 tag 流并决策 main 治理方案（检查点：下一次发布 / Sprint 3 规划）。
 - 下一次读 `specs/.secrets` 的会话，先整行遮罩再解析非键值行（检查点：下一次密钥操作）。
 
+#### 12. [Oct 22, 2026], On demand（上线过程错误复盘，用户发起）
+- 排障输出两次泄露密钥（`.secrets` 非键值明文行、Portainer 响应体 `Env` 携带 `DATABASE_URL`），MySQL root 密码轮换仍待协调执行，纪律全案入 [prod-ops-output-and-assertion-discipline.md](./knowledge/ops/prod-ops-output-and-assertion-discipline.md)。
+- 冒烟断言用 `(chunks ?? []).length` 吞掉 `INTERNAL_ERROR` 错误信封，把 UNSAFE_QDRANT_BIND 误判为空返回拉长诊断，验证脚本必须先判 `isError` 再判业务字段（同上知识条目 §2）。
+- 三次小事故无残留但成纪律：大块替换后立即 Read 核对、诊断输出标签与命令一致、kill 前列 PID 与承载（同上 §3）；本机镜像验证不可中途砍掉（DEF-009 教训已在 #11 记录）。
+
 **Opportunities**
 
 #### 1. [Oct 20, 2026], feature-06 done
