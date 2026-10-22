@@ -1,5 +1,7 @@
 # hcp-twin-mcp (Streamable HTTP :3200)
 # Build: docker build -f docker/Dockerfile.mcp -t hcp-twin-mcp .
+# mvp4 起 twin-mcp 依赖 @hca/hcp-engagement-agent（TWIN2 定时刷新 / ensureDoingNow），
+# 运行时闭包扩为六包（同 Dockerfile.mcp2 减 engagement-mcp 加 twin-mcp）。
 
 ARG NODE_IMAGE=node:22-bookworm-slim
 ARG NPM_REGISTRY=https://registry.npmmirror.com
@@ -9,28 +11,32 @@ ARG NPM_REGISTRY
 WORKDIR /app
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates \
+  && apt-get install -y --no-install-recommends ca-certificates python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
+# Workspace lockfile 要求全部 workspace 的 package.json 在位
 COPY packages/domain/package.json packages/domain/
 COPY packages/db/package.json packages/db/
-COPY packages/hcp-twin-mcp/package.json packages/hcp-twin-mcp/
-# Workspace lockfile expects these package.json paths present
 COPY packages/mcp-client/package.json packages/mcp-client/
 COPY packages/medical-kb/package.json packages/medical-kb/
 COPY packages/hcp-engagement-agent/package.json packages/hcp-engagement-agent/
+COPY packages/hcp-engagement-mcp/package.json packages/hcp-engagement-mcp/
+COPY packages/hcp-twin-mcp/package.json packages/hcp-twin-mcp/
 COPY apps/web/package.json apps/web/
 
 RUN npm config set registry "${NPM_REGISTRY}" \
-  && npm ci --ignore-scripts
+  && npm ci
 
 COPY tsconfig.base.json ./
 COPY packages/domain packages/domain
 COPY packages/db packages/db
+COPY packages/mcp-client packages/mcp-client
+COPY packages/medical-kb packages/medical-kb
+COPY packages/hcp-engagement-agent packages/hcp-engagement-agent
 COPY packages/hcp-twin-mcp packages/hcp-twin-mcp
 
-RUN npm run build -w @hca/domain -w @hca/db -w @hca/hcp-twin-mcp \
+RUN npm run build -w @hca/domain -w @hca/db -w @hca/mcp-client -w @hca/medical-kb -w @hca/hcp-engagement-agent -w @hca/hcp-twin-mcp \
   && npm prune --omit=dev
 
 FROM ${NODE_IMAGE} AS runner
@@ -47,6 +53,9 @@ COPY --from=build /app/package.json /app/package-lock.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/packages/domain ./packages/domain
 COPY --from=build /app/packages/db ./packages/db
+COPY --from=build /app/packages/mcp-client ./packages/mcp-client
+COPY --from=build /app/packages/medical-kb ./packages/medical-kb
+COPY --from=build /app/packages/hcp-engagement-agent ./packages/hcp-engagement-agent
 COPY --from=build /app/packages/hcp-twin-mcp ./packages/hcp-twin-mcp
 
 EXPOSE 3200

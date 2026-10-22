@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Docker / production image (see docker/Dockerfile.web) needs standalone output
+  output: "standalone",
   transpilePackages: [
     "@hca/domain",
     "@hca/db",
