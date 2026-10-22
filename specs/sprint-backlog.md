@@ -9,7 +9,7 @@
 ## 当前项目进度
 
 - Total sprints: 2
-- Current WIP sprint: Sprint 2
+- Current WIP sprint: （无）
 - Sprint goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规证据引用，系统按计划自动刷新已保存数字分身，且 Agent 在 ROCKS 范式下达到可验收质量。
 
 <a id="index"></a>
@@ -123,7 +123,7 @@ Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规
 
 依赖 Sprint 1 对外 MCP 进程与 HCP 主数据工具。
 
-**Status: Done**（2026-10-22 用户确认 Sprint Goal 达成；同日增补运维批次 [OPS2-01](./product-backlog.md#pb-19) task-03 入 ToDo，属 Sprint 2 事后追加，Goal 口径不变）
+**Status: Done**（2026-10-22 用户确认 Sprint Goal 达成；同日增补 [OPS2-01](./product-backlog.md#pb-19) task-03 并于当日收口，十六条 SBI 全 Done）
 
 ### **Done**
 
@@ -144,12 +144,7 @@ Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规
 | 1 | feature-01 | get_hcp_insights 对外工具 | [MCP2-03 get_hcp_insights · HCP 洞察](./product-backlog.md#L82) | mcp2.0/Feature | - [Agent 洞察](agent/agent-function-spec.md)<br>- [Web 洞察页](app/app-function-spec.md) | **Done** |
 | 3 | feature-03 | Agent ROCKS 质量优化 | [AGT2-01 Agent 优化 · ROCKS 范式](./product-backlog.md#L115) | agent/Feature | - [Agent 功能规格（Sprint 2 增补）](agent/agent-function-spec.md)<br>- [Agent 设计 §13](agent/agent-design.md)<br>- [Agent 故事 US-AGT-007 / 008](agent/agent-stories.md)<br>- [Agent 测试与 eval 计划](agent/agent-tests.md) | **Done** |
 | 16 | task-02 | MVP2 上线 | [REL2-01 MVP2 上线（mvp4 → 生产）](./product-backlog.md#pb-18) | 后台维护/Task | - [go-live-instruction.md](go-live/1021/go-live-instruction.md)<br>- [env-changes.md](go-live/1021/env-changes.md)<br>- [data-backfill-design.md](go-live/1021/data-backfill-design.md)<br>- [release.md](release.md) | **Done** |
-
-### **ToDo**
-
-| # | Code | SBI | Parent PBI | Module/Type | Related specs | Status |
-| --- | --- | --- | --- | --- | --- | --- |
-| 17 | task-03 | zone SSL 迁移 Full (strict) | [OPS2-01 zone SSL 迁移 Full (strict)（agent-mate.ai）](./product-backlog.md#pb-19) | 后台维护/Task | - release-bot `Release-jobs/zone-ssl-full-strict/task-details.md`（执行件）<br>- [release.md §6.1](release.md)<br>- [DEF-011](issues-log.md)<br>- [issues-log DEF-011 关闭条目](issues-log.md) | **ToDo** |
+| 17 | task-03 | zone SSL 迁移 Full (strict) | [OPS2-01 zone SSL 迁移 Full (strict)（agent-mate.ai）](./product-backlog.md#pb-19) | 后台维护/Task | - release-bot `Release-jobs/zone-ssl-full-strict/task-details.md`（执行件）<br>- [release.md §6.1](release.md)<br>- [DEF-011](issues-log.md) | **Done** |
 
 ### Retrospective
 
@@ -202,6 +197,11 @@ Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规
 - DEF-009：Next standalone 依赖追踪不含 onnxruntime 原生二进制，`/api/engagement/*` 全量 500——standalone 镜像必须显式核对原生依赖落位，容器级冒烟不可中途砍掉。
 - 生产 PAT 两次经 `.secrets` 非 `KEY=` 格式明文行进入聊天（我的脱敏正则只按键值行匹配）——读密钥文件一律先整行遮罩再解析；token 均已吊销轮换。
 
+#### 13. [Oct 22, 2026], task-03（OPS2-01）done + Sprint 2 最终收口
+- **既往 Future action 评分**（相对 #11）：#11 三条（部署前查 Alias 撞名 / tag 流与 main 治理 / 读 `.secrets` 整行遮罩）**partial**——task-03 执行中已用 `--resolve` 与串行 NPM PUT，但未单独跑 Alias 巡检；main 治理仍 open；遮罩纪律本轮未再触发泄露。
+- zone `agent-mate.ai` 已 **Full (strict)**：补 LE 证书 #11–#13 挂 Host 2/3/4，用户面板 Phase 3 Full → Phase 4 Full (strict)，八站矩阵与 MCP 八工具经 CF 边缘全绿；Host 2/3/4/11 已重开 Force SSL，http→301 无循环。
+- NPM API 三连签 LE 触发 nginx 运行配置脏态（`/api` openresty 404、`nginx -t` 仍 OK），`docker exec … nginx -s reload` 零停机恢复；教训入 [npm-batch-le-reload-dirty-config.md](./knowledge/ops/npm-batch-le-reload-dirty-config.md)（细节亦在 release-bot knowledge 05 §7）。
+
 **Opportunities**
 
 #### 11. [Oct 22, 2026], Sprint-end
@@ -209,6 +209,9 @@ Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规
 - 共享网络通用服务别名（`web` ×4 / `agent` ×3 / `rag` ×2）仍多 Stack 撞名，可提示各 Stack owner 换专属别名（我方已换 `hcp-qdrant`）。
 - 存量 16 条 twin `profile.specialties` 空数组，default 检索路径无 coverage 信号——可随 TWIN 定时刷新自然补齐或开小故事。
 - Makefile `up`/`down` 封装（Sprint 1 遗留未落地）。
+
+#### 13. [Oct 22, 2026], task-03 done
+- zone 级 SSL 迁 Full (strict) 可复用 release-bot 执行件模板，其它 zone 复制 Phase 0–4 与串行 NPM 纪律即可。
 
 **Future actions**
 
@@ -221,6 +224,10 @@ Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规
 - 排障输出两次泄露密钥（`.secrets` 非键值明文行、Portainer 响应体 `Env` 携带 `DATABASE_URL`），MySQL root 密码轮换仍待协调执行，纪律全案入 [prod-ops-output-and-assertion-discipline.md](./knowledge/ops/prod-ops-output-and-assertion-discipline.md)。
 - 冒烟断言用 `(chunks ?? []).length` 吞掉 `INTERNAL_ERROR` 错误信封，把 UNSAFE_QDRANT_BIND 误判为空返回拉长诊断，验证脚本必须先判 `isError` 再判业务字段（同上知识条目 §2）。
 - 三次小事故无残留但成纪律：大块替换后立即 Read 核对、诊断输出标签与命令一致、kill 前列 PID 与承载（同上 §3）；本机镜像验证不可中途砍掉（DEF-009 教训已在 #11 记录）。
+
+#### 13. [Oct 22, 2026], task-03 done
+- 下一次经 NPM API 批量改证书或 Host 后，若 `/api` 突然 404 先容器内 `nginx -s reload` 再排障（检查点：下一次 NPM API 批量操作）。
+- Sprint 3 规划前决策 main 与 mvp4 治理（检查点：下一次发布规划，延续 Opportunities #11）。
 
 **Opportunities**
 

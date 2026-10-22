@@ -168,7 +168,7 @@ flowchart TB
 | 镜像 | `ghcr.io/ethanhuangcst/hcp-engagement-agent/hcp-engagement-mcp:<IMAGE_TAG>`（CI matrix 追加，前置条件 §3-6） |
 | 容器端口 | `3300` |
 | 主机端口 | `127.0.0.1:3205→3300`（2026-10-21 实测 3204 已被同节点他应用占用，改 3205；loopback-only，同 qdrant 模式） |
-| 公网 | **已上线**（2026-10-22，[DEF-011](./issues-log.md) 已关闭）：`hcp-mcp.agent-mate.ai`（Cloudflare 橙云 → NPM Host **#11** → 容器名 :3300），LE 证书 **#10** 至 2027-01-20，**不加鉴权**（Ethan 决策，与 ADR-008 决策 5 同姿态）；Host 须保持 `proxy_buffering off; proxy_read_timeout 300s;`；zone 现 SSL 模式为 **Flexible** → 该 Host **不得**开 Force SSL（301 循环），zone 迁 Full 后可重开；主机端口 3205 维持 loopback-only 运维后门。**残余风险（知情记录）**：无鉴权公网暴露意味着 `add_hcp` 写库、`ingest_academic` 公开源拉取、按需 LLM 合成可被任意调用方触发；日后加固走 NPM Access List 或 Cloudflare WAF 入口层规则，无需改代码 |
+| 公网 | **已上线**（2026-10-22，[DEF-011](./issues-log.md) 已关闭）：`hcp-mcp.agent-mate.ai`（Cloudflare 橙云 → NPM Host **#11** → 容器名 :3300），LE 证书 **#10** 至 2027-01-20，**不加鉴权**（Ethan 决策，与 ADR-008 决策 5 同姿态）；Host 须保持 `proxy_buffering off; proxy_read_timeout 300s;`；zone SSL 已为 **Full (strict)**（[OPS2-01](./product-backlog.md#pb-19) 2026-10-22 Done），Host **#11** 已开 Force SSL；主机端口 3205 维持 loopback-only 运维后门。**残余风险（知情记录）**：无鉴权公网暴露意味着 `add_hcp` 写库、`ingest_academic` 公开源拉取、按需 LLM 合成可被任意调用方触发；日后加固走 NPM Access List 或 Cloudflare WAF 入口层规则，无需改代码 |
 | env | 同 §4（共享 `DATABASE_URL`），`MCP2_PORT=3300`（仅 Streamable HTTP，ADR-008） |
 | 健康 | `GET :3300/health` |
 
@@ -176,7 +176,7 @@ flowchart TB
 
 公网客户端接入（DEF-011 已落地）：`mcp.json` 仅一行地址，`{"mcpServers":{"hcp-engagement-mcp":{"url":"https://hcp-mcp.agent-mate.ai/mcp"}}}`。
 
-> zone SSL 迁移 Full (strict) 已立项 [OPS2-01](./product-backlog.md#pb-19)（Sprint 2 增补 task-03，ToDo）：补 `hcp` / `portainer` / `nginx` 三张源站证书后 zone 切 Full → Full (strict)，迁移完成后 Host #11 可重开 Force SSL。执行件：release-bot `Release-jobs/zone-ssl-full-strict/task-details.md`。
+> zone SSL 迁移 Full (strict) 已完成（2026-10-22，[OPS2-01](./product-backlog.md#pb-19) Done）：LE 证书 #11–#13 挂 `hcp` / `portainer` / `nginx`，zone 经 Full → Full (strict)，Host 2/3/4/11 Force SSL 已开。执行记录：release-bot `Release-jobs/zone-ssl-full-strict/task-details.md` §7。
 
 ### 6.2 TWIN2-01 定时刷新
 

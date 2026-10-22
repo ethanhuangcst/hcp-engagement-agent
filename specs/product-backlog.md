@@ -217,7 +217,7 @@
 | 16 | 对外服务 | [MCP2-10](#pb-16) | add_hcp 入库科室以选中记录信号专科为准（DEF-006，D2） | Implementable | - [DEF-006](issues-log.md)<br>- [US-MCP2-007 增补](mcp2.0/mcp2-stories.md)<br>- [mcp2-design §13.6](mcp2.0/mcp2-design.md)<br>- [mcp2 测试计划 §15](mcp2.0/mcp2-test.md)<br>- [F-WEB-047 增补](app/app-function-spec.md) | Sprint 2 | Done |
 | 17 | 后台维护 | [MKB2-05](#pb-17) | seed CLI 启动序统一（DEF-007） | Implementable | - [DEF-007](issues-log.md)<br>- [US-RAG-010](rag/rag-stories.md)<br>- [rag-design §21](rag/rag-design.md)<br>- [rag 测试计划 §8](rag/rag-tests.md) | Sprint 2 | Done |
 | 18 | 后台维护 | [REL2-01](#pb-18) | MVP2 上线（mvp4 → 生产） | Implementable | - [go-live-instruction.md](go-live/1021/go-live-instruction.md)<br>- [env-changes.md](go-live/1021/env-changes.md)<br>- [release.md](release.md) | Sprint 2 | Done |
-| 19 | 后台维护 | [OPS2-01](#pb-19) | zone SSL 迁移 Full (strict)（agent-mate.ai） | Implementable | - release-bot `Release-jobs/zone-ssl-full-strict/task-details.md`<br>- [release.md §6.1](release.md)<br>- [DEF-011](issues-log.md) | Sprint 2 | ToDo |
+| 19 | 后台维护 | [OPS2-01](#pb-19) | zone SSL 迁移 Full (strict)（agent-mate.ai） | Implementable | - release-bot `Release-jobs/zone-ssl-full-strict/task-details.md`<br>- [release.md §6.1](release.md)<br>- [DEF-011](issues-log.md) | Sprint 2 | Done |
 
 [返回目录](#index)
 
@@ -229,6 +229,7 @@
 
 | Date | Change |
 | --- | --- |
+| 2026-10-22 | Sprint 2 最终关闭：feature-01–14 + task-02 + task-03 十六条全 Done；[OPS2-01](#pb-19) Done（zone `agent-mate.ai` Full (strict)，执行记录 release-bot task-details §7）；回顾块 #13 入 `sprint-backlog.md`。 |
 | 2026-10-22 | Sprint 2 关闭：feature-01–14 + task-02 十五条全 Done，MVP2 上生产（`sha-d9989ae`）；[REL2-01](#pb-18) Done（上线执行记录与 DEF-008/009/010 详见 `changes-log.md` / `issues-log.md`）；Sprint-end 回顾入 `sprint-backlog.md`。 |
 | 2026-10-22 | 立项 [OPS2-01](#pb-19)（后台维护 / Task）：zone `agent-mate.ai` SSL 迁 Full (strict)，入 Sprint 2 增补 task-03（ToDo）；动因为 DEF-011 执行中发现 zone 实为 Flexible；执行件落 release-bot `Release-jobs/zone-ssl-full-strict/`。 |
 | 2026-10-22 | [AGT2-01](#pb-8) / feature-03 Done：`prompts/v1` 模板注册表 + 四路径模板版本元数据 + 时延预算降级 + eval 门禁（15/15 过零红线，报告归档）；agent 46/46 绿；用户 close confirm；见 `changes-log.md`。 |

@@ -8,6 +8,19 @@
 
 ## 2026-10-22
 
+### Sprint 2 最终关闭 + task-03（OPS2-01）Done
+
+**原因**：用户 close confirm task-03 与 Sprint 2 收口（zone SSL Full (strict) 与十六条 SBI 全 Done）。
+
+**变更内容**：
+- **执行**：Phase 0–4 完成（四橙云 Host 源站 LE、CF Full → Full (strict)、Force SSL 重开）；八站矩阵 + MCP 八工具经 CF 边缘验证；release-bot 执行记录 §7（commit `57aebd6`）。
+- **过程**：NPM 连续 LE 签发致 nginx 运行配置脏态，`nginx -s reload` 修复；教训入 [npm-batch-le-reload-dirty-config.md](knowledge/ops/npm-batch-le-reload-dirty-config.md)。
+- **过程文件**：`sprint-backlog.md` task-03 → Done、回顾 #13；`product-backlog.md` [OPS2-01](product-backlog.md#pb-19) Done；`status.md` 无进行中 SBI；[release.md §6.1](release.md) 更新 Full (strict) 口径。
+
+**验收**：用户确认关闭；Sprint 2 十六条 SBI 均为 Done。
+
+---
+
 ### DEF-011 关闭：对外 MCP 公网入口上线（`hcp-mcp.agent-mate.ai`，零代码）
 
 **原因**：用户 close confirm DEF-011（生产对外 MCP 公网入口可用）；方案当日定为不加鉴权、纯入口三件套（Cloudflare DNS → NPM → 容器 3300），无代码与镜像改动。
