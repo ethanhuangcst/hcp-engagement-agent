@@ -20,6 +20,7 @@ import {
   getAcademicCorpusRoot,
   getCorpusRoot,
   getDenseWeight,
+  getQdrantUrl,
   getSparseWeight,
 } from "./config.js";
 import { embedQuery, embedTexts, embeddingDim, rerank } from "./embedding.js";
@@ -619,9 +620,30 @@ export async function retrieveAcademic(
   }
 
   const qVec = await embedQuery(query);
-  dbg("embedded", { vec_len: qVec.length, has_nan: qVec.some(Number.isNaN) });
+  dbg("embedded", { vec_len: qVec.length, has_nan: qVec.some(Number.isNaN), qdrant_url: getQdrantUrl() });
   await ensureCollections(qVec.length);
   const q = getQdrantClient();
+
+  /** 排障临时：进程内 REST 直探（绕开 client 库；定位后移除） */
+  if (process.env.RAG_DEBUG === "1") {
+    try {
+      const res = await fetch(
+        `${getQdrantUrl()}/collections/${ACADEMIC_COLLECTION}/points/search`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ vector: qVec, limit: 5, with_payload: false }),
+        },
+      );
+      const j = (await res.json()) as { result?: unknown[] };
+      dbg("rest_probe", {
+        http: res.status,
+        hits: Array.isArray(j.result) ? j.result.length : -1,
+      });
+    } catch (e) {
+      dbg("rest_probe", { err: String(e).slice(0, 200) });
+    }
+  }
 
   const dense = await q.search(ACADEMIC_COLLECTION, {
     vector: qVec,
