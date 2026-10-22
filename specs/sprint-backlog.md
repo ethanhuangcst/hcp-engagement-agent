@@ -123,7 +123,7 @@ Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规
 
 依赖 Sprint 1 对外 MCP 进程与 HCP 主数据工具。
 
-**Status: WIP**
+**Status: Done**（2026-10-22 用户确认 Sprint Goal 达成）
 
 ### **Done**
 
@@ -143,12 +143,14 @@ Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规
 | 2 | feature-02 | retrieve_academic 对外工具 | [MCP2-04 retrieve_academic · 学术证据检索](./product-backlog.md#L88) | mcp2.0/Feature | - [Agent 学术检索 I-AGT-007](agent/agent-function-spec.md)<br>- [Web 洞察页](app/app-function-spec.md) | **Done** |
 | 1 | feature-01 | get_hcp_insights 对外工具 | [MCP2-03 get_hcp_insights · HCP 洞察](./product-backlog.md#L82) | mcp2.0/Feature | - [Agent 洞察](agent/agent-function-spec.md)<br>- [Web 洞察页](app/app-function-spec.md) | **Done** |
 | 3 | feature-03 | Agent ROCKS 质量优化 | [AGT2-01 Agent 优化 · ROCKS 范式](./product-backlog.md#L115) | agent/Feature | - [Agent 功能规格（Sprint 2 增补）](agent/agent-function-spec.md)<br>- [Agent 设计 §13](agent/agent-design.md)<br>- [Agent 故事 US-AGT-007 / 008](agent/agent-stories.md)<br>- [Agent 测试与 eval 计划](agent/agent-tests.md) | **Done** |
+| 16 | task-02 | MVP2 上线 | [REL2-01 MVP2 上线（mvp4 → 生产）](./product-backlog.md#pb-18) | 后台维护/Task | - [go-live-instruction.md](go-live/1021/go-live-instruction.md)<br>- [env-changes.md](go-live/1021/env-changes.md)<br>- [data-backfill-design.md](go-live/1021/data-backfill-design.md)<br>- [release.md](release.md) | **Done** |
 
 ### **ToDo**
 
 | # | Code | SBI | Parent PBI | Module/Type | Related specs | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| 16 | task-02 | MVP2 上线 | [REL2-01 MVP2 上线（mvp4 → 生产）](./product-backlog.md#pb-18) | 后台维护/Task | - [go-live-instruction.md](go-live/1021/go-live-instruction.md)<br>- [env-changes.md](go-live/1021/env-changes.md)<br>- [data-backfill-design.md](go-live/1021/data-backfill-design.md)<br>- [release.md](release.md) | **WIP** |
+
+（无待办 SBI：Sprint 2 已全部收口）
 
 ### Retrospective
 
@@ -194,6 +196,27 @@ Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规
 
 #### 10. [Oct 22, 2026], feature-03 Agent ROCKS 质量优化 done
 - 回顾门已运行，无新增 durable 教训；eval 门禁首跑 15/15 过且三类时延实测均在预算内（已记 [agent-design §13.3](agent/agent-design.md)），architecture §7 / ADR-2.0-6 的「eval 门禁可落地」假设成立。
+
+#### 11. [Oct 22, 2026], Sprint-end（含 task-02 MVP2 上线 done）
+- **既往 Future action 评分**：Sprint 1 #5 与 Sprint 2 #5（release `.tmp-*.mts` 约定）**landed**（feature-08 落地）；Sprint 2 #3（演示首句标明 `tools/call` 来源）**landed**（本轮多次执行）；Sprint 2 #4（跨包新导出先重建 dist）**landed**（全程未复发）；Sprint 1 sprint-end 回看 #4（`MCP_URL` 含 `/mcp`）**landed**（internalMcpUrl + DEF-010 后 compose 显式容器名）；Sprint 1 sprint-end 回看 #1（Makefile up/down）**not landed**；Sprint 2 #1（start-qdrant.sh 复用已有二进制）**not landed**；Sprint 2 #6（隧道窗口纪律）**partial**——未跑测试套件，但排障写操作仍经翻转 DNS 误写他库，新增纪律「写前先核解析目标」入 [shared-network-dns-alias-collision.md](./knowledge/ops/shared-network-dns-alias-collision.md)。
+- DEF-008（共享网络 DNS 别名串库）是本 sprint 最大教训：检索间歇静默空返回的判别路径（exec 正常/server 进程异常 + GET 通 POST 空 + telemetry 零位移）与两层修复（专属别名 + security 白名单）全案入库，见同上知识条目。
+- DEF-009：Next standalone 依赖追踪不含 onnxruntime 原生二进制，`/api/engagement/*` 全量 500——standalone 镜像必须显式核对原生依赖落位，容器级冒烟不可中途砍掉。
+- 生产 PAT 两次经 `.secrets` 非 `KEY=` 格式明文行进入聊天（我的脱敏正则只按键值行匹配）——读密钥文件一律先整行遮罩再解析；token 均已吊销轮换。
+
+**Opportunities**
+
+#### 11. [Oct 22, 2026], Sprint-end
+- main 分支治理：mvp4 与 main 历史无关，main 停在 1.0——force-align 到 mvp4 或把 tag 发布流文档化为正式流程。
+- 共享网络通用服务别名（`web` ×4 / `agent` ×3 / `rag` ×2）仍多 Stack 撞名，可提示各 Stack owner 换专属别名（我方已换 `hcp-qdrant`）。
+- 存量 16 条 twin `profile.specialties` 空数组，default 检索路径无 coverage 信号——可随 TWIN 定时刷新自然补齐或开小故事。
+- Makefile `up`/`down` 封装（Sprint 1 遗留未落地）。
+
+**Future actions**
+
+#### 11. [Oct 22, 2026], Sprint-end
+- 下一次生产部署前，先 `docker network inspect portainer_network` 核对 Aliases 无新增撞名（检查点：下一次部署）。
+- 下一次发布沿用 tag 流并决策 main 治理方案（检查点：下一次发布 / Sprint 3 规划）。
+- 下一次读 `specs/.secrets` 的会话，先整行遮罩再解析非键值行（检查点：下一次密钥操作）。
 
 **Opportunities**
 

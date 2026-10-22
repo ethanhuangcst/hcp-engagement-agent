@@ -8,6 +8,16 @@
 
 ## 2026-10-22
 
+### Sprint 2 关闭 + task-02（MVP2 上线）Done
+
+**原因**：用户 close confirm task-02 可用与 Sprint 2 Goal 达成（Sprint 2 全部 SBI Done：feature-01–14 + task-02）。
+
+**变更内容**：task-02 标 Done（执行记录见同日条目）；`RAG_DEBUG` 移出生产 compose 并复验（S4/S10 5/5）；sprint-backlog Sprint 2 Status → Done + Sprint-end 回顾；product-backlog REL2-01 → Done；issues-log DEF-008/009/010 关闭（Sprint 2）；status.md 同步。
+
+**验收**：生产 `sha-d9989ae` + compose `0d0430b`：4 容器 Up、八工具检索确定性、RAG 151/23 三面一致、web 全链 200、共存抽查过；TWIN cron 已启用（北京 02:00）。
+
+---
+
 ### task-02 执行：MVP2 上线完成（REL2-01，冒烟全绿，待 close confirm）
 
 **原因**：用户确认开工 task-02（MVP2 上线）；执行 [go-live 1021 手册](go-live/1021/go-live-instruction.md) 全流程并处置冒烟发现的三缺陷。

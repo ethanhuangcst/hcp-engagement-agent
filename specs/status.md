@@ -16,11 +16,13 @@
 | Sprint | Status | Note |
 | --- | --- | --- |
 | Sprint 1 | Done | 2026-10-20 关闭：task-01、feature-01（含 OGT-1 扩展）、feature-02、feature-03 均 Done，Sprint Goal 经用户确认达成 |
-| Sprint 2 | WIP | 2026-10-20 开工：feature-01–14 十四条功能 SBI 全部 Done（feature-03 于 2026-10-22 关闭，对外 MCP 八工具 + TWIN2 + RAG 全齐）；剩 task-02（MVP2 上线，REL2-01）一条 |
+| Sprint 2 | Done | 2026-10-22 关闭：feature-01–14 + task-02（MVP2 上线）十五条全 Done；对外 MCP 八工具、TWIN2 定时刷新、RAG 三面一致全部上生产（`sha-d9989ae`），Sprint Goal 经用户确认达成 |
 
 ## 当前进展
 
-- 当前在做的 sprint：Sprint 2（WIP）。当前 WIP SBI：task-02（MVP2 上线，REL2-01，2026-10-22 用户确认开工）。上线准备规格已修订就绪（[go-live 1021 手册](./go-live/1021/go-live-instruction.md)）；Phase 1 只读预检 2026-10-22 全过（3 容器 Up、web health ok、Qdrant 146/23 三面一致、3205 空闲、Portainer 凭据有效）；正在执行 Phase 0（B2 部署三件套合入 + B3 mcp2 镜像三处新增）。
+- Sprint 2 已关闭（2026-10-22，用户确认 Goal 达成）：MVP2 上生产（`IMAGE_TAG=sha-d9989ae` + compose `0d0430b`），4 容器 Up，对外 MCP 八工具检索确定性全绿，RAG 151/23 三面一致，web 全链（options / compliance / insights / add_hcp）验证通过，TWIN 定时刷新已启用（北京 02:00）。
+- 上线过程当日发现并关闭 DEF-008（共享网络 DNS 别名串库，P0）/ DEF-009（web standalone 缺 onnxruntime 原生库）/ DEF-010（mcp2 MCP_URL loopback 口径）；kb-qdrant 误写已清理归零；知识条目 [shared-network-dns-alias-collision.md](./knowledge/ops/shared-network-dns-alias-collision.md)。
+- 生产已知口径：回滚锚点 `sha-03bd588`；`RAG_ACADEMIC_FETCH=pubmed` 启用；mvp4 与 main 历史无关，发布走 tag（`v2.0.0`）流。
 - 剩余 SBI：task-02（MVP2 上线，REL2-01，ToDo）。上线准备规格已修订就绪（[go-live 1021 手册](./go-live/1021/go-live-instruction.md)、env-changes、release.md 对齐八工具与 OGT-5 后基线）；阻塞项 B1 / B4 已清，B2 / B3（部署三件套合入 + mcp2 镜像）待执行。
 - 回顾 Future action #5 已落地：[release.md](release.md) Step 5 补「live 临时脚本放仓库根 `.tmp-*.mts`」，`.gitignore` 补 `.tmp-*`（feature-08 验收批次）。
 - 合规索引后台检查：`coverage.status=ready`（rdpac 15、cn_med_rep_measures 8）；已删除 Qdrant 孤儿点 `tenant-demo@2026-01`。
@@ -31,8 +33,8 @@
 
 ## 下一步可选
 
-- task-02（MVP2 上线，REL2-01）：执行 [go-live 1021 手册](./go-live/1021/go-live-instruction.md)——Phase 0.2/0.3 清障（B2：main 部署三件套合入 mvp4；B3：`Dockerfile.mcp2` + compose 服务 + CI matrix）→ Phase 0.4 合回 main 触发 CI → Portainer 更新（用户逐步操作）→ 冒烟 S1–S11。
-- 候选新故事：医院中英文名归一（回顾 Opportunities #4：中文「南方医院」查不到库内 `Nanfang Hospital`）。
+- 候选新故事：main 分支治理（mvp4 与 main 历史无关，main 停在 1.0；force-align 或文档化 tag 发布流）；医院中英文名归一（Sprint 2 回顾 Opportunities）；存量 twin `profile.specialties` 空数组补齐（旧 16 条，可随 TWIN 刷新自然恢复）；Makefile `up`/`down` 封装（Sprint 1 遗留）。
+- 明晨核对：TWIN 定时刷新首次触发（北京 02:00）后 `hcp_twins.as_of` 更新与容器日志 cron 行（[release.md §6.2](./release.md)）。
 
 ## 当前 OGT（进行中任务）
 
@@ -51,4 +53,4 @@
 | 3 | 扩展 `query_hcp` 库外检索（并入式）、医院/科室包含匹配与 `add_hcp` candidate 校验 | Sprint 1 `feature-03`（并重开 `feature-01` 契约扩展） | 2026-10-20 | 2026-10-20 |
 | 4 | 解决 RID-1：建立 `specs/.secrets` 并实机核对生产配置（SSH 野草云3） | - | 2026-10-19 | 2026-10-19 |
 
-最后更新：2026-10-22 feature-03（Agent ROCKS，AGT2-01）关闭：eval 门禁 15/15 过零红线、agent 46/46 绿、用户 close confirm；Sprint 2 功能 SBI 全部 Done，剩 task-02（MVP2 上线，REL2-01）ToDo，上线规格已修订就绪（go-live 1021 手册）。
+最后更新：2026-10-22 Sprint 2 关闭（用户确认）：task-02 MVP2 上线 Done，生产 `sha-d9989ae` 全绿；DEF-008/009/010 当日修复关闭；Sprint 1+2 全部收口，进入 backlog 规划期。
