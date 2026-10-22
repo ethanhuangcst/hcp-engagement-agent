@@ -8,6 +8,21 @@
 
 ## 2026-10-22
 
+### task-02 执行：MVP2 上线完成（REL2-01，冒烟全绿，待 close confirm）
+
+**原因**：用户确认开工 task-02（MVP2 上线）；执行 [go-live 1021 手册](go-live/1021/go-live-instruction.md) 全流程并处置冒烟发现的三缺陷。
+
+**变更内容**：
+- **镜像链**：mvp4 与 main 历史无关 → 部署三件套路径检出入 mvp4（`2f0e796`，含新建 `Dockerfile.mcp2` / compose 第 4 服务 `127.0.0.1:3205` / CI matrix 第三项）；出镜像走 tag `v2.0.0`（非 merge-main），CI 四轮至 `sha-d9989ae`；生产 `IMAGE_TAG=sha-d9989ae`。
+- **缺陷修复（当日发现当日关闭）**：[DEF-008](issues-log.md) 共享网络 `qdrant` 别名冲突（DNS 轮询串库 → 专属别名 `hcp-qdrant` + security 白名单 + `QDRANT_ALLOW_NON_LOCAL`）；[DEF-009](issues-log.md) web standalone 缺 `libonnxruntime.so`（Dockerfile.web 显式 COPY）；[DEF-010](issues-log.md) mcp2 `MCP_URL` 宿主机 loopback 口径容器内不可达（compose 显式容器名）。kb-qdrant 误写 5 点清理归零复核；我方 geriatrics 经 MCP 重灌（146→151）。
+- **环境**：`TWIN_REFRESH_CRON=0 18 * * *`（北京 02:00）启用、`RAG_ACADEMIC_FETCH=pubmed` 转正、`RAG_DEBUG=1` 排障开关保留（收口复核后移除）。
+- **验证**：S1 web health / S3 mcp2 health（8 工具）/ S4+S10 连跑 8 轮确定 5 chunks / S11 kidney 真库 9 / S5 `kol_04 吴一龙` add_hcp 全链（入库 `hcp_a5096267356` + incremental build + oncology 预灌 + specialty_preview matched）/ web options 200 真实 LLM + compliance 闸门 pass / S9 共存抽查（kb/places/portainer 200）。回滚锚点 `sha-03bd588`。
+- **知识**：[shared-network-dns-alias-collision.md](knowledge/ops/shared-network-dns-alias-collision.md)（DNS 轮询串库识别特征与修复模式）；[release.md](release.md) §1.2 DNS 别名红线 + §4 新 env 行。
+
+**验收**：[go-live-instruction.md](go-live/1021/go-live-instruction.md) 全 Phase 通过（执行记录见文件头）；生产 4 容器 `sha-d9989ae` Up；RAG 三面一致（151/23 + manifest）。task-02 行保持 WIP，待用户 close confirm 后标 Done。
+
+---
+
 ### feature-03 Done：Agent ROCKS 质量优化（AGT2-01）
 
 **原因**：Sprint 2 目标要求 Agent 一人一策、开放对话与一句话洞察在真实 LLM 下达到可验收质量（ROCKS 范式）；用户 close confirm feature-03 可用。

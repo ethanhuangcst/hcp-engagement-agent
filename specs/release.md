@@ -38,6 +38,8 @@
 
 `mypoke-trade`（`mypoke.trade` · 3002/3201/6335）、`kb-agent`（`kb.agent-mate.ai` · 3006/3202/3203/6336）、`places-agent`（`places.agent-mate.ai` · 3007）。规则见 release-bot `knowledge/09-isolation-safety.md`：只改本 Stack / 本 NPM Host / 本 DNS；发布后抽查 ≥1 个既有应用。
 
+> **DNS 别名红线（DEF-008，2026-10-22）**：共享 `portainer_network` 上通用服务名（`qdrant` / `web` / `agent` / `rag`）多 Stack 撞名，Docker DNS 轮询会串库。我方 Qdrant 一律走专属别名 **`hcp-qdrant`**（`QDRANT_URL=http://hcp-qdrant:6333`，security 白名单已放行）；新增服务前先 `docker network inspect portainer_network` 核对 Aliases。知识条目：[shared-network-dns-alias-collision.md](./knowledge/ops/shared-network-dns-alias-collision.md)。
+
 ---
 
 ## 2. 运行时架构（生产流量路径）
@@ -90,6 +92,10 @@ flowchart TB
 | `TWIN_REFRESH_CRON`（2.0） | no | 未设 = TWIN2-01 关闭；设如 `"0 2 * * *"` 开启定时刷新 |
 | `TWIN_REFRESH_TTL_HOURS`（2.0） | no | 默认 24 |
 | `MCP2_PORT`（2.0） | no | 对外 MCP 端口（建议 `3300`）；传输为 Streamable HTTP（ADR-008，无 `MCP2_TRANSPORT`） |
+| `QDRANT_ALLOW_NON_LOCAL`（2.0） | 建议 | 容器网络内非 loopback 的 Qdrant 主机放行（`hcp-qdrant` 别名口径；security 白名单 `hcp-qdrant` 已随代码放行，此 env 为容器网络通用出口） |
+| `MCP_URL`（mcp2，2.0） | yes | `http://hcp-twin-mcp:3200`（容器名 DNS）；不设则继承 stack.env 宿主机 loopback 口径，容器内不可达（DEF-010） |
+| `RAG_ACADEMIC_FETCH`（mcp2，2.0） | 建议 | `pubmed` 启用生产在线 PubMed 拉取（`ingest_academic` 新专科灌注；2026-10-22 起启用） |
+| `RAG_DEBUG`（mcp2，2.0） | 临时 | `1` 时检索链输出结构化阶段日志（embedded/dense/sparse/chunks）；排障开关，平时不设 |
 
 ---
 

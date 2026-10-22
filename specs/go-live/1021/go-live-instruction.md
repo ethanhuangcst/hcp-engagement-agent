@@ -1,5 +1,7 @@
 # 1021 上线手册（mvp4 → 生产）
 
+> **执行记录（2026-10-22，task-02 / REL2-01）**：已完成上线。实际路径与手册差异：① mvp4 与 main 历史无关，Phase 0.2 改为路径检出三件套；② 出镜像走 **tag `v2.0.0`**（merge-to-main 不可行），CI 四轮（`2f0e796` twin-mcp 包闭包 + web standalone 修复 → `3baccbd` → `418f9f9` RAG_DEBUG 插桩 → `d9989ae` REST 直探），生产终态 `IMAGE_TAG=sha-d9989ae` + compose `f12a253`；③ 冒烟发现三缺陷 DEF-008/009/010（DNS 别名串库 / web 缺 onnxruntime 原生库 / mcp2 MCP_URL loopback），全部当日修复关闭；④ kb-qdrant 误写 5 点已清理归零，我方 geriatrics 重灌（151 点）；⑤ `RAG_ACADEMIC_FETCH=pubmed` 转正、`TWIN_REFRESH_CRON=0 18 * * *` 启用、`RAG_DEBUG=1` 保留至复核后移除；⑥ 冒烟 S1–S11 全绿（S4/S10 连跑 8 轮确定），S5 以 `kol_04 吴一龙` 全链通过（入库 `hcp_a5096267356` + incremental build + oncology 预灌）。回滚锚点：上一可用版 `sha-03bd588`。
+
 > 目标：把 `mvp4`（Sprint 1+2 成果：对外 MCP 八工具、TWIN2 定时刷新、28 学科学术种子、MySQL 方言修复）安全发布到野草云3 节点 Portainer Stack `hcp-engagement-agent`。
 > 对比差异见 [env-changes.md](./env-changes.md)；密钥清单见 `specs/.secrets`（不外链，gitignored）。
 > 基线快照（2026-10-22 复核）：生产跑 `main@03bd588 / latest`，3 容器，Web/MCP 正常；生产 Qdrant 已经 OGT-5 回灌（academic 146 / compliance 23，三面一致）。mvp4 HEAD `61410eb`（含 feature-03 Agent ROCKS 进行中工作，上线内容以发布当日 HEAD 为准）。
