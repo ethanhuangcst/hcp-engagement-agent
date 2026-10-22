@@ -34,6 +34,12 @@ services:
       - ./data/qdrant:/qdrant/storage
     environment:
       QDRANT__SERVICE__HTTP_PORT: "6333"
+    networks:
+      default:
+        aliases:
+          # 共享 portainer_network 上存在第二个 "qdrant" 别名（kb-qdrant），Docker DNS 轮询导致
+          # 我方服务约半数请求打进 kb 的 Qdrant。专属别名根治；服务名 alias "qdrant" 保留给历史调用方。
+          - hcp-qdrant
 
   hcp-twin-mcp:
     <<: *ghcr
@@ -46,7 +52,7 @@ services:
       MCP_PORT: "3200"
       TWIN_MODE: live
       HCA_DATA_DIR: /data
-      QDRANT_URL: http://qdrant:6333
+      QDRANT_URL: http://hcp-qdrant:6333
       VECTOR_BACKEND: qdrant-local
       # TWIN2-01 定时刷新（不设 = 关闭；空串视为关闭）
       TWIN_REFRESH_CRON: ${TWIN_REFRESH_CRON:-}
@@ -76,7 +82,7 @@ services:
       - stack.env
     environment:
       DATABASE_URL: ${DATABASE_URL}
-      QDRANT_URL: http://qdrant:6333
+      QDRANT_URL: http://hcp-qdrant:6333
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
       DASHSCOPE_BASE_URL: ${DASHSCOPE_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
       LLM_MODEL: ${LLM_MODEL:-qwen-max}
@@ -118,7 +124,7 @@ services:
       HCA_DATA_DIR: /data
       # Override host-local URLs from .env for compose network
       MCP_URL: http://hcp-twin-mcp:3200
-      QDRANT_URL: http://qdrant:6333
+      QDRANT_URL: http://hcp-qdrant:6333
       VECTOR_BACKEND: qdrant-local
     volumes:
       - ./data:/data
