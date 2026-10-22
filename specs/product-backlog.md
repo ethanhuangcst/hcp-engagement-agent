@@ -169,6 +169,14 @@
   - **验收口径**：[go-live-instruction.md](go-live/1021/go-live-instruction.md) 全部 Phase 通过；生产 `hcp-engagement-mcp` 八工具可用（含 `retrieve_compliance` 与 `ingest_academic` / `get_ingest_status`）；生产 Qdrant 与 `ingest_manifest` 三面一致（academic 146 / compliance 23）；共存应用抽查 ≥1 个正常；回滚锚点已记录。
   - **失败**：任一冒烟 S 失败按手册回滚（仅本 Stack `IMAGE_TAG` 回退与新增 Qdrant collection 清理；不动共享网络与他 Stack）。
   - **规格**：[go-live-instruction.md](go-live/1021/go-live-instruction.md) · [env-changes.md](go-live/1021/env-changes.md) · [data-backfill-design.md](go-live/1021/data-backfill-design.md) · [release.md](release.md)。
+- <a id="pb-19"></a>[OPS2-01](#pb-19) zone SSL 迁移 Full (strict)（agent-mate.ai）
+  - **做什么**：把 Cloudflare zone `agent-mate.ai` 的 SSL 模式从 Flexible 迁到 Full (strict)，消除 CF → 野草云3 的明文 `http:80` 回源：补齐三张缺失源站 LE 证书（`hcp` 主站 / `portainer` / `nginx` 管理面）、逐站源站直验、zone 切 Full → Full (strict)、全站复验后重开各 Host Force SSL（含 hcp-mcp #11）。类型 **Task**：纯运维执行件，零产品代码改动，不新增对外接口。
+  - **动因**：[DEF-011](issues-log.md) 执行中实测 zone 为 Flexible（CF 明文回源）；kb ClickFix 注入事件（release-bot ADR-004）证明该入口面曾出现被注入内容；Flexible 亦与 `ssl_forced` 互踩 301（DEF-011 实发）。
+  - **范围**：zone `agent-mate.ai` 全部 proxied Host（mypoke / kb / media / places / framework（规划）/ hcp / hcp-mcp / portainer / nginx）；`sdd.works` 属另一 zone，不在范围。
+  - **前置**：`specs/.secrets` NPM / Portainer 凭据（agent 自动化）；Cloudflare 面板两步由用户操作；低峰窗口约 45–60 分钟。
+  - **验收口径**：三张新证书签发并挂载；每个主机名 `curl --resolve <host>:443:38.55.192.140` 直验有效证书 + 200；zone 切 Full 后逐站公网复验（验证矩阵全绿）；切 Full (strict) 后复验全绿；各 Host Force SSL 重开后无 301 循环；release-bot 清单与 knowledge 已刷新。
+  - **失败/回滚**：单一开关回滚——SSL 模式切回 Flexible 秒级恢复；单站 526 先查该站源站证书。
+  - **规格**：执行件 release-bot `Release-jobs/zone-ssl-full-strict/task-details.md` · [release.md §6.1](release.md) · [DEF-011](issues-log.md)。
 
 
 <a id="agent"></a>
@@ -209,6 +217,7 @@
 | 16 | 对外服务 | [MCP2-10](#pb-16) | add_hcp 入库科室以选中记录信号专科为准（DEF-006，D2） | Implementable | - [DEF-006](issues-log.md)<br>- [US-MCP2-007 增补](mcp2.0/mcp2-stories.md)<br>- [mcp2-design §13.6](mcp2.0/mcp2-design.md)<br>- [mcp2 测试计划 §15](mcp2.0/mcp2-test.md)<br>- [F-WEB-047 增补](app/app-function-spec.md) | Sprint 2 | Done |
 | 17 | 后台维护 | [MKB2-05](#pb-17) | seed CLI 启动序统一（DEF-007） | Implementable | - [DEF-007](issues-log.md)<br>- [US-RAG-010](rag/rag-stories.md)<br>- [rag-design §21](rag/rag-design.md)<br>- [rag 测试计划 §8](rag/rag-tests.md) | Sprint 2 | Done |
 | 18 | 后台维护 | [REL2-01](#pb-18) | MVP2 上线（mvp4 → 生产） | Implementable | - [go-live-instruction.md](go-live/1021/go-live-instruction.md)<br>- [env-changes.md](go-live/1021/env-changes.md)<br>- [release.md](release.md) | Sprint 2 | Done |
+| 19 | 后台维护 | [OPS2-01](#pb-19) | zone SSL 迁移 Full (strict)（agent-mate.ai） | Implementable | - release-bot `Release-jobs/zone-ssl-full-strict/task-details.md`<br>- [release.md §6.1](release.md)<br>- [DEF-011](issues-log.md) | Sprint 2 | ToDo |
 
 [返回目录](#index)
 
@@ -221,6 +230,7 @@
 | Date | Change |
 | --- | --- |
 | 2026-10-22 | Sprint 2 关闭：feature-01–14 + task-02 十五条全 Done，MVP2 上生产（`sha-d9989ae`）；[REL2-01](#pb-18) Done（上线执行记录与 DEF-008/009/010 详见 `changes-log.md` / `issues-log.md`）；Sprint-end 回顾入 `sprint-backlog.md`。 |
+| 2026-10-22 | 立项 [OPS2-01](#pb-19)（后台维护 / Task）：zone `agent-mate.ai` SSL 迁 Full (strict)，入 Sprint 2 增补 task-03（ToDo）；动因为 DEF-011 执行中发现 zone 实为 Flexible；执行件落 release-bot `Release-jobs/zone-ssl-full-strict/`。 |
 | 2026-10-22 | [AGT2-01](#pb-8) / feature-03 Done：`prompts/v1` 模板注册表 + 四路径模板版本元数据 + 时延预算降级 + eval 门禁（15/15 过零红线，报告归档）；agent 46/46 绿；用户 close confirm；见 `changes-log.md`。 |
 | 2026-10-22 | 用户确认新增 [REL2-01](#pb-18)（MVP2 上线，Task）排入 Sprint 2（SBI task-02，ToDo）；上线准备规格修订：go-live 1021 手册、env-changes、release.md 对齐八工具面与 OGT-5 回灌后基线（B1/B4 已清、B2/B3 待执行）；不动代码。 |
 | 2026-10-21 | feature-03 开工准备（用户指令，不动代码）：agent 模块规格四件就位——[功能规格 Sprint 2 增补](agent/agent-function-spec.md)（F-AGT-031~034）、[US-AGT-007 / 008](agent/agent-stories.md)、[agent-design §13](agent/agent-design.md)、新建 [agent-tests.md](agent/agent-tests.md) 入 artifacts-map；[architecture §12](architecture.md) eval-set 用例数置已决（三类各 5 例合计 15，朱同玉 fixture 锚点）；AGT2-01 保持 ToDo。 |

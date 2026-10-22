@@ -11,7 +11,7 @@
 2. **服务端暴露形态仅 HTTP**：产品路径为 Streamable HTTP，`MCP2_PORT`（缺省 3300），`GET /health` 健康检查；stdio 分支（`MCP2_TRANSPORT=stdio`）随本变更一并从代码与 env 模板中移除。
 3. **本地托管**：开发期由开发者手动 `npm run dev:hcp-engagement-mcp` 启动；常驻托管（launchd / make up 约定）属后续独立需求，不在本 ADR 范围。
 4. **本机为 http 非 https**：回环链路不引入 TLS 反代；对外提供 HTTPS 时走部署层（NPM Host / agent-mate.ai 域名），见 release.md §6.1。
-5. **鉴权维持 2.0 既定决策**：不做鉴权，仅本机/内网可达。
+5. **鉴权维持 2.0 既定决策**：不做鉴权，仅本机/内网可达。（2026-10-22 修订：公网入口 `hcp-mcp.agent-mate.ai` 经部署层反代开放，仍不做鉴权，可达范围从本机/内网扩至公网；见 [release.md §6.1](../../specs/release.md) 与 [DEF-011](../../specs/issues-log.md)。）
 
 ## 原因
 - 本地与生产同一传输路径，客户端配置零差异，降低联调与文档成本。

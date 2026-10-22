@@ -8,6 +8,24 @@
 
 ## 2026-10-22
 
+### DEF-011 关闭：对外 MCP 公网入口上线（`hcp-mcp.agent-mate.ai`，零代码）
+
+**原因**：用户 close confirm DEF-011（生产对外 MCP 公网入口可用）；方案当日定为不加鉴权、纯入口三件套（Cloudflare DNS → NPM → 容器 3300），无代码与镜像改动。
+
+**变更内容**：
+- **入口**：Cloudflare zone `agent-mate.ai` 加 `hcp-mcp` A → `38.55.192.140`（灰云签发后切橙云）；NPM 新 Host **#11**（上游容器名 `hcp-engagement-agent-hcp-engagement-mcp-1:3300`、Websockets、Advanced `proxy_buffering off; proxy_read_timeout 300s;`）+ LE 证书 **#10**（HTTP-01，至 2027-01-20）；主机端口 3205 维持 loopback-only 运维后门。
+- **排障**：zone SSL 模式实为 **Flexible**，`ssl_forced` 与其互踩 301 循环 → Host #11 关 `ssl_forced`（与主站同款姿态）；DNS 300 秒 TTL 缓存两度造成「橙云未生效」误判，经权威 NS 非递归查询与 `--resolve` 强制边缘复核确认生效。
+- **客户端**：`~/.cursor/mcp.json` 的 `hcp-engagement-mcp` 条目换 `https://hcp-mcp.agent-mate.ai/mcp`（一行 url）。
+- **跨仓**：release-bot 四文件反向更新并推送（`1644738`）：野草云3 清单刷 hcp 2.0 四服务 + Host #11 + 专属别名 `hcp-qdrant` + 实跑 tag `sha-d9989ae`；knowledge 05/08/09 记 Flexible 陷阱、TTL 缓存坑、共享网别名唯一规则。
+
+**验收**：经 CF 边缘（`cf-ray` 在）全链绿：`/health` 200、`initialize` + `tools/list` 八工具、`retrieve_academic`（朱同玉 kidney transplant）5 chunks 且 specialty 正确带真实 pmid、流式完整；共存抽查 hcp / kb / places 全 200；Portainer API 实查 4 容器 running `sha-d9989ae`。
+
+**回顾门**：本缺陷无新增 hcp 仓知识条目——durable 教训（Flexible 陷阱、TTL 缓存、NPM API 字段名）已在同会话落入 release-bot knowledge 05/08/09，属正确归属。
+
+**遗留**：zone 迁 Full (strict) 建议（先补主站 / Portainer / NPM 管理面三张源站证书）双仓记录待排；无鉴权公网暴露残余风险知情记录于 [release.md §6.1](release.md)。
+
+---
+
 ### On-demand 回顾：上线过程操作错误复盘（用户发起）
 
 **原因**：用户 `/sdd-retrospective` 要求记录 MVP2 上线过程中若干错误的更新（操作层面，区别于 DEF-008/009/010 产品缺陷）。

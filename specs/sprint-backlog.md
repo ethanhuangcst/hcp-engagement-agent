@@ -123,7 +123,7 @@ Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规
 
 依赖 Sprint 1 对外 MCP 进程与 HCP 主数据工具。
 
-**Status: Done**（2026-10-22 用户确认 Sprint Goal 达成）
+**Status: Done**（2026-10-22 用户确认 Sprint Goal 达成；同日增补运维批次 [OPS2-01](./product-backlog.md#pb-19) task-03 入 ToDo，属 Sprint 2 事后追加，Goal 口径不变）
 
 ### **Done**
 
@@ -149,8 +149,7 @@ Sprint Goal: 集成方通过对外 MCP 读取 HCP 洞察并检索学术与合规
 
 | # | Code | SBI | Parent PBI | Module/Type | Related specs | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-
-（无待办 SBI：Sprint 2 已全部收口）
+| 17 | task-03 | zone SSL 迁移 Full (strict) | [OPS2-01 zone SSL 迁移 Full (strict)（agent-mate.ai）](./product-backlog.md#pb-19) | 后台维护/Task | - release-bot `Release-jobs/zone-ssl-full-strict/task-details.md`（执行件）<br>- [release.md §6.1](release.md)<br>- [DEF-011](issues-log.md)<br>- [issues-log DEF-011 关闭条目](issues-log.md) | **ToDo** |
 
 ### Retrospective
 
