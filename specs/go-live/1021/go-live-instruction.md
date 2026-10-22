@@ -122,13 +122,17 @@ git checkout main && git merge mvp4 --no-verify && git push origin main
 ## Phase 1 — 生产前预检（SSH 只读）
 
 ```bash
-SSH="ssh -o PubkeyAuthentication=no -o PreferredAuthentications=password root@38.55.192.140"
+# 注意（2026-10-22 实测）：该节点 sshd 只接受 keyboard-interactive，password 方式会 Permission denied；
+# 手动执行时 ssh 交互输入密码即可；脚本化用 sshpass -e + 下述 PreferredAuthentications。
+SSH="ssh -o PubkeyAuthentication=no -o PreferredAuthentications=keyboard-interactive,password root@38.55.192.140"
 # 密码在 specs/.secrets: SSH_PASSWORD
 $SSH 'docker ps --format "{{.Names}}\t{{.Status}}" | grep hcp'      # 3 容器 Up
 $SSH 'curl -s http://127.0.0.1:3001/api/health'                       # 期望 ok:true
 $SSH 'curl -s http://127.0.0.1:6333/collections | head -c 300'        # 期望 2 个 collection（academic_index / compliance_index，OGT-5 已回灌）
 $SSH 'ss -tlnp | grep -E "3204|3205"'                                # 3204 被占确认，3205 空闲
 ```
+
+> **状态（2026-10-22 执行通过）**：3 容器 Up（twin-mcp healthy）；`/api/health` `ok:true`（database_ok、twin_mode live、version 0.2.0）；collections 齐全且点数 academic **146** / compliance **23**（与语料、manifest 三面一致）；3204 docker-proxy 占用、3205 空闲。Portainer 登录凭据同日验证有效（`/api/auth` 签发 JWT；注意 `.secrets` 的 `PORTAINER_URL` 带尾斜杠，拼接 API 路径时先去掉）。
 回滚锚点记录（写在手边，不许只存聊天）：
 ```text
 回滚镜像 tag: latest（当前生产实际运行 = main@03bd588 的 push）
