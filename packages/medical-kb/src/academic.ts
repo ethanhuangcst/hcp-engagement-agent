@@ -588,6 +588,21 @@ export async function retrieveAcademic(
     parsed.data;
   assertVectorBackendLocal();
 
+  /** 上线排障临时插桩（RAG_DEBUG=1 时输出结构化阶段日志；定位后移除） */
+  const dbg = (stage: string, extra: Record<string, unknown> = {}) => {
+    if (process.env.RAG_DEBUG === "1") {
+      console.error(
+        JSON.stringify({
+          event: "rag_retrieve_debug",
+          stage,
+          index: "academic",
+          query,
+          ...extra,
+        }),
+      );
+    }
+  };
+
   const must: Array<Record<string, unknown>> = [];
   /** ADR-014 / mcp2-design §12：无法归一化受控专科时省略 filter 与 coverage，检索照常、不报错 */
   const specialty = rawSpecialty
@@ -604,6 +619,7 @@ export async function retrieveAcademic(
   }
 
   const qVec = await embedQuery(query);
+  dbg("embedded", { vec_len: qVec.length, has_nan: qVec.some(Number.isNaN) });
   await ensureCollections(qVec.length);
   const q = getQdrantClient();
 
@@ -613,6 +629,7 @@ export async function retrieveAcademic(
     with_payload: true,
     filter: must.length ? { must } : undefined,
   });
+  dbg("dense", { count: dense.length, filter: must.length > 0 });
 
   const corpus = await ensureBm25ForCollection(
     ACADEMIC_COLLECTION,
@@ -628,6 +645,7 @@ export async function retrieveAcademic(
     id: String(d.id),
     score: d.score ?? 0,
   }));
+  dbg("sparse", { count: sparseHits.length, corpus_ready: corpus.length > 0 });
   const fused = rrfFuse(
     [denseRanked, sparseHits],
     [getDenseWeight(), getSparseWeight()],
@@ -681,6 +699,7 @@ export async function retrieveAcademic(
           : undefined,
   }));
 
+  dbg("chunks", { count: chunks.length, candidates: candidates.length, fused: fused.length });
   return {
     chunks,
     ...(specialty

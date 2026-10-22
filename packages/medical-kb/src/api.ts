@@ -345,12 +345,27 @@ export async function retrieveCompliance(
 
   const { query, jurisdiction, tenant_id, top_k = 5 } = parsed.data;
   assertVectorBackendLocal();
+  /** 上线排障临时插桩（RAG_DEBUG=1；定位后移除） */
+  const dbg = (stage: string, extra: Record<string, unknown> = {}) => {
+    if (process.env.RAG_DEBUG === "1") {
+      console.error(
+        JSON.stringify({
+          event: "rag_retrieve_debug",
+          stage,
+          index: "compliance",
+          query,
+          ...extra,
+        }),
+      );
+    }
+  };
   const must: Array<Record<string, unknown>> = [];
   if (jurisdiction) {
     must.push({ key: "jurisdiction", match: { value: jurisdiction } });
   }
 
   const qVec = await embedQuery(query);
+  dbg("embedded", { vec_len: qVec.length, has_nan: qVec.some(Number.isNaN) });
   await ensureCollections(qVec.length);
   const q = getQdrantClient();
 
@@ -360,6 +375,7 @@ export async function retrieveCompliance(
     with_payload: true,
     filter: must.length ? { must } : undefined,
   });
+  dbg("dense", { count: dense.length });
 
   const corpus = await ensureBm25();
   const sparseHits = bm25Search(

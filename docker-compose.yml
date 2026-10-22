@@ -48,6 +48,8 @@ services:
       HCA_DATA_DIR: /data
       QDRANT_URL: http://qdrant:6333
       VECTOR_BACKEND: qdrant-local
+      # TWIN2-01 定时刷新（不设 = 关闭；空串视为关闭）
+      TWIN_REFRESH_CRON: ${TWIN_REFRESH_CRON:-}
     volumes:
       - ./data:/data
     ports:
@@ -82,6 +84,7 @@ services:
       MCP_TRANSPORT: http
       MCP2_PORT: "3300"
       HCA_DATA_DIR: /data
+      RAG_DEBUG: "1"   # 上线排障临时开关；定位 retrieve 空结果后移除
     volumes:
       - ./data:/data
     ports:

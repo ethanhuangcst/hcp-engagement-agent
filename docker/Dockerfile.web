@@ -52,6 +52,8 @@ RUN apt-get update \
 COPY --from=build --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
 COPY --from=build --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
+# Xenova/transformers native binding (onnxruntime .so + .node) — Next standalone tracing 不含原生二进制，缺失时 /api/engagement/* 500
+COPY --from=build /app/node_modules/onnxruntime-node ./node_modules/onnxruntime-node
 
 USER nextjs
 EXPOSE 3001
